@@ -9,6 +9,8 @@ RUN NODE_OPTIONS=--max-old-space-size=1536 npm run build && npm prune --omit=dev
 
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production
+ARG APP_REVISION=unknown
+ENV APP_REVISION=$APP_REVISION
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
@@ -19,6 +21,7 @@ COPY test ./test
 COPY src/deltas.js ./src/deltas.js
 COPY scripts/smoke.mjs ./scripts/smoke.mjs
 COPY scripts/role-smoke.mjs ./scripts/role-smoke.mjs
+COPY scripts/deploy-release.sh ./scripts/deploy-release.sh
 USER 1000:1000
 EXPOSE 3100
 CMD ["node", "server/index.js"]

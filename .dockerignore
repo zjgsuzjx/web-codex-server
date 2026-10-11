@@ -1,8 +1,12 @@
 .git
+AGENTS.md
+MEMORY.md
 node_modules
 data
 .env
 .deploy
+.deploy-state
+.deploy-releases
 dist
 test-results
 *.tar.gz

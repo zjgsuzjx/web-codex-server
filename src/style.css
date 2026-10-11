@@ -43,3 +43,112 @@ input[type=checkbox],input[type=radio]{cursor:pointer}
 .permission-menu .select-trigger{min-height:36px;font-size:11px;padding:8px 10px}
 .approval .select-trigger,.approval .select-option{font-size:11px}
 @media(prefers-reduced-motion:reduce){.select-trigger,.select-chevron,.sidebar-search{transition:none}}
+
+/* Shared scrollbars, including horizontal code blocks and embedded surfaces. */
+:root{--scroll-thumb:#b2c4df;--scroll-hover:#789bd2;--scroll-active:#4c7bd0;--motion-ease:cubic-bezier(.22,1,.36,1)}
+:root[data-theme=dark]{--scroll-thumb:#405778;--scroll-hover:#6483af;--scroll-active:#86afff}
+*{scrollbar-width:thin;scrollbar-color:var(--scroll-thumb) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--scroll-thumb);border:2px solid transparent;background-clip:padding-box;border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background-color:var(--scroll-hover)}
+*::-webkit-scrollbar-thumb:active{background-color:var(--scroll-active)}
+*::-webkit-scrollbar-corner{background:transparent}
+@supports selector(::-webkit-scrollbar){*,.select-options{scrollbar-width:auto;scrollbar-color:auto}}
+.monaco-editor .scrollbar .slider,.xterm .scrollbar .slider{background:var(--scroll-thumb)!important;border-radius:999px}
+.monaco-editor .scrollbar .slider:hover,.xterm .scrollbar .slider:hover{background:var(--scroll-hover)!important}
+.monaco-editor .scrollbar .slider:active,.xterm .scrollbar .slider:active{background:var(--scroll-active)!important}
+
+/* Tooltips are rendered outside scroll containers so they stay within the viewport. */
+.tooltip-trigger{display:inline-flex;flex-shrink:0;min-width:0;border-radius:9px}
+.tooltip-trigger:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.tooltip-bubble{position:fixed;z-index:3000;width:max-content;max-width:min(280px,calc(100vw - 24px));padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--bg);box-shadow:0 8px 28px #17396824;pointer-events:none;animation:tooltip-in .14s var(--motion-ease);font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.tooltip-bubble strong{display:block;color:var(--text);font-size:12px;font-weight:600}
+.tooltip-bubble span{display:block;margin-top:4px}
+.conversation-tools{gap:7px;flex-wrap:wrap;row-gap:6px;padding:0;margin-bottom:12px;color:var(--muted)}
+.conversation-tool{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);font-size:11px;white-space:nowrap;transition:color .16s,background .16s,border-color .16s,box-shadow .16s,transform .16s var(--motion-ease)}
+.conversation-tool svg{color:var(--accent)}
+.conversation-tool:hover:not(:disabled),.conversation-tool:focus-visible{color:var(--accent);background:var(--hover);border-color:var(--scroll-hover);box-shadow:0 3px 10px #2563eb0c;transform:translateY(-1px)}
+.conversation-tool:active:not(:disabled){transform:translateY(0) scale(.97);box-shadow:none}
+.conversation-tool:disabled{opacity:.5}
+.conversation-tool.is-busy{opacity:1;background:var(--hover);color:var(--accent);border-color:var(--scroll-hover)}
+.conversation-tools>.tooltip-trigger{margin-left:0}
+.conversation-tools>.token-usage{margin-left:auto;padding:5px 8px;border-radius:6px;background:var(--panel);font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Keep the side rail mounted for both directions of the transition. */
+.sidebar{display:flex;width:0;padding:17px 0 10px;border-right-width:0;overflow:hidden;opacity:0;visibility:hidden;transform:translateX(-14px);transition:width .24s var(--motion-ease),padding .24s var(--motion-ease),opacity .18s,transform .24s var(--motion-ease),visibility 0s .24s}
+.sidebar-open .sidebar{width:244px;padding:17px 12px 10px;border-right-width:1px;opacity:1;visibility:visible;transform:translateX(0);transition-delay:0s}
+.sidebar-content{display:flex;flex-direction:column;width:220px;flex:1;min-height:0}
+.mobile-scrim{display:none}
+.editor-panel{overflow:hidden;transition:width .24s var(--motion-ease),opacity .2s,transform .24s var(--motion-ease);animation:panel-in .24s var(--motion-ease)}
+.editor-panel.is-closing{width:0;opacity:0;transform:translateX(18px);border-left:0;pointer-events:none}
+.work-body{position:relative}
+.modal-backdrop{animation:fade-in .18s ease-out}
+.modal{animation:dialog-in .22s var(--motion-ease)}
+.modal-backdrop.is-closing{animation:fade-out .18s ease-in forwards;pointer-events:none}
+.modal-backdrop.is-closing .modal{animation:dialog-out .18s ease-in forwards}
+.select-options,.permission-menu,.row-menu[open]>div{animation:popover-in .16s var(--motion-ease)}
+.welcome,.messages,.settings-content,.editor-placeholder{animation:content-in .22s var(--motion-ease)}
+.auth-card{animation:dialog-in .3s var(--motion-ease)}
+.toast{animation:toast-in .2s var(--motion-ease)}
+.upload-progress,.approval,.context-chip{animation:content-in .2s var(--motion-ease)}
+.capacity-meter i,.progress-bar i{transition:width .28s var(--motion-ease)}
+.icon-button,.new-chat,.project-item,.thread-row,.view-toggle,.settings-nav>button,.permission-button,.primary,.secondary,.send-button,.mode-pill,.user-profile{transition:background .16s,color .16s,border-color .16s,box-shadow .16s,transform .16s var(--motion-ease)}
+.icon-button:active:not(:disabled),.view-toggle:active,.send-button:active:not(:disabled),.primary:active:not(:disabled),.secondary:active:not(:disabled){transform:scale(.96)}
+.suggestion-grid>button{transition:background .18s,border-color .18s,transform .18s var(--motion-ease),box-shadow .18s}
+.suggestion-grid>button:hover{transform:translateY(-2px);box-shadow:0 6px 18px #2563eb0b}
+.tool-item[open]>div,.tool-item[open]>pre,.tool-item[open]>.markdown{animation:content-in .16s ease-out}
+
+/* Loading states reserve space without masking loaded content during refresh. */
+.loading-placeholder{width:100%;min-width:0;padding:24px;color:var(--muted);animation:fade-in .18s ease-out}
+.loading-caption{display:flex;align-items:center;gap:8px;font-size:11px;line-height:1.7}
+.skeleton-lines{display:flex;flex-direction:column;gap:12px;margin-top:20px}
+.skeleton{display:block;position:relative;overflow:hidden;width:100%;height:12px;border-radius:6px;background:var(--hover)}
+.skeleton::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--bg) 65%,transparent),transparent);animation:shimmer 1.6s ease-in-out infinite}
+.skeleton:nth-child(3n+2){width:82%}.skeleton:nth-child(3n){width:62%}
+.loading-list{padding:10px 12px}.loading-list .loading-caption{font-size:10px}
+.loading-list .skeleton-lines{gap:14px;margin-top:14px}.loading-list .skeleton{height:13px}
+.loading-conversation{padding:10px 0}.loading-conversation .skeleton-lines{gap:16px;margin-top:28px}
+.loading-conversation .skeleton:first-child{width:52%;height:50px;margin-left:auto;border-radius:14px}
+.loading-conversation .skeleton:nth-child(2){width:25%;margin-top:16px}
+.loading-conversation .skeleton:nth-child(5){height:80px;width:100%;margin:7px 0}
+.conversation-loading{width:100%}
+.loading-code{flex:1;padding:26px 22px;min-height:220px}.loading-code .skeleton{height:10px}.loading-code .skeleton-lines{gap:15px}
+.loading-code .skeleton:nth-child(even){margin-left:16px;width:65%}
+.initial-loading{flex-direction:column;gap:8px}.initial-loading>.loading-placeholder{max-width:290px;padding:15px 24px}.initial-loading .loading-caption{justify-content:center}
+.usage-summary .summary-loading{display:inline-block;position:relative;min-width:62px;border-radius:4px;background:var(--hover);color:var(--muted);animation:pulse 1.6s ease-in-out infinite}
+.live-terminal{position:relative}.terminal-surface{height:100%;min-height:0}.terminal-loading{position:absolute;inset:0;background:var(--bg);border-radius:0 0 15px 15px;overflow:hidden}
+.terminal-surface[aria-busy=true]{opacity:0}.terminal-surface{transition:opacity .18s}
+
+@keyframes shimmer{to{transform:translateX(100%)}}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+@keyframes fade-out{from{opacity:1}to{opacity:0}}
+@keyframes content-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tooltip-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+@keyframes popover-in{from{opacity:0;transform:translateY(5px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes panel-in{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@keyframes dialog-in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes dialog-out{to{opacity:0;transform:translateY(8px) scale(.98)}}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+
+@media(max-width:1100px){.editor-panel{position:absolute;inset:0;width:100%;z-index:10}.editor-panel.is-closing{width:100%}}
+@media(max-width:800px){
+  .sidebar,.sidebar-open .sidebar{width:265px;padding:17px 12px 10px;transform:translateX(-100%);transition:transform .24s var(--motion-ease),opacity .18s,visibility 0s .24s}
+  .sidebar-open .sidebar{transform:translateX(0);transition-delay:0s}
+  .sidebar-content{width:241px}
+  .mobile-scrim{display:block;animation:fade-in .24s ease-out}
+  .mobile-scrim.is-closing{animation:fade-out .24s ease-in forwards;pointer-events:none}
+  .conversation-tool{padding:7px 8px;font-size:10px;gap:5px}
+  .conversation-tools{gap:6px}.conversation-tools>.token-usage{font-size:9px}
+  .topbar-left{gap:7px}.workspace-name{max-width:110px}.topbar-right{gap:7px}
+  .loading-code{padding:20px 16px}.loading-list{padding:10px 8px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .sidebar,.sidebar-open .sidebar{transition-delay:0s}
+  .suggestion-grid>button:hover,.conversation-tool:hover:not(:disabled),.conversation-tool:active:not(:disabled){transform:none}
+}
+@media(forced-colors:active){
+  *{scrollbar-color:auto}.conversation-tool,.tooltip-bubble{border:1px solid ButtonText}
+  .skeleton{background:GrayText}.skeleton::after{display:none}
+}

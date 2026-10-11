@@ -37,6 +37,17 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
   const request = async (url, method='GET', body, session, overrides={})=>{const r=await fetch(base+'/api'+url,{method,headers:{'Content-Type':'application/json',Origin:base,...(session?{Cookie:session.cookie,'X-CSRF-Token':session.csrf}:{}),...overrides},body:body?JSON.stringify(body):undefined});let data;try{data=await r.json();}catch{}return {status:r.status,data,headers:r.headers};};
   async function register(username){const r=await request('/register','POST',{username,password:'Very-good-password42',inviteCode:'test-invite-secret'});assert.equal(r.status,200);const s={...r.data.user,cookie:r.headers.get('set-cookie').split(';')[0]};sessions.push(s);return s;}
   try {
+    await t.test('deployment health reports readiness without account or operation details', async () => {
+      const idle = await fetch(base + '/api/health').then(r => r.json());
+      assert.equal(idle.deploymentReady, true);
+      for (const field of ['active', 'terminals', 'requests', 'pending']) {
+        instance.codex.instances.set('deployment-check', { [field]: new Set(['private-operation']) });
+        const busy = await fetch(base + '/api/health').then(r => r.json());
+        assert.equal(busy.deploymentReady, false);
+        assert.ok(!JSON.stringify(busy).includes('private-operation'));
+        instance.codex.instances.delete('deployment-check');
+      }
+    });
     await t.test('registration requires invite; password is hashed; first user is superadministrator',async()=>{assert.equal((await request('/register','POST',{username:'Alice',password:'Very-good-password42',inviteCode:'wrong'})).status,403);const a=await register('Alice');assert.equal(a.username,'alice');assert.equal(a.role,'superadmin');assert.ok(!instance.store.user(a.id).password.includes('Very-good'));const b=await register('Bob');assert.equal(b.role,'user');assert.equal((await request('/admin/users','GET',null,b)).status,403);});
     const [a,b]=sessions;const p=(await request('/projects','POST',{name:'测试项目'},a)).data;
     await t.test('dashboard is authenticated and reports real capacity and cached account quota',async()=>{
