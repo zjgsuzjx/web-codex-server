@@ -22,6 +22,7 @@ COPY src/deltas.js ./src/deltas.js
 COPY scripts/smoke.mjs ./scripts/smoke.mjs
 COPY scripts/role-smoke.mjs ./scripts/role-smoke.mjs
 COPY scripts/deploy-release.sh ./scripts/deploy-release.sh
+COPY scripts/deploy-main.sh ./scripts/deploy-main.sh
 USER 1000:1000
 EXPOSE 3100
 CMD ["node", "server/index.js"]
