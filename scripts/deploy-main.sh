@@ -30,7 +30,9 @@ fi
 STAGE=$(mktemp -d "$APP_DIR/.deploy-releases/$TARGET.XXXXXX")
 cleanup() { case "$STAGE" in "$APP_DIR"/.deploy-releases/*) [[ ! -L "$STAGE" ]] && rm -rf -- "$STAGE";; *) return 1;; esac; }
 trap cleanup EXIT
-git --git-dir="$STATE_DIR/source.git" archive "$TARGET" | tar -x --no-same-owner --no-same-permissions -C "$STAGE"
+# Keep state/log files private, but preserve readable source modes for the
+# non-root runtime image. The temporary release directory itself stays 0700.
+(umask 022; git --git-dir="$STATE_DIR/source.git" archive "$TARGET" | tar -x --no-same-owner --no-same-permissions -C "$STAGE")
 echo "$(date -Is) Server deployment started: $TARGET"
 # Retry readiness only during this triggered request, with a ten-minute limit.
 # There is no cron, recurring repository check or permanent background process.

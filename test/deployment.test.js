@@ -8,6 +8,51 @@ import { execFile } from 'node:child_process';
 const exec = promisify(execFile);
 const revision = 'a'.repeat(40);
 
+test('main deployment extracts readable source while keeping runtime state private', { skip: process.platform !== 'linux' }, async () => {
+  const directory = await fs.mkdtemp(path.join(os.userInfo().homedir, '.codex-main-deploy-test-'));
+  const app = path.join(directory, 'apps/web-codex-server'), fixture = path.join(directory, 'fixture'), bin = path.join(directory, 'bin');
+  const archive = path.join(directory, 'source.tar'), record = path.join(directory, 'release-checked');
+  try {
+    await fs.mkdir(path.join(app, 'scripts'), { recursive: true });
+    await fs.mkdir(path.join(fixture, 'src'), { recursive: true, mode: 0o755 });
+    await fs.mkdir(path.join(fixture, 'scripts'), { mode: 0o755 }); await fs.mkdir(bin);
+    await fs.writeFile(path.join(fixture, 'package.json'), '{}', { mode: 0o644 });
+    await fs.writeFile(path.join(fixture, 'src/index.js'), 'export {};', { mode: 0o644 });
+    await fs.writeFile(path.join(fixture, 'scripts/tool.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    await exec('/bin/tar', ['-cf', archive, '-C', fixture, 'package.json', 'src', 'scripts']);
+    const script = await fs.readFile(new URL('../scripts/deploy-main.sh', import.meta.url), 'utf8');
+    // Substitute only Git discovery; archive extraction and deployment flow are real.
+    await fs.writeFile(path.join(app, 'scripts/deploy-main.sh'), script.replace('export PATH=/usr/local/bin:/usr/bin:/bin', 'export PATH="$DEPLOY_TEST_BIN:/usr/local/bin:/usr/bin:/bin"'));
+    await fs.writeFile(path.join(bin, 'git'), `#!/bin/bash
+set -euo pipefail
+case " $* " in
+  *" init --bare "*) mkdir -p "\${@: -1}";;
+  *" rev-parse FETCH_HEAD "*) printf '%s\\n' "$MOCK_REVISION";;
+  *" ls-tree -r --name-only "*) printf 'package.json\\nsrc/index.js\\nscripts/tool.sh\\n';;
+  *" archive "*) cat "$MOCK_ARCHIVE";;
+esac
+`, { mode: 0o755 });
+    await fs.writeFile(path.join(app, 'scripts/deploy-release.sh'), `#!/bin/bash
+set -euo pipefail
+[[ "$(stat -c %a "$1")" == 700 ]]
+[[ "$(stat -c %a "$1/package.json")" == 644 ]]
+[[ "$(stat -c %a "$1/src")" == 755 ]]
+[[ "$(stat -c %a "$1/src/index.js")" == 644 ]]
+[[ "$(stat -c %a "$1/scripts/tool.sh")" == 755 ]]
+[[ ! -e "$1/.env" && ! -e "$1/MEMORY.md" && ! -e "$1/AGENTS.md" ]]
+printf '%s\\n' "$2" > "$MOCK_RECORD"
+`);
+    await fs.writeFile(path.join(app, '.env'), 'private runtime fixture', { mode: 0o600 });
+    await exec('/bin/bash', [path.join(app, 'scripts/deploy-main.sh'), revision], { env: { ...process.env, DEPLOY_TEST_BIN: bin, MOCK_REVISION: revision, MOCK_ARCHIVE: archive, MOCK_RECORD: record } });
+    assert.equal((await fs.readFile(record, 'utf8')).trim(), revision);
+    assert.equal((await fs.stat(path.join(app, '.deploy-state/main.lock'))).mode & 0o777, 0o600);
+    assert.equal((await fs.stat(path.join(app, '.deploy-state'))).mode & 0o777, 0o700);
+    assert.equal((await fs.stat(path.join(app, '.env'))).mode & 0o777, 0o600);
+    assert.equal(await fs.readFile(path.join(app, '.env'), 'utf8'), 'private runtime fixture');
+    assert.deepEqual(await fs.readdir(path.join(app, '.deploy-releases')), []);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
 test('release deployment validates, defers and restores without touching production resources', { skip: process.platform !== 'linux' }, async t => {
   const directory = await fs.mkdtemp(path.join(os.userInfo().homedir, '.codex-deploy-test-'));
   const app = path.join(directory, 'apps/web-codex-server'), source = path.join(app, '.deploy-releases/candidate'), bin = path.join(directory, 'bin');
