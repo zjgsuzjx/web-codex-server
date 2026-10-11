@@ -44,7 +44,10 @@ else printf '{"status":"ok","revision":"%s"}\\n' "$MOCK_REVISION"; fi
   try {
     await t.test('idle release is tested before promotion and records its revision', async () => {
       const result = await run('success'); assert.equal(result.code, 0);
-      assert.ok(result.calls.indexOf('run --rm --network none') < result.calls.indexOf('tag starvalley-codex-web:'));
+      const calls = result.calls.trim().split('\n');
+      const tested = calls.findIndex(call => call.startsWith('run --rm --network none'));
+      const promoted = calls.findIndex(call => call.startsWith('tag starvalley-codex-web:'));
+      assert.ok(tested >= 0 && promoted > tested, result.calls);
       assert.ok(result.calls.includes('promote')); assert.equal((await fs.readFile(path.join(app, '.deploy-state/deployed-commit'), 'utf8')).trim(), revision);
       assert.equal(await fs.readFile(path.join(app, '.env'), 'utf8'), 'fixture runtime settings');
     });
