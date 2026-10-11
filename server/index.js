@@ -87,7 +87,10 @@ export async function createApp(options = {}) {
     if (!allowedOrigin(req)) return res.status(403).json({ error: '请求来源无效' }); next();
   });
   app.use(express.json({ limit: '3mb' }));
-  app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
+  app.get('/api/health', (req, res) => {
+    const busy = uploads.size || mutationLocks.size || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
+    res.json({ status: 'ok', version: '1.0.0', revision: process.env.APP_REVISION || null, deploymentReady: !busy });
+  });
   app.get('/api/session', (req, res) => { const u = store.auth(req); res.json({ user: u ? publicUser(u) : null, inviteRequired: !!config.inviteCode }); });
   async function login(res, u) {
     const token = randomBytes(32).toString('hex'), csrf = randomBytes(24).toString('hex');

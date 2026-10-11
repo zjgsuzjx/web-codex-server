@@ -89,6 +89,28 @@ bash scripts/backup.sh
 
 备份会暂停本应用和用户 worker，生成包含数据库、项目、历史和凭据的私有归档，然后恢复应用。请妥善保存备份。服务器当前内存和磁盘较小，构建需要约 1.5 GiB Node heap 和可用 swap；构建缓存可以按需回收，**不要使用 `docker volume prune` 清理应用数据**。
 
+### 合并 main 后自动部署（服务器构建）
+
+部署好本应用后，在服务器的 `/home/<用户>/apps/web-codex-server` 目录运行：
+
+```bash
+bash scripts/install-auto-deploy.sh
+```
+
+安装脚本保留已有 crontab，并添加每分钟检查公开仓库 `main` 的任务。不需要 GitHub Actions、GitHub Secret 或额外的 GitHub 令牌；不会消耗 Actions 执行分钟或保存构建产物。安装时记录当前 `main` 作为起点，以后 PR 合并或推送产生新提交时才构建，同一提交不会反复构建。
+
+服务器从 `main` 获取确切提交，通过 `git archive` 导出独立的构建目录。Docker 在服务器编译前端；候选镜像先在没有生产目录及 Docker socket 的隔离容器中运行检查和测试，通过后才更新应用并验证健康与提交号。失败会恢复上一镜像；同一失败提交间隔 15 分钟重试。worker 镜像仅在其 Dockerfile 改变时构建。
+
+应用正在执行对话、终端命令、审批或上传时会推迟切换；切换前会再次检查。应用更新仍需短暂重启，网页会重新连接。数据和配置保留；旧源码中已删除的文件不会由同步程序删除，但镜像始终从独立的当前提交构建。仅合并可信代码，因为合并到 `main` 的 Dockerfile 和部署脚本会在服务器执行。
+
+```bash
+tail -n 80 .deploy-state/auto-deploy.log
+cat .deploy-state/deployed-commit
+curl -fsS http://127.0.0.1:3100/api/health
+```
+
+`.deploy-state/` 和 `.deploy-releases/` 只用于服务器运行，已排除出 Git 和 Docker 构建上下文。`.env`、`data/`、本地 `AGENTS.md` / `MEMORY.md` 不进入发布归档和镜像。部署不会清理其他服务、镜像或数据卷。停止自动部署时，只从 crontab 移除以 `# starvalley-codex-auto-deploy` 结尾的这一行。
+
 ### 本地开发
 
 ```bash

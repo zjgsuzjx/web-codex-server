@@ -1,5 +1,6 @@
 import Editor, { loader } from '@monaco-editor/react';
 import { memo, useRef } from 'react';
+import LoadingPlaceholder from './LoadingPlaceholder';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution';
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution';
@@ -28,5 +29,5 @@ loader.config({ monaco });
 const languages = { js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', json: 'json', html: 'html', css: 'css', md: 'markdown', sh: 'shell', yml: 'yaml', yaml: 'yaml', toml: 'ini', sql: 'sql', rs: 'rust', go: 'go', java: 'java', c: 'c', cpp: 'cpp', php: 'php', xml: 'xml', svg: 'xml', txt: 'plaintext' };
 export default memo(function CodeEditor({ file, content, onChange, onSave, readonly = false, theme = 'light' }) {
   const saveRef=useRef(onSave);saveRef.current=onSave;
-  return <Editor path={file} value={content} language={languages[file?.split('.').pop()] || 'plaintext'} theme={theme === 'light' ? 'vs' : 'vs-dark'} onChange={onChange} loading={<div className="editor-loading">加载编辑器…</div>} onMount={editor => editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>saveRef.current?.())} options={{ fontSize: 13, fontFamily: "'Cascadia Code', 'SFMono-Regular', Consolas, monospace", minimap: { enabled: false }, padding: { top: 16 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', smoothScrolling: true }} />;
+  return <Editor path={file} value={content} language={languages[file?.split('.').pop()] || 'plaintext'} theme={theme === 'light' ? 'vs' : 'vs-dark'} onChange={onChange} loading={<LoadingPlaceholder label="正在准备编辑器…" variant="code" rows={9}/>} onMount={editor => editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>saveRef.current?.())} options={{ fontSize: 13, fontFamily: "'Cascadia Code', 'SFMono-Regular', Consolas, monospace", minimap: { enabled: false }, padding: { top: 16 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', smoothScrolling: true, scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }} />;
 });
