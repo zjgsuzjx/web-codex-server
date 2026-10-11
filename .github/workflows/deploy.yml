@@ -1,0 +1,58 @@
+name: Request server deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-deployment-request
+  cancel-in-progress: false
+
+jobs:
+  request:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Start server build over SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          umask 077
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [[ -n "${!name}" ]] || { echo "::error::Missing secret: $name"; exit 1; }
+          done
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] && (( 10#$DEPLOY_PORT > 0 && 10#$DEPLOY_PORT <= 65535 ))
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          key="$RUNNER_TEMP/deploy_key"
+          known_hosts="$RUNNER_TEMP/deploy_known_hosts"
+          trap 'rm -f -- "$key" "$known_hosts"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$known_hosts"
+          ssh -T -i "$key" -p "$DEPLOY_PORT" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$known_hosts" -o ConnectTimeout=20 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- $GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          revision=$1
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          cd /home/zhuzi/apps/web-codex-server
+          [[ -f scripts/deploy-main.sh ]] || { echo 'Install the deployment scripts on the server first' >&2; exit 1; }
+          mkdir -p .deploy-state
+          log="$PWD/.deploy-state/request-$revision-$(date +%s)-$$.log"
+          nohup /usr/bin/timeout 3600 /bin/bash "$PWD/scripts/deploy-main.sh" "$revision" > "$log" 2>&1 < /dev/null &
+          echo "Deployment requested: $revision; log: $log"
+          REMOTE
+          printf 'Server deployment requested for `%s`. The server builds in the background; this workflow confirms SSH submission only. Check the server request log and `/api/health` revision for the final result.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

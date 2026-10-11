@@ -32,7 +32,7 @@
 
 目前部署目录：`/home/zhuzi/apps/web-codex-server`，访问域名：`https://codex.starvalley.fun`。
 
-构建在服务器进行，不使用 GitHub Actions。部署需要 Docker / Compose；现有系统 Nginx 提供 HTTPS 和 WebSocket 代理，Docker API 只绑定服务器回环地址。
+构建在服务器进行；GitHub Actions 只通过 SSH 触发部署。部署需要 Docker / Compose；现有系统 Nginx 提供 HTTPS 和 WebSocket 代理，Docker API 只绑定服务器回环地址。
 
 ```bash
 cd /home/zhuzi/apps/web-codex-server
@@ -91,25 +91,33 @@ bash scripts/backup.sh
 
 ### 合并 main 后自动部署（服务器构建）
 
-部署好本应用后，在服务器的 `/home/<用户>/apps/web-codex-server` 目录运行：
+`.github/workflows/deploy.yml` 在 `main` 推送（包括 PR 合并）时通过 SSH 发出部署请求，也支持在 Actions 页面选择 `main` 手动运行。服务器没有定时检查仓库的任务。runner 不下载源码、不构建镜像、不保存产物，SSH 请求成功后立即退出，构建时间不会变成 runner 等待时间。
+
+先把 `scripts/deploy-main.sh` 和 `scripts/deploy-release.sh` 随首次部署安装到服务器 `/home/zhuzi/apps/web-codex-server`，再在仓库 **Settings → Secrets and variables → Actions** 添加这些 Repository secrets：
+
+| Secret | 内容 |
+| --- | --- |
+| `DEPLOY_HOST` | 服务器 SSH 地址 |
+| `DEPLOY_USER` | 部署用户，此安装为 `zhuzi` |
+| `DEPLOY_SSH_KEY` | 已获服务器授权的部署专用 SSH 私钥 |
+| `DEPLOY_KNOWN_HOSTS` | 通过可信渠道核对的服务器 `known_hosts` 记录；工作流严格验证主机密钥 |
+| `DEPLOY_PORT` | 可选 SSH 端口，默认 `22`；非默认端口的主机记录使用 `[地址]:端口` |
+
+私钥只放在 GitHub Secret，不能提交或写入 README / 本地记忆。服务器需安装 Git、Docker / Compose、Node.js、curl、flock、rsync 和 timeout，并能访问公开仓库。此工作流只在 `main` 使用部署密钥，不为 PR 分支部署。
+
+服务器串行处理请求，只接收当前 `main` 的确切提交，跳过过期请求和已部署提交，通过 `git archive` 导出独立的构建目录。Docker 在服务器编译前端；候选镜像先在没有生产目录及 Docker socket 的隔离容器中运行检查和测试，通过后才更新应用并验证健康与提交号。切换或健康验证失败会恢复上一镜像。worker 镜像仅在其 Dockerfile 改变时构建。
+
+应用正在执行对话、终端命令、审批或上传时会推迟切换；只在这次请求中有限等待，约十分钟仍忙碌就退出，之后可手动重跑工作流。切换前会再次检查。应用更新仍需短暂重启，网页会重新连接。数据和配置保留；旧源码中已删除的文件不会由同步程序删除，但镜像始终从独立的当前提交构建。仅合并可信代码，因为合并到 `main` 的 Dockerfile 和部署脚本会在服务器执行。
+
+**Actions 成功表示 SSH 请求已提交，不表示后台部署已完成。** 每次请求的日志路径显示在工作流输出中；最终以日志成功信息及健康检查的 `revision` 为准：
 
 ```bash
-bash scripts/install-auto-deploy.sh
-```
-
-安装脚本保留已有 crontab，并添加每分钟检查公开仓库 `main` 的任务。不需要 GitHub Actions、GitHub Secret 或额外的 GitHub 令牌；不会消耗 Actions 执行分钟或保存构建产物。安装时记录当前 `main` 作为起点，以后 PR 合并或推送产生新提交时才构建，同一提交不会反复构建。
-
-服务器从 `main` 获取确切提交，通过 `git archive` 导出独立的构建目录。Docker 在服务器编译前端；候选镜像先在没有生产目录及 Docker socket 的隔离容器中运行检查和测试，通过后才更新应用并验证健康与提交号。失败会恢复上一镜像；同一失败提交间隔 15 分钟重试。worker 镜像仅在其 Dockerfile 改变时构建。
-
-应用正在执行对话、终端命令、审批或上传时会推迟切换；切换前会再次检查。应用更新仍需短暂重启，网页会重新连接。数据和配置保留；旧源码中已删除的文件不会由同步程序删除，但镜像始终从独立的当前提交构建。仅合并可信代码，因为合并到 `main` 的 Dockerfile 和部署脚本会在服务器执行。
-
-```bash
-tail -n 80 .deploy-state/auto-deploy.log
+tail -n 80 .deploy-state/request-<提交号>-<时间>-<进程号>.log
 cat .deploy-state/deployed-commit
 curl -fsS http://127.0.0.1:3100/api/health
 ```
 
-`.deploy-state/` 和 `.deploy-releases/` 只用于服务器运行，已排除出 Git 和 Docker 构建上下文。`.env`、`data/`、本地 `AGENTS.md` / `MEMORY.md` 不进入发布归档和镜像。部署不会清理其他服务、镜像或数据卷。停止自动部署时，只从 crontab 移除以 `# starvalley-codex-auto-deploy` 结尾的这一行。
+`.deploy-state/` 和 `.deploy-releases/` 只用于服务器运行，已排除出 Git 和 Docker 构建上下文。`.env`、`data/`、本地 `AGENTS.md` / `MEMORY.md` 不进入发布归档和镜像。部署不会清理其他服务、镜像或数据卷。如果以前安装过轮询方案，只移除 crontab 中以 `# starvalley-codex-auto-deploy` 结尾的那一行，保留其他任务。停用此方案时禁用 Actions 中的部署工作流即可。
 
 ### 本地开发
 
