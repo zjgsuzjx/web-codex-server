@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+.env
+*.tar.gz
+*.log
+test-results/
+.deploy/

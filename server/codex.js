@@ -1,0 +1,145 @@
+import Docker from 'dockerode';
+import { PassThrough } from 'node:stream';
+import readline from 'node:readline';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { fail } from './files.js';
+import { executionTarget, hostCommand, projectCwd, workerSpec } from './execution.js';
+
+// Ordinary users/admins always receive non-root, scoped containers. Host execution
+// is a separate, explicitly selected superadmin-only backend; commands use argv.
+export class CodexManager {
+  constructor(config, emit) { this.config = config; this.emit = emit; this.instances = new Map(); this.starting = new Map(); this.docker = new Docker({ socketPath: config.dockerSocket || '/var/run/docker.sock' }); }
+  async ensure(user) {
+    user = this.currentUser(user);
+    const target = executionTarget(user);
+    if (this.instances.has(user.id) && this.instances.get(user.id).target !== target) await this.restart(user);
+    if (this.instances.has(user.id)) return this.instances.get(user.id);
+    if (this.starting.has(user.id)) return this.starting.get(user.id);
+    if (new Set([...this.instances.keys(), ...this.starting.keys()]).size >= this.config.maxWorkers) fail(503, '服务器当前工作区已满，请稍后重试');
+    const pending = this.start(user).finally(() => this.starting.delete(user.id));
+    this.starting.set(user.id, pending); return pending;
+  }
+  async start(user) {
+    user = this.currentUser(user);
+    const target = executionTarget(user), spec = workerSpec(this.config, user);
+    const userDir = path.join(this.config.dataDir, 'users', user.username);
+    await fs.mkdir(path.join(userDir, 'projects'), { recursive: true });
+    await fs.mkdir(path.join(userDir, 'codex'), { recursive: true });
+    const marker = path.join(userDir, 'codex', '.initialized');
+    try { await fs.access(marker); } catch {
+      for (const file of ['config.toml', 'auth.json']) {
+        try { await fs.copyFile(path.join(this.config.templateDir, file), path.join(userDir, 'codex', file), 1); } catch (e) { if (!['ENOENT', 'EEXIST'].includes(e.code)) throw e; }
+      }
+      try { await fs.writeFile(path.join(userDir, 'codex', 'config.toml'), 'sandbox_mode = "danger-full-access"\napproval_policy = "on-request"\n', { flag: 'wx', mode: 0o600 }); } catch (e) { if (e.code !== 'EEXIST') throw e; }
+      await fs.writeFile(marker, '', { mode: 0o600 });
+    }
+    await this.prepareHome(user, target === 'workspace');
+    const name = `sv-codex-${user.id}`;
+    const networkMode = spec.HostConfig.NetworkMode;
+    let container = this.docker.getContainer(name);
+    try {
+      const info = await container.inspect();
+      if (info.HostConfig.NetworkMode !== networkMode || (info.Config.Labels?.['starvalley.execution'] || 'workspace') !== target || Boolean(info.HostConfig.Privileged) !== (target === 'server')) { await container.remove({ force: true }); const missing = new Error('Recreate worker execution environment'); missing.statusCode = 404; throw missing; }
+      if (!info.State.Running) await container.start();
+    }
+    catch (e) {
+      if (e.statusCode !== 404) throw e;
+      container = await this.docker.createContainer(spec); await container.start();
+    }
+    try { if (executionTarget(this.currentUser(user)) !== target) fail(403, '执行权限已改变'); }
+    catch(e) { await container.remove({force:true}).catch(()=>{}); throw e; }
+    const cmd = target === 'server' ? hostCommand(this.config, user, ['/usr/bin/node', this.config.hostCodexScript, 'app-server']) : ['codex', 'app-server'];
+    const exec = await container.exec({ Cmd: cmd, AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: false });
+    const stream = await exec.start({ hijack: true, stdin: true });
+    const stdout = new PassThrough(), stderr = new PassThrough();
+    container.modem.demuxStream(stream, stdout, stderr);
+    const inst = { target, container, stream, pending: new Map(), requests: new Map(), next: 1, last: Date.now(), loaded: new Set(), active: new Set(), terminals: new Set() };
+    this.instances.set(user.id, inst);
+    stderr.on('data', () => {}); // Credentials/provider responses must never enter application logs.
+    readline.createInterface({ input: stdout }).on('line', line => {
+      let msg; try { msg = JSON.parse(line); } catch { return; }
+      if (msg.id != null && !msg.method) {
+        const waiter = inst.pending.get(msg.id); if (waiter) { clearTimeout(waiter.timer); inst.pending.delete(msg.id); if (msg.error) waiter.reject(new Error(msg.error.message)); else waiter.resolve(msg.result); }
+      } else if (msg.method) {
+        inst.last = Date.now();
+        if (msg.method === 'turn/started') inst.active.add(msg.params?.turn?.id);
+        if (msg.method === 'turn/completed') inst.active.delete(msg.params?.turn?.id);
+        if (msg.id != null) inst.requests.set(String(msg.id), msg);
+        if (msg.method === 'serverRequest/resolved') inst.requests.delete(String(msg.params?.requestId));
+        this.emit(user.id, msg);
+      }
+    });
+    const ended = () => { if(this.instances.get(user.id) === inst)this.drop(user.id); };
+    stream.on('error', ended); stream.on('end', ended);
+    try { await this.raw(inst, 'initialize', { clientInfo: { name: 'starvalley_web', title: 'Starvalley Codex', version: '1.0.0' }, capabilities: { experimentalApi: true } }); } catch (e) { this.drop(user.id); throw e; }
+    stream.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
+    return inst;
+  }
+  currentUser(user) {
+    if (this.config.changingUsers?.has(user.id)) fail(409, '账号权限正在更新，请重新登录');
+    const current = this.config.resolveUser ? this.config.resolveUser(user.id) : user;
+    if (!current) fail(403, '账号已失效');
+    executionTarget(current); return current;
+  }
+  async prepareHome(user, repairProjects = false) {
+    // Host root may create root-owned CLI state. Repair only this user's Codex
+    // bind, in a confined helper without host PID/network, Docker socket or root mount.
+    const home = path.join(this.config.hostDataDir, 'users', user.username, 'codex').replaceAll('\\', '/');
+    const projectDir = path.join(this.config.hostDataDir, 'users', user.username, 'projects').replaceAll('\\','/');
+    const helper = await this.docker.createContainer({ Image: this.config.workerImage, User: '0:0', Cmd: ['chown', '-R', '--no-dereference', '1000:1000', '/codex-home', ...(repairProjects?['/own-projects']:[])],
+      HostConfig: { Binds: [`${home}:/codex-home`,...(repairProjects?[`${projectDir}:/own-projects`]:[])], NetworkMode: 'none', ReadonlyRootfs: true, CapDrop: ['ALL'], CapAdd: ['CHOWN', 'DAC_OVERRIDE'], SecurityOpt: ['no-new-privileges:true'], PidsLimit: 16, Memory: 32 * 1024 * 1024 } });
+    try { await helper.start(); const result = await helper.wait(); if(result.StatusCode !== 0) fail(500, '无法准备用户 Codex 目录'); }
+    finally { await helper.remove({force:true}).catch(()=>{}); }
+  }
+  raw(inst, method, params = {}, timeout = 120000) {
+    inst.last = Date.now(); const id = inst.next++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { inst.pending.delete(id); reject(new Error('Codex 请求超时')); }, timeout);
+      inst.pending.set(id, { resolve, reject, timer });
+      inst.stream.write(JSON.stringify({ id, method, params }) + '\n');
+    });
+  }
+  async call(user, method, params = {}, timeout = 120000) { return this.raw(await this.ensure(user), method, params, timeout); }
+  async terminal(user, projectId, cols, rows, onData, onEnd) {
+    user = this.currentUser(user);
+    const inst = await this.ensure(user);
+    if (inst.terminals.size >= 2) fail(429, '终端数量已达上限');
+    const cwd = projectCwd(this.config, user, projectId), Cmd = inst.target === 'server' ? hostCommand(this.config, user, ['/bin/bash'], cwd) : ['bash'];
+    const exec = await inst.container.exec({ Cmd, WorkingDir: inst.target === 'server' ? '/' : cwd, Env: ['TERM=xterm-256color', 'LANG=C.UTF-8'], AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: true });
+    const stream = await exec.start({ hijack: true, stdin: true });
+    inst.terminals.add(stream); stream.on('data', data => { inst.last = Date.now(); onData(data); });
+    const end = () => { if (inst.terminals.delete(stream)) onEnd(); };
+    stream.on('error', end); stream.on('end', end); stream.on('close', end);
+    await exec.resize({ h: rows, w: cols }).catch(() => {});
+    return { stream, exec, close() { if (!stream.destroyed) { stream.write('exit\n'); stream.end(); stream.destroy(); } end(); } };
+  }
+  async reply(user, requestId, result) {
+    const inst = await this.ensure(user); const request = inst.requests.get(String(requestId));
+    if (!request) fail(404, '该请求已失效');
+    inst.stream.write(JSON.stringify({ id: request.id, result }) + '\n'); inst.requests.delete(String(requestId));
+  }
+  async resume(user, thread, settings) {
+    const inst = await this.ensure(user);
+    if (!inst.loaded.has(thread.id)) { await this.raw(inst, 'thread/resume', { threadId: thread.id, cwd: projectCwd(this.config, this.currentUser(user), thread.project_id), ...settings }); inst.loaded.add(thread.id); }
+  }
+  drop(uid) {
+    const inst = this.instances.get(uid); if (!inst) return;
+    this.instances.delete(uid);
+    for (const p of inst.pending.values()) { clearTimeout(p.timer); p.reject(new Error('Codex 进程已断开，请重试')); }
+    inst.stream.destroy();
+    for (const stream of inst.terminals) stream.destroy();
+    this.emit(uid, { method: 'connection/lost', params: {} });
+  }
+  async restart(user) { const inst = this.instances.get(user.id); this.drop(user.id); if (inst) await inst.container.stop({ t: 5 }).catch(() => {}); }
+  async revoke(user) {
+    await this.starting.get(user.id)?.catch(()=>{});
+    await this.restart(user);
+    await this.docker.getContainer(`sv-codex-${user.id}`).remove({force:true}).catch(e=>{if(e.statusCode!==404)throw e;});
+    await this.prepareHome(user, true);
+  }
+  async stopIdle(connected) {
+    for (const [id, inst] of this.instances) if (!connected.has(id) && Date.now() - inst.last > 15 * 60000 && inst.pending.size === 0 && inst.requests.size === 0 && !inst.active.size && !inst.terminals.size) { this.drop(id); await inst.container.stop({ t: 5 }).catch(() => {}); }
+  }
+  async shutdown() { await Promise.all([...this.instances.values()].map(i => i.container.stop({ t: 5 }).catch(() => {}))); for (const id of this.instances.keys()) this.drop(id); }
+}
