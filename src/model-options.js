@@ -1,8 +1,5 @@
 const fallbackEfforts = ['minimal', 'low', 'medium', 'high', 'xhigh'];
-const labels = { none: '无', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '极高', max: '最高', ultra: '超高' };
-
 export const modelId = model => model.model || model.id;
-export const effortLabel = effort => labels[effort] || effort;
 export const effortTone = effort => ['high', 'xhigh', 'max', 'ultra'].includes(effort) ? effort : 'normal';
 export function availableModels(models) {
   const seen = new Set();
@@ -15,6 +12,11 @@ export function availableModels(models) {
 }
 export function selectedModel(models, id) {
   return id ? models.find(model => modelId(model) === id) : models.find(model => model.isDefault);
+}
+export function modelOptions(models, current) {
+  const options = [{ value: '', label: '服务器默认模型' }, ...availableModels(models).map(model => ({ value: modelId(model), label: model.displayName || modelId(model) }))];
+  if (current && !options.some(option => option.value === current)) options.push({ value: current, label: current });
+  return options;
 }
 export function reasoningEfforts(model) {
   if (!Array.isArray(model?.supportedReasoningEfforts)) return fallbackEfforts;
