@@ -143,6 +143,34 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       const usage={last:{totalTokens:1250},total:{totalTokens:25000},modelContextWindow:200000};instance.codex.emit(a.id,{method:'thread/tokenUsage/updated',params:{threadId:tr.id,tokenUsage:usage}});
       assert.deepEqual((await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.tokenUsage,usage);
     });
+    await t.test('generated images survive history and websocket completion; image endpoints enforce ownership and path boundaries',async()=>{
+      const tr=(await request('/threads','POST',{projectId:p.id},a)).data;
+      const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=','base64');
+      const image={id:'generated',type:'imageGeneration',status:'completed',result:png.toString('base64'),revisedPrompt:'Test image'};
+      const turn={id:'image-turn',status:'completed',items:[image]};instance.codex.threads.get(tr.id).turns.push(turn);
+      const events=await socket(base,a);sockets.push(events);await events.wait('ready');
+      instance.codex.emit(a.id,{method:'item/completed',params:{threadId:tr.id,turnId:turn.id,item:image}});
+      const event=(await events.wait('codex/event')).event.params.item;assert.ok(!('result' in event));assert.match(event.imageUrl,/\/images\/generated$/);
+      const history=(await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.turns[0].items[0];assert.equal(history.imageUrl,event.imageUrl);assert.ok(!('result' in history));
+      const url=base+history.imageUrl;
+      const response=await fetch(url,{headers:{Cookie:a.cookie}});assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');assert.deepEqual(Buffer.from(await response.arrayBuffer()),png);
+      assert.match((await fetch(url+'?download=1',{headers:{Cookie:a.cookie}})).headers.get('content-disposition'),/^attachment; filename="?generated-image\.png"?$/);
+      assert.equal((await fetch(url)).status,401);assert.equal((await fetch(url,{headers:{Cookie:b.cookie}})).status,404);
+      assert.equal((await request(`/threads/${tr.id}/turns/wrong/images/generated`,'GET',null,a)).status,404);
+      const generatedDir=path.join(dir,'users','alice','codex','generated_images');await fs.mkdir(generatedDir,{recursive:true});await fs.writeFile(path.join(generatedDir,'saved.png'),png);
+      image.result='';image.savedPath='/home/node/.codex/generated_images/saved.png';assert.equal((await fetch(url,{headers:{Cookie:a.cookie}})).status,200);
+      image.savedPath='/home/node/.codex/auth.json';assert.equal((await fetch(url,{headers:{Cookie:a.cookie}})).status,403);
+      image.savedPath='/home/node/.codex/generated_images/not-found.png';assert.equal((await fetch(url,{headers:{Cookie:a.cookie}})).status,404);
+      image.savedPath=null;image.result='';assert.equal((await fetch(url,{headers:{Cookie:a.cookie}})).status,404);
+      const projectDir=path.join(dir,'users','alice','projects',p.id);await fs.writeFile(path.join(projectDir,'diagram.png'),png);
+      const media=rel=>`/threads/${tr.id}/media?path=${encodeURIComponent(rel)}`;
+      assert.equal((await request(media(`/workspace/${p.id}/diagram.png`),'GET',null,a)).status,200);
+      for(const rel of ['/etc/passwd','/home/node/.codex/auth.json',`/workspace/${p.id}/../other.png`])assert.equal((await request(media(rel),'GET',null,a)).status,rel.includes('..')?400:403);
+      assert.equal((await request(media('resumed.txt'),'GET',null,a)).status,415);
+      await fs.symlink(generatedDir,path.join(projectDir,'media-link'),process.platform==='win32'?'junction':'dir');
+      assert.equal((await request(media('media-link/saved.png'),'GET',null,a)).status,403);
+      assert.equal((await request(media('diagram.png'),'GET',null,b)).status,404);
+    });
     await t.test('web login permits managed device flow but rejects browser callbacks and external tokens',async()=>{
       await s2.call('account/login/start',{type:'chatgptDeviceCode',accessToken:'ignored'});assert.deepEqual(instance.codex.calls.at(-1).params,{type:'chatgptDeviceCode'});
       await assert.rejects(s2.call('account/login/start',{type:'chatgptAuthTokens',accessToken:'forbidden'}));await assert.rejects(s2.call('account/login/start',{type:'chatgpt'}));

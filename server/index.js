@@ -15,6 +15,7 @@ import { ROLES, isAdministrator, executionTarget, projectCwd } from './execution
 import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomicWrite, anchored, safeRename, safeRemove } from './files.js';
 import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInput } from './attachments.js';
 import { stageZip, publishZip } from './archives.js';
+import { imageResult, readMedia } from './chat-media.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -51,7 +52,7 @@ export async function createApp(options = {}) {
     const t = tid && store.get('SELECT * FROM threads WHERE id=? AND user_id=?', tid, uid);
     if (t && msg.method === 'thread/tokenUsage/updated') store.run('UPDATE threads SET token_usage=? WHERE id=?', JSON.stringify(msg.params.tokenUsage), tid);
     if (t && msg.method === 'turn/started') bindAttachments(uid, tid, msg.params.turn.id);
-    if (t && msg.params?.item?.type === 'userMessage') msg = { ...msg, params: { ...msg.params, item: decorateItem(uid, tid, msg.params.turnId, msg.params.item) } };
+    if (t && msg.params?.item) msg = { ...msg, params: { ...msg.params, item: decorateItem(uid, tid, msg.params.turnId, msg.params.item) } };
     if (t && msg.params?.turn) msg = { ...msg, params: { ...msg.params, turn: decorateTurn(uid, tid, msg.params.turn) } };
     if (t && msg.method === 'thread/name/updated' && msg.params.threadName && t.title_state !== 'manual') setTitle(uid, tid, msg.params.threadName);
     // Codex owns durable conversation history; reconnect re-reads it via thread/read.
@@ -66,6 +67,12 @@ export async function createApp(options = {}) {
     for (const id of attachmentSends.get(`${uid}:${tid}`) || []) store.run('UPDATE attachments SET turn_id=? WHERE id=? AND user_id=? AND thread_id=? AND turn_id IS NULL', turnId, id, uid, tid);
   }
   function decorateItem(uid, tid, turnId, item) {
+    if (item.type === 'imageGeneration') {
+      const { result, ...metadata } = item;
+      // Keep multi-megabyte image payloads out of WebSocket events and history
+      // JSON. Fetch bytes through the authenticated, thread-scoped endpoint.
+      return { ...metadata, imageUrl: result || item.savedPath ? `/api/threads/${encodeURIComponent(tid)}/turns/${encodeURIComponent(turnId)}/images/${encodeURIComponent(item.id)}` : null };
+    }
     if (item.type !== 'userMessage') return item;
     // Forked turns retain their IDs and attachment references in Codex history.
     return { ...item, attachments: store.all('SELECT * FROM attachments WHERE user_id=? AND turn_id=?', uid, turnId).map(attachmentPublic) };
@@ -257,6 +264,25 @@ export async function createApp(options = {}) {
     if (result.thread.name && t.title_state !== 'manual') setTitle(req.user.id, t.id, result.thread.name);
     res.json({ ...result, thread: { ...result.thread, title: store.thread(req.user, t.id).title, tokenUsage: t.token_usage ? JSON.parse(t.token_usage) : result.thread.tokenUsage, turns: result.thread.turns?.map(turn => decorateTurn(req.user.id, t.id, turn)) || [] } });
     if (t.title_state === 'pending' && result.thread.turns?.some(turn => turn.status === 'completed')) void autoTitle(req.user.id, t.id);
+  });
+  const sendImage = (req, res, image) => {
+    res.type(image.mime);
+    if (req.query.download === '1') res.attachment(`generated-image.${image.mime.split('/')[1]}`);
+    res.send(image.data);
+  };
+  app.get('/api/threads/:id/turns/:turnId/images/:itemId', async (req, res) => {
+    const t = store.thread(req.user, req.params.id);
+    const result = await codex.call(req.user, 'thread/read', { threadId: t.id, includeTurns: true });
+    const item = result.thread.turns?.find(turn => turn.id === req.params.turnId)?.items?.find(item => item.id === req.params.itemId && item.type === 'imageGeneration');
+    if (!item) fail(404, '生成图片不存在');
+    let image = imageResult(item.result);
+    if (!image && item.savedPath) image = await readMedia(config, req.user, t, item.savedPath);
+    if (!image) fail(404, 'Codex 没有返回可读取的图片');
+    sendImage(req, res, image);
+  });
+  app.get('/api/threads/:id/media', async (req, res) => {
+    const t = store.thread(req.user, req.params.id);
+    sendImage(req, res, await readMedia(config, req.user, t, req.query.path));
   });
   app.patch('/api/threads/:id', async (req, res) => { store.thread(req.user, req.params.id); const title = req.body.title?.trim(); if (!title || title.length > 100) fail(400, '对话标题无效'); store.run("UPDATE threads SET title=?,title_state='manual' WHERE id=? AND user_id=?", title, req.params.id, req.user.id); await codex.call(req.user, 'thread/name/set', { threadId: req.params.id, name: title }).catch(() => {}); emit(req.user.id, {method:'thread/title/updated',params:{threadId:req.params.id,title}}); res.json({ ok: true }); });
   function getAttachment(user, id) {

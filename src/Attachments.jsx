@@ -24,14 +24,16 @@ export function AttachmentPreview({ item, api, Dialog, onClose }) {
           try { const bytes = new Uint8Array(buffer); if (bytes.includes(0)) throw new Error(); preview = {...preview,kind:'text',text:new TextDecoder('utf-8',{fatal:true}).decode(bytes)}; } catch {}
         }
         if (!cancelled) setData(preview);
+      } else if (item.generated && item.kind === 'image' && item.url) {
+        if (!cancelled) setData(item);
       } else {
         const preview = await api(`/attachments/${item.id}/preview`); if (!cancelled) setData(preview);
       }
     })().catch(e=>{if(!cancelled)setError(e.message);});
     return () => {cancelled=true;if(url)URL.revokeObjectURL(url);};
   }, [item.id]);
-  return <Dialog title={item.name} subtitle="当前对话的附件" wide onClose={onClose}><div className="attachment-preview">
+  return <Dialog title={item.name} subtitle={item.generated ? 'Codex 生成的图片' : '当前对话的附件'} wide onClose={onClose}><div className="attachment-preview">
     {error ? <p role="alert">{error}</p> : !data ? <LoaderCircle className="spin" size={20}/> : data.kind === 'image' ? <img src={data.url} alt={item.name}/> : data.kind === 'text' ? <pre>{data.text}</pre> : <p>此附件无法直接预览，可以下载查看。</p>}
-    {data && <a className="secondary" href={item.file ? data.url : `${data.url}?download=1`} download={item.name}><Download size={14}/>下载附件</a>}
+    {data && <a className="secondary" href={item.file ? data.url : `${data.url}${data.url.includes('?')?'&':'?'}download=1`} download={item.generated ? undefined : item.name}><Download size={14}/>{item.generated ? '下载图片' : '下载附件'}</a>}
   </div></Dialog>;
 }

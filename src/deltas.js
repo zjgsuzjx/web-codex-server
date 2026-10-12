@@ -1,12 +1,13 @@
 // Lifecycle notifications contain partial snapshots. Never replace the item list.
 export function mergeItem(previous = {}, incoming = {}) {
   const item = { ...previous, ...incoming };
-  for (const field of ['text', 'aggregatedOutput', 'streamedReasoning', 'streamedReasoningContent']) {
+  for (const field of ['text', 'aggregatedOutput', 'streamedReasoning', 'streamedReasoningContent', 'imageUrl', 'savedPath']) {
     if (previous[field] && (!incoming[field] || previous[field].startsWith(incoming[field]) && previous[field].length > incoming[field].length)) item[field] = previous[field];
   }
-  for (const field of ['content', 'summary', 'attachments']) {
+  for (const field of ['content', 'summary', 'attachments', 'contentItems']) {
     if (!incoming[field]?.length && previous[field]?.length) item[field] = previous[field];
   }
+  if (previous.status && previous.status !== 'inProgress' && incoming.status === 'inProgress') item.status = previous.status;
   return item;
 }
 export function mergeTurn(previous = {}, incoming = {}) {
@@ -39,7 +40,13 @@ export function applyDeltas(turns, events) {
     if (!p?.turnId || !p?.itemId || !p.delta) continue;
     const field = method === 'item/agentMessage/delta' ? 'text' : method === 'item/commandExecution/outputDelta' ? 'aggregatedOutput' : method === 'item/reasoning/textDelta' ? 'streamedReasoningContent' : 'streamedReasoning';
     const key = `${p.turnId}/${p.itemId}`;
-    const item = updates.get(key) || {}; item[field] = (item[field] || '') + p.delta; updates.set(key, item);
+    const item = updates.get(key) || {}; item[field] = (item[field] || '') + p.delta;
+    const parts = method === 'item/reasoning/summaryTextDelta' ? 'streamedSummaryParts' : method === 'item/reasoning/textDelta' ? 'streamedContentParts' : null;
+    if (parts) {
+      const index = p.summaryIndex ?? p.contentIndex ?? 0;
+      if (Number.isInteger(index) && index >= 0 && index < 1000) { item[parts] ||= []; item[parts][index] = (item[parts][index] || '') + p.delta; }
+    }
+    updates.set(key, item);
   }
   // Deltas can arrive before item/started (or after reconnect).
   for (const { method, params: p } of events) {
@@ -53,7 +60,10 @@ export function applyDeltas(turns, events) {
     let changed = false;
     const items = turn.items.map(item => {
       const update = updates.get(`${turn.id}/${item.id}`); if (!update) return item;
-      changed = true; return { ...item, ...Object.fromEntries(Object.entries(update).map(([key, delta]) => [key, (item[key] || '') + delta])) };
+      changed = true; return { ...item, ...Object.fromEntries(Object.entries(update).map(([key, delta]) => {
+        if (!Array.isArray(delta)) return [key, (item[key] || '') + delta];
+        const parts = [...(item[key] || [])]; delta.forEach((text, index) => { parts[index] = (parts[index] || '') + text; }); return [key, parts];
+      })) };
     });
     return changed ? { ...turn, items } : turn;
   });
@@ -67,7 +77,7 @@ export function createDeltaBuffer(deliver, delay = 50, timers = globalThis) {
   }
   return {
     push(event) {
-      const p = event.params, key = `${event.method}/${p.turnId}/${p.itemId}`;
+      const p = event.params, key = `${event.method}/${p.turnId}/${p.itemId}/${p.summaryIndex ?? p.contentIndex ?? ''}`;
       const old = queue.get(key);
       queue.set(key, old ? { ...old, params: { ...old.params, delta: old.params.delta + (p.delta || '') } } : event);
       if (timer == null) timer = timers.setTimeout(() => flush(), delay);

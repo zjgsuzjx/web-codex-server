@@ -8,7 +8,7 @@
     "start": "node server/index.js",
     "build": "vite build",
     "test": "node --test test/*.test.js",
-    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js && node --check server/attachments.js && node --check server/archives.js"
+    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js && node --check server/attachments.js && node --check server/archives.js && node --check server/chat-media.js"
   },
   "engines": {
     "node": ">=24"
