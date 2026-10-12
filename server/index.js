@@ -13,7 +13,7 @@ import { CodexManager } from './codex.js';
 import { createResources } from './resources.js';
 import { ROLES, isAdministrator, executionTarget, projectCwd } from './execution.js';
 import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomicWrite, anchored, safeRename, safeRemove } from './files.js';
-import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInput } from './attachments.js';
+import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInputs } from './attachments.js';
 import { stageZip, publishZip } from './archives.js';
 import { imageResult, readMedia } from './chat-media.js';
 
@@ -64,7 +64,8 @@ export async function createApp(options = {}) {
   };
   const codex = options.codexFactory ? options.codexFactory(config, emit) : new CodexManager(config, emit);
   function bindAttachments(uid, tid, turnId) {
-    for (const id of attachmentSends.get(`${uid}:${tid}`) || []) store.run('UPDATE attachments SET turn_id=? WHERE id=? AND user_id=? AND thread_id=? AND turn_id IS NULL', turnId, id, uid, tid);
+    const pending = attachmentSends.get(`${uid}:${tid}`);
+    for (const [index, id] of (pending?.ids || []).entries()) store.run('UPDATE attachments SET turn_id=?,message_text=? WHERE id=? AND user_id=? AND thread_id=? AND turn_id IS NULL', turnId, index === 0 ? pending.text : null, id, uid, tid);
   }
   function decorateItem(uid, tid, turnId, item) {
     if (item.type === 'imageGeneration') {
@@ -75,7 +76,11 @@ export async function createApp(options = {}) {
     }
     if (item.type !== 'userMessage') return item;
     // Forked turns retain their IDs and attachment references in Codex history.
-    return { ...item, attachments: store.all('SELECT * FROM attachments WHERE user_id=? AND turn_id=?', uid, turnId).map(attachmentPublic) };
+    const attachments = store.all('SELECT * FROM attachments WHERE user_id=? AND turn_id=?', uid, turnId);
+    const original = attachments.find(attachment => attachment.message_text != null)?.message_text;
+    // CLI history includes model-only attachment context. Keep the user's
+    // original question and attachment chips in the browser, including forks.
+    return { ...item, ...(original != null ? { text: original, content: [{ type: 'text', text: original }, ...(item.content || []).filter(content => content.type !== 'text')] } : {}), attachments: attachments.map(attachmentPublic) };
   }
   function decorateTurn(uid, tid, turn) { return { ...turn, items: (turn.items || []).map(i => decorateItem(uid, tid, turn.id, i)) }; }
   function setTitle(uid, tid, title) {
@@ -91,7 +96,7 @@ export async function createApp(options = {}) {
         if (r.thread.name) { setTitle(uid, tid, r.thread.name); return; }
         const first = r.thread.turns?.find(turn => turn.status === 'completed' && turn.items?.some(i => i.type === 'userMessage'));
         if (!first || !codex.generateTitle) return;
-        const exchange = first.items.filter(i => ['userMessage','agentMessage'].includes(i.type)).map(i => i.type === 'userMessage' ? `User: ${i.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n') || i.text || ''}` : `Assistant: ${i.text || ''}`).join('\n').slice(0,12000);
+        const exchange = decorateTurn(uid, tid, first).items.filter(i => ['userMessage','agentMessage'].includes(i.type)).map(i => i.type === 'userMessage' ? `User: ${i.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n') || i.text || ''}` : `Assistant: ${i.text || ''}`).join('\n').slice(0,12000);
         const title = await codex.generateTitle(user, exchange);
         // Manual edits and native names that arrived during generation win.
         if (store.thread(user, tid).title_state === 'pending') {
@@ -454,8 +459,8 @@ export async function createApp(options = {}) {
       const account = await codex.call(u, 'account/read', { refreshToken: false });
       if (account.requiresOpenaiAuth && !account.account) fail(409, '请先在设置 → Codex 账号中完成登录');
       await codex.resume(u, t, threadSettings(s));
-      const input = [{ type: 'text', text: params.text.trim() || '请查看这些附件。' }];
-      for (const attachment of attachments) input.push(await attachmentInput(config,u,attachment));
+      const displayText = params.text.trim() || '请查看这些附件。';
+      const input = [{ type: 'text', text: displayText }, ...await attachmentInputs(config,u,attachments)];
       const cwd = projectCwd(config, u, t.project_id), target = executionTarget(u);
       for (const image of params.images || []) { if (typeof image !== 'string') fail(400, '图片路径无效'); const rel = relativePath(image, false); await safePath(root(u, store.project(u, t.project_id)), rel); input.push({ type: 'localImage', path: `${cwd}/${rel}` }); }
       const sandboxPolicy = s.sandbox === 'workspaceWrite' ? { type: 'workspaceWrite', writableRoots: [`/workspace/${t.project_id}`], networkAccess: s.networkAccess } : s.sandbox === 'readOnly' ? { type: 'readOnly', networkAccess: s.networkAccess } : { type: 'externalSandbox', networkAccess: s.networkAccess ? 'enabled' : 'restricted' };
@@ -464,7 +469,7 @@ export async function createApp(options = {}) {
       if (s.mode === 'plan') { if (!s.model) fail(400, '计划模式需要先选择模型'); args.collaborationMode = { mode: 'plan', settings: { model: s.model, reasoning_effort: s.effort, developer_instructions: null } }; }
       const key = `${u.id}:${t.id}`;
       if (attachmentSends.has(key)) fail(409,'消息正在发送，请稍候');
-      attachmentSends.set(key, ids);
+      attachmentSends.set(key, { ids, text: displayText });
       try { const result = await codex.call(u, method, args); bindAttachments(u.id,t.id,result.turn.id); return {...result,turn:decorateTurn(u.id,t.id,result.turn)}; }
       finally { attachmentSends.delete(key); }
     });

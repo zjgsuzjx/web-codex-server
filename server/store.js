@@ -25,6 +25,7 @@ export function createStore(dataDir) {
   const columns = new Set(db.prepare('PRAGMA table_info(threads)').all().map(x => x.name));
   if (!columns.has('title_state')) db.exec("ALTER TABLE threads ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'");
   if (!columns.has('token_usage')) db.exec('ALTER TABLE threads ADD COLUMN token_usage TEXT');
+  if (!db.prepare('PRAGMA table_info(attachments)').all().some(column => column.name === 'message_text')) db.exec('ALTER TABLE attachments ADD COLUMN message_text TEXT');
   // Upgrade the original installation owner once; never upgrade invited admins.
   db.exec('BEGIN IMMEDIATE');
   try {

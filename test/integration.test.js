@@ -114,7 +114,8 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       assert.equal((await request(`/attachments/${id}/preview`,'GET',null,a)).data.text,'hello');
       const other=(await request('/threads','POST',{projectId:p.id},a)).data;await assert.rejects(s2.call('turn/start',{threadId:other.id,text:'wrong thread',attachments:[id]}));
       const started=await s2.call('turn/start',{threadId:tr.id,text:'',attachments:[id]});assert.equal(started.turn.items[0].attachments[0].id,id);
-      const call=instance.codex.calls.at(-1);assert.equal(call.params.input[1].type,'mention');assert.match(call.params.input[1].path,/\/home\/node\/\.codex\/chat-attachments\//);
+      const call=instance.codex.calls.at(-1);assert.equal(call.params.input[1].type,'text');assert.match(call.params.input[1].text,/\/home\/node\/\.codex\/chat-attachments\//);assert.ok(call.params.input[1].text.includes('"content":"hello"'));
+      assert.deepEqual(started.turn.items[0].content.filter(i=>i.type==='text'),[{type:'text',text:'请查看这些附件。'}]);
       assert.equal((await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.turns[0].items[0].attachments[0].id,id);
       assert.equal((await request(`/attachments/${id}`,'DELETE',null,a)).status,409);await assert.rejects(s2.call('turn/start',{threadId:tr.id,text:'reuse',attachments:[id]}));
       const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=','base64');
@@ -123,6 +124,22 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       await s2.call('turn/start',{threadId:other.id,text:'see screenshot',attachments:[uploaded.id]});assert.equal(instance.codex.calls.at(-1).params.input[1].type,'localImage');
       const draft=await s2.call('upload/begin',{scope:'attachment',threadId:other.id,path:'draft',size:0});const draftId=(await s2.call('upload/finish',{uploadId:draft.uploadId})).attachment.id;
       assert.equal((await request(`/attachments/${draftId}`,'DELETE',null,a)).status,200);assert.equal((await request(`/attachments/${draftId}/content`,'GET',null,a)).status,404);
+    });
+    await t.test('source attachment bytes reach Codex alongside the question but stay out of displayed user history',async()=>{
+      const tr=(await request('/threads','POST',{projectId:p.id},a)).data;
+      const source=Buffer.from('const SERVICE_MARKER="attachment-specific-service";\nexport function api() { return SERVICE_MARKER; }\n'+'// source line\n'.repeat(1000));
+      const uploaded=await s2.call('upload/begin',{scope:'attachment',threadId:tr.id,path:'app.js',size:source.length});await s2.chunk(source);const attachment=(await s2.call('upload/finish',{uploadId:uploaded.uploadId})).attachment;
+      const question='这是个什么服务？有什么功能';
+      const result=await s2.call('turn/start',{threadId:tr.id,text:question,attachments:[attachment.id]});
+      const input=instance.codex.calls.at(-1).params.input;assert.equal(input[0].text,question);assert.equal(input[1].type,'text');const context=JSON.parse(input[1].text.split('\n').slice(1).join('\n'));assert.equal(context.content,source.toString());assert.equal(context.contentStatus,'full');assert.equal(context.name,'app.js');
+      assert.deepEqual(result.turn.items[0].content.filter(i=>i.type==='text'),[{type:'text',text:question}]);
+      const history=(await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.turns[0].items[0];assert.equal(history.attachments[0].id,attachment.id);assert.equal(history.content[0].text,question);assert.ok(!JSON.stringify(history).includes('SERVICE_MARKER'));
+      assert.equal(instance.store.get('SELECT message_text FROM attachments WHERE id=?',attachment.id).message_text,question);
+      const inherited=(await request('/threads','POST',{projectId:p.id},a)).data;instance.codex.threads.get(inherited.id).turns=[instance.codex.threads.get(tr.id).turns[0]];
+      const forkHistory=(await request(`/threads/${inherited.id}`,'GET',null,a)).data.thread.turns[0].items[0];assert.equal(forkHistory.content[0].text,question);assert.equal(forkHistory.attachments[0].id,attachment.id);
+      const missing=await s2.call('upload/begin',{scope:'attachment',threadId:tr.id,path:'missing.js',size:1});await s2.chunk(Buffer.from('x'));const id=(await s2.call('upload/finish',{uploadId:missing.uploadId})).attachment.id;
+      await fs.unlink(path.join(dir,'users','alice','codex','chat-attachments',id,'missing.js'));const turns=instance.codex.calls.filter(c=>c.method==='turn/start').length;
+      await assert.rejects(s2.call('turn/start',{threadId:tr.id,text:'read the missing file',attachments:[id]}),/文件不存在/);assert.equal(instance.codex.calls.filter(c=>c.method==='turn/start').length,turns);assert.equal(instance.store.get('SELECT turn_id FROM attachments WHERE id=?',id).turn_id,null);
     });
     await t.test('ZIP imports extract safely without keeping the archive, and file downloads are ZIP too',async()=>{
       const data=Buffer.from(zipSync({'import/readme.txt':Buffer.from('zipped'),'import/empty/':new Uint8Array()}));
