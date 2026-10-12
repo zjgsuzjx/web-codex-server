@@ -19,7 +19,12 @@ export function createStore(dataDir) {
     CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL REFERENCES users(id), thread_id TEXT, payload TEXT NOT NULL, created INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS events_user ON events(user_id,seq);
     CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, action TEXT, created INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY, created INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS migrations(name TEXT PRIMARY KEY, created INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS invites(id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, label TEXT NOT NULL, created_by TEXT NOT NULL REFERENCES users(id), created INTEGER NOT NULL, expires INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, used_by TEXT REFERENCES users(id), used_at INTEGER);
+    CREATE TABLE IF NOT EXISTS attachments(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), thread_id TEXT NOT NULL REFERENCES threads(id), turn_id TEXT, name TEXT NOT NULL, size INTEGER NOT NULL, mime TEXT NOT NULL, created INTEGER NOT NULL);`);
+  const columns = new Set(db.prepare('PRAGMA table_info(threads)').all().map(x => x.name));
+  if (!columns.has('title_state')) db.exec("ALTER TABLE threads ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'");
+  if (!columns.has('token_usage')) db.exec('ALTER TABLE threads ADD COLUMN token_usage TEXT');
   // Upgrade the original installation owner once; never upgrade invited admins.
   db.exec('BEGIN IMMEDIATE');
   try {

@@ -7,16 +7,17 @@ import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { createApp } from '../server/index.js';
 import { relativePath, safePath, anchored, safeRemove } from '../server/files.js';
+import { zipSync, unzipSync } from 'fflate';
 
 function mockCodex(config, emit) {
   const threads = new Map(), calls = [];
-  return { calls, instances: new Map(), async ensure() {}, async resume() {}, async restart() {}, async stopIdle() {}, async shutdown() {}, async reply() {}, async call(u, method, params) {
+  return { calls, instances: new Map(), emit, threads, async generateTitle(u, exchange) { calls.push({method:'generateTitle',params:{exchange}}); return '改善工作区体验'; }, async ensure() {}, async resume() {}, async restart() {}, async stopIdle() {}, async shutdown() {}, async reply() {}, async call(u, method, params) {
     calls.push({ method, params });
     if (method === 'thread/start') { const thread = { id: randomUUID(), turns: [] }; threads.set(thread.id, thread); return { thread }; }
     if (method === 'thread/read') return { thread: threads.get(params.threadId) };
     if (method === 'account/read') return { account: { type: 'chatgpt' }, requiresOpenaiAuth: true };
     if (method === 'account/rateLimits/read') return { rateLimits: { limitId: 'codex', primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1800000000 }, secondary: { usedPercent: 7, windowDurationMins: 10080 } } };
-    if (method === 'turn/start') { const turn = { id: randomUUID(), status: 'inProgress', items: [] }; emit(u.id, { method: 'turn/started', params: { threadId: params.threadId, turn } }); return { turn }; }
+    if (method === 'turn/start') { const turn = { id: randomUUID(), status: 'inProgress', items: [{id:randomUUID(),type:'userMessage',content:params.input}] }; threads.get(params.threadId).turns.push(turn); emit(u.id, { method: 'turn/started', params: { threadId: params.threadId, turn } }); return { turn }; }
     return {};
   } };
 }
@@ -89,6 +90,62 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       const last=instance.codex.calls.at(-1);assert.equal(last.params.sandboxPolicy.type,'dangerFullAccess');
       assert.equal(last.params.cwd,path.posix.join(instance.config.hostDataDir.replaceAll('\\','/'),'users','alice','projects',p.id));
       assert.equal((await request('/settings','PUT',{...a.settings,executionTarget:'workspace'},a)).status,200);
+    });
+    await t.test('single-use invites record their user, stay hashed, expire and require a superadmin',async()=>{
+      assert.equal((await request('/admin/invites','POST',{label:'team'},b)).status,403);
+      const invite=await request('/admin/invites','POST',{label:'team',days:7},a);assert.equal(invite.status,201);
+      const register=await request('/register','POST',{username:'charlie',password:'Very-good-password42',inviteCode:invite.data.code});assert.equal(register.status,200);
+      assert.equal((await request('/register','POST',{username:'david',password:'Very-good-password42',inviteCode:invite.data.code})).status,403);
+      const list=await request('/admin/invites','GET',null,a);const used=list.data.find(i=>i.id===invite.data.id);assert.equal(used.usedBy,'charlie');assert.ok(used.used_at);assert.ok(!JSON.stringify(list.data).includes(invite.data.code));
+      const dbInvite=instance.store.get('SELECT * FROM invites WHERE id=?',invite.data.id);assert.notEqual(dbInvite.hash,invite.data.code);
+      const revoked=await request('/admin/invites','POST',{days:1},a);await request(`/admin/invites/${revoked.data.id}`,'DELETE',null,a);
+      assert.equal((await request('/register','POST',{username:'david',password:'Very-good-password42',inviteCode:revoked.data.code})).status,403);
+      assert.equal((await request('/admin/invites','POST',{days:0},a)).status,400);
+      const expired=await request('/admin/invites','POST',{days:1},a);instance.store.run('UPDATE invites SET expires=? WHERE id=?',Date.now()-1,expired.data.id);
+      assert.equal((await request('/register','POST',{username:'expireduser',password:'Very-good-password42',inviteCode:expired.data.code})).status,403);
+      const concurrent=await request('/admin/invites','POST',{days:1},a);const attempts=await Promise.all(['redeemone','redeemtwo'].map(username=>request('/register','POST',{username,password:'Very-good-password42',inviteCode:concurrent.data.code})));
+      assert.deepEqual(attempts.map(r=>r.status).sort(),[200,403]);
+    });
+    await t.test('chat attachments use binary upload, stay outside projects, belong to one user/thread, and survive history',async()=>{
+      const tr=(await request('/threads','POST',{projectId:p.id},a)).data;
+      const task=await s2.call('upload/begin',{scope:'attachment',threadId:tr.id,path:'notes.txt',size:5});await s2.chunk(Buffer.from('hello'));const done=await s2.call('upload/finish',{uploadId:task.uploadId});const id=done.attachment.id;
+      const files=(await request(`/projects/${p.id}/files`,'GET',null,a)).data;assert.ok(!files.some(f=>f.path==='notes.txt'));
+      assert.equal((await request(`/attachments/${id}/preview`,'GET',null,b)).status,404);
+      assert.equal((await request(`/attachments/${id}/preview`,'GET',null,a)).data.text,'hello');
+      const other=(await request('/threads','POST',{projectId:p.id},a)).data;await assert.rejects(s2.call('turn/start',{threadId:other.id,text:'wrong thread',attachments:[id]}));
+      const started=await s2.call('turn/start',{threadId:tr.id,text:'',attachments:[id]});assert.equal(started.turn.items[0].attachments[0].id,id);
+      const call=instance.codex.calls.at(-1);assert.equal(call.params.input[1].type,'mention');assert.match(call.params.input[1].path,/\/home\/node\/\.codex\/chat-attachments\//);
+      assert.equal((await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.turns[0].items[0].attachments[0].id,id);
+      assert.equal((await request(`/attachments/${id}`,'DELETE',null,a)).status,409);await assert.rejects(s2.call('turn/start',{threadId:tr.id,text:'reuse',attachments:[id]}));
+      const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=','base64');
+      const image=await s2.call('upload/begin',{scope:'attachment',threadId:other.id,path:'paste.png',size:png.length});await s2.chunk(png);const uploaded=(await s2.call('upload/finish',{uploadId:image.uploadId})).attachment;
+      assert.equal((await request(`/attachments/${uploaded.id}/preview`,'GET',null,a)).data.kind,'image');
+      await s2.call('turn/start',{threadId:other.id,text:'see screenshot',attachments:[uploaded.id]});assert.equal(instance.codex.calls.at(-1).params.input[1].type,'localImage');
+      const draft=await s2.call('upload/begin',{scope:'attachment',threadId:other.id,path:'draft',size:0});const draftId=(await s2.call('upload/finish',{uploadId:draft.uploadId})).attachment.id;
+      assert.equal((await request(`/attachments/${draftId}`,'DELETE',null,a)).status,200);assert.equal((await request(`/attachments/${draftId}/content`,'GET',null,a)).status,404);
+    });
+    await t.test('ZIP imports extract safely without keeping the archive, and file downloads are ZIP too',async()=>{
+      const data=Buffer.from(zipSync({'import/readme.txt':Buffer.from('zipped'),'import/empty/':new Uint8Array()}));
+      const task=await s2.call('upload/begin',{projectId:p.id,path:'project.zip',size:data.length,extract:true});await s2.chunk(data);const result=await s2.call('upload/finish',{uploadId:task.uploadId});assert.equal(result.extracted,2);
+      assert.equal((await request(`/projects/${p.id}/file?path=import/readme.txt`,'GET',null,a)).data.content,'zipped');assert.equal((await request(`/projects/${p.id}/file?path=project.zip`,'GET',null,a)).status,404);
+      const r=await fetch(base+`/api/projects/${p.id}/download?path=import/readme.txt`,{headers:{Cookie:a.cookie,Origin:base}});assert.equal(r.headers.get('content-type'),'application/zip');const zip=unzipSync(new Uint8Array(await r.arrayBuffer()));assert.equal(Buffer.from(zip['readme.txt']).toString(),'zipped');
+      const conflict=await s2.call('upload/begin',{projectId:p.id,path:'again.zip',size:data.length,extract:true});await s2.chunk(data);await assert.rejects(s2.call('upload/finish',{uploadId:conflict.uploadId}),/已存在/);
+      const bomb=Buffer.from(zipSync({'too-large.txt':new Uint8Array(30001)}));const bad=await s2.call('upload/begin',{projectId:p.id,path:'big.zip',size:bomb.length,extract:true});await s2.chunk(bomb);await assert.rejects(s2.call('upload/finish',{uploadId:bad.uploadId}),/上限/);
+    });
+    await t.test('completed turns generate a title once, preserve manual names, and persist current context statistics',async()=>{
+      const tr=(await request('/threads','POST',{projectId:p.id},a)).data;const start=await s2.call('turn/start',{threadId:tr.id,text:'improve UX'});
+      const turn=instance.codex.threads.get(tr.id).turns[0];turn.status='completed';turn.items.push({id:randomUUID(),type:'agentMessage',text:'I improved the UI'});
+      instance.codex.emit(a.id,{method:'turn/completed',params:{threadId:tr.id,turn:{id:start.turn.id,status:'completed',items:[]}}});
+      for(let n=0;n<30&&instance.store.thread(a,tr.id).title_state==='pending';n++)await new Promise(r=>setTimeout(r,10));
+      assert.equal(instance.store.thread(a,tr.id).title,'改善工作区体验');assert.match(instance.codex.calls.find(c=>c.method==='generateTitle').params.exchange,/I improved/);
+      const before=instance.codex.calls.filter(c=>c.method==='generateTitle').length;instance.codex.emit(a.id,{method:'turn/completed',params:{threadId:tr.id,turn}});await new Promise(r=>setTimeout(r,10));assert.equal(instance.codex.calls.filter(c=>c.method==='generateTitle').length,before);
+      await request(`/threads/${tr.id}`,'PATCH',{title:'My title'},a);instance.codex.emit(a.id,{method:'thread/name/updated',params:{threadId:tr.id,threadName:'overwrite'}});assert.equal(instance.store.thread(a,tr.id).title,'My title');
+      const usage={last:{totalTokens:1250},total:{totalTokens:25000},modelContextWindow:200000};instance.codex.emit(a.id,{method:'thread/tokenUsage/updated',params:{threadId:tr.id,tokenUsage:usage}});
+      assert.deepEqual((await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.tokenUsage,usage);
+    });
+    await t.test('web login permits managed device flow but rejects browser callbacks and external tokens',async()=>{
+      await s2.call('account/login/start',{type:'chatgptDeviceCode',accessToken:'ignored'});assert.deepEqual(instance.codex.calls.at(-1).params,{type:'chatgptDeviceCode'});
+      await assert.rejects(s2.call('account/login/start',{type:'chatgptAuthTokens',accessToken:'forbidden'}));await assert.rejects(s2.call('account/login/start',{type:'chatgpt'}));
     });
     await t.test('logout invalidates session and websocket',async()=>{assert.equal((await request('/logout','POST',{},a)).status,200);assert.equal((await request('/projects','GET',null,a)).status,401);});
   } finally { for(const s of sockets) await s.close(); await instance.close(); await fs.rm(dir,{recursive:true,force:true}); }
