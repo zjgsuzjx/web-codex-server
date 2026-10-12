@@ -8,7 +8,7 @@
     "start": "node server/index.js",
     "build": "vite build",
     "test": "node --test test/*.test.js",
-    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js"
+    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js && node --check server/attachments.js && node --check server/archives.js"
   },
   "engines": {
     "node": ">=24"
@@ -18,10 +18,14 @@
     "archiver": "^7.0.1",
     "dockerode": "^5.0.1",
     "express": "^5.1.0",
-    "ws": "^8.18.3"
+    "fflate": "^0.8.3",
+    "ws": "^8.18.3",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "@monaco-editor/react": "^4.7.0",
+    "@vitejs/plugin-react": "^5.0.3",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "lucide-react": "^0.468.0",
@@ -30,7 +34,6 @@
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "@vitejs/plugin-react": "^5.0.3",
     "vite": "^7.1.7"
   }
 }

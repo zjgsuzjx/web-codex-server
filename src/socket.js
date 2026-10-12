@@ -29,11 +29,12 @@ export class LiveSocket {
     await this.ready();
     return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.ack = null; reject(new Error('上传确认超时')); }, 60000); this.ack = { resolve, reject, timer }; this.ws.send(data); });
   }
-  async upload(projectId, files, onProgress, signal) {
-    let complete = 0; const total = files.reduce((n, f) => n + f.size, 0);
+  async upload(destination, files, onProgress, signal) {
+    let complete = 0; const total = files.reduce((n, f) => n + f.size, 0), results = [];
     for (let index = 0; index < files.length; index++) {
       const file = files[index], filename = file.webkitRelativePath || file.name;
-      let task = await this.call('upload/begin', { projectId, path: filename, size: file.size }), offset = task.offset;
+      const target = typeof destination === 'string' ? {projectId:destination} : destination;
+      let task = await this.call('upload/begin', { ...target, path: filename, size: file.size }), offset = task.offset;
       try {
         while (offset < file.size) {
           if (signal?.aborted) throw new Error('已取消上传');
@@ -46,10 +47,11 @@ export class LiveSocket {
           onProgress({ name: filename, done: complete + offset, total, index: index + 1, count: files.length });
         }
         if (signal?.aborted) throw new Error('已取消上传');
-        await this.call('upload/finish', { uploadId: task.uploadId }); complete += file.size;
+        results.push(await this.call('upload/finish', { uploadId: task.uploadId })); complete += file.size;
         onProgress({ name: filename, done: complete, total, index: index + 1, count: files.length });
       } catch (e) { await this.call('upload/cancel', { uploadId: task.uploadId }).catch(() => {}); throw e; }
     }
+    return results;
   }
   close() { this.stopped = true; clearTimeout(this.timer); this.ws.close(); }
   subscribe(listener) { this.listeners ||= new Set(); this.listeners.add(listener); return () => this.listeners.delete(listener); }
