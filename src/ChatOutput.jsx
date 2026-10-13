@@ -1,9 +1,10 @@
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Download, Globe2, Image, LoaderCircle, ExternalLink } from 'lucide-react';
+import { Copy, Download, FileText, Globe2, Image, LoaderCircle, ExternalLink } from 'lucide-react';
 import { contentImage, mediaUrl, toolContent } from '../shared/chat-content.js';
+import { remarkReplyFormat } from '../shared/markdown-format.js';
 import ChatImage from './ChatImage';
-import { isFileLineLink, websiteInfo } from './link-info';
+import { fileLinkInfo, rehypeFileReferences, websiteInfo } from './link-info';
 
 function WebsiteLink({ href, children, ...props }) {
   const website = websiteInfo(href);
@@ -14,13 +15,17 @@ function WebsiteLink({ href, children, ...props }) {
 
 const nodeText = node => typeof node === 'string' || typeof node === 'number' ? String(node) : Array.isArray(node) ? node.map(nodeText).join('') : nodeText(node?.props?.children || '');
 export function Markdown({ text = '', threadId, onFile, notify, onPreview }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={(url, key) => key === 'src' ? mediaUrl(url, threadId) : isFileLineLink(url) ? url : defaultUrlTransform(url)} components={{
+  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkReplyFormat]} rehypePlugins={[rehypeFileReferences]} urlTransform={(url, key) => key === 'src' ? mediaUrl(url, threadId) : fileLinkInfo(url) ? url : defaultUrlTransform(url)} components={{
     a: ({ node, href, children, ...props }) => {
-      const local = href && (isFileLineLink(href) || !/^(?:[a-z][a-z\d+.-]*:|\/\/|#|\/api\/)/i.test(href));
-      if (node.children?.some(child => child.tagName === 'img')) return <span>{children}<WebsiteLink href={href} {...props}>打开图片链接</WebsiteLink></span>;
-      if (websiteInfo(href)) return <WebsiteLink href={href} {...props}>{children}</WebsiteLink>;
-      return <a {...props} href={href} target={local ? undefined : '_blank'} rel="noopener noreferrer" onClick={local && onFile ? event => { event.preventDefault(); onFile(href.replace(/(?::\d+){1,2}(?:#L\d+)?$|#L\d+$/, '')); } : undefined}>{children}</a>;
+      const local = fileLinkInfo(href), image = node.children?.some(child => child.tagName === 'img');
+      const label = image ? '打开图片链接' : children;
+      const link = !href ? <span>{label}</span> : websiteInfo(href) ? <WebsiteLink href={href} {...props}>{label}</WebsiteLink> : local ?
+        <a {...props} className="file-link" href={href} title={`打开文件：${local.path}${local.line ? ` · 第 ${local.line} 行` : ''}`} onClick={onFile ? event => { event.preventDefault(); onFile(local.path); } : undefined}>
+          <FileText size={13} aria-hidden="true"/><span className="file-link-label">{label}</span>
+        </a> : <a {...props} href={href} rel="noopener noreferrer">{label}</a>;
+      return image ? <span className="markdown-image-link">{children}{link}</span> : link;
     },
+    table: ({ node, children, ...props }) => <div className="markdown-table" role="region" aria-label="回复表格，可横向滚动" tabIndex={0}><table {...props}>{children}</table></div>,
     img: ({ node, src, alt }) => src ? <ChatImage src={src} alt={alt || '图片'} onPreview={onPreview}/> : <span className="output-error">图片地址无法预览</span>,
     pre: ({ node, children, ...props }) => <div className="code-block"><div className="code-block-header"><span>代码</span><button type="button" onClick={() => navigator.clipboard.writeText(nodeText(children)).then(() => notify?.('已复制')).catch(() => notify?.('复制失败', true))}><Copy size={12}/>复制</button></div><pre {...props}>{children}</pre></div>
   }}>{text || ''}</ReactMarkdown>;
