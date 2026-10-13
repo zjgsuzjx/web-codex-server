@@ -206,3 +206,31 @@ input[type=checkbox],input[type=radio]{cursor:pointer}
 /* Generated media stays visible alongside the completed answer. */
 .generated-image,.visible-tool-output{margin:16px 0 24px 42px;min-width:0}.generated-image-heading{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-bottom:12px}.generated-image-open{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}.generated-image-open img,.markdown-image{display:block;max-width:100%;height:auto;max-height:650px;object-fit:contain;border-radius:10px}.generated-image-download{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:12px;color:var(--accent)}.image-prompt{margin-top:12px;font-size:12px;color:var(--muted)}.image-prompt summary{cursor:pointer}.image-prompt p{margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}.output-error,.output-pending{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.output-error button{display:inline-flex;align-items:center;gap:5px;margin-left:10px;color:var(--accent)}.tool-output{min-width:0}.tool-output pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}.tool-output .markdown-image{margin:12px 0}.markdown-image{margin:12px 0}.tool-output .output-error{color:var(--danger,#b42318)}
 @media(max-width:600px){.generated-image,.visible-tool-output{margin-left:0}.generated-image-open img,.markdown-image{max-height:450px}}
+
+/* Link pills retain the label and make the destination easy to recognize. */
+.website-link,.markdown a.website-link{display:inline-flex;align-items:center;gap:6px;max-width:100%;vertical-align:middle;padding:2px 9px;margin:2px 1px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--accent);font-size:12px;line-height:1.65;text-decoration:none;transition:background .16s,border-color .16s,box-shadow .16s}
+.website-link:hover,.markdown a.website-link:hover{background:var(--hover);border-color:var(--accent);box-shadow:0 2px 8px #2563eb12}
+.website-link-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.website-link-domain{flex-shrink:0;border-left:1px solid var(--line);padding-left:6px;font-size:10px;color:var(--muted);max-width:16ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.message-avatar>img{display:block;width:29px;height:29px}
+:root[data-theme=dark] .message-avatar>img{filter:invert(1)}
+/* Reserve space while decoding images, including newly opened previews. */
+.chat-image{position:relative;display:block;width:100%;max-width:100%;margin:12px 0;line-height:normal}
+.chat-image-open{display:block;width:100%;padding:0;text-align:left;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);cursor:zoom-in}
+.chat-image-open:hover{border-color:var(--accent)}
+.chat-image-frame{display:block;position:relative;width:100%;border-radius:10px;overflow:hidden}
+.chat-image-frame.loading{aspect-ratio:16/9;min-height:140px;max-height:450px;background:var(--panel)}
+.chat-image-frame img{display:block;max-width:100%;max-height:650px;height:auto;object-fit:contain;border-radius:10px}
+.chat-image-frame.loading img{position:absolute;inset:0;width:100%;height:100%;opacity:0}
+.image-skeleton{display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;height:auto;min-height:140px;border-radius:10px;color:var(--subtle);font-size:12px;width:100%}
+.image-skeleton>span{position:relative;z-index:1}
+.chat-image-frame>.image-skeleton{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}
+.chat-image-frame.loaded{display:flex;justify-content:center}
+.image-load-error{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;min-height:150px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted);font-size:12px}
+.image-load-error>button{display:inline-flex;align-items:center;gap:5px;padding:6px;color:var(--accent)}
+.attachment-preview>.chat-image{margin:0}
+.chat-image-preview .chat-image-frame.loading,.attachment-preview>.image-skeleton{max-height:60dvh}
+.chat-image-preview .chat-image-frame.loaded{display:flex;justify-content:center}
+.chat-image-preview img{max-height:60dvh}
+@media(max-width:600px){.chat-image-frame img{max-height:450px}.chat-image-preview img{max-height:60dvh}.website-link-domain{max-width:12ch}.website-link,.markdown a.website-link{gap:5px;padding:2px 7px}.chat-image-frame.loading,.image-skeleton{min-height:110px}}
+@media(forced-colors:active){.website-link,.chat-image-open,.image-load-error{border:1px solid LinkText}}
