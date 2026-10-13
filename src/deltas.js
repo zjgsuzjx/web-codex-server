@@ -1,3 +1,5 @@
+import { mergeTiming } from '../shared/turn-activity.js';
+
 // Lifecycle notifications contain partial snapshots. Never replace the item list.
 export function mergeItem(previous = {}, incoming = {}) {
   const item = { ...previous, ...incoming };
@@ -19,7 +21,8 @@ export function mergeTurn(previous = {}, incoming = {}) {
   // A delayed start response must not resurrect a completed turn.
   const status = previous.status && previous.status !== 'inProgress' && incoming.status === 'inProgress' ? previous.status : incoming.status || previous.status;
   const changes = previous.changes && (!incoming.changes || previous.changes.revision > incoming.changes.revision) ? previous.changes : incoming.changes;
-  return { ...previous, ...incoming, status, items, ...(changes ? { changes } : {}) };
+  const timing = mergeTiming(previous.timing, incoming.timing);
+  return { ...previous, ...incoming, status, items, ...(changes ? { changes } : {}), ...(timing ? { timing } : {}) };
 }
 export function mergeTurns(previous, incoming) {
   const turns = [...previous];
@@ -31,7 +34,8 @@ export function mergeTurns(previous, incoming) {
 }
 export function applyLifecycle(turns, event) {
   const p = event.params || {};
-  if (event.method === 'turn/changes/updated') return mergeTurns(turns, [{ id: p.turnId, status: p.changes.status, changes: p.changes }]);
+  if (event.method === 'turn/changes/updated') return mergeTurns(turns, [{ id: p.turnId, status: turns.find(turn => turn.id === p.turnId)?.status || p.changes.status, changes: p.changes }]);
+  if (event.method === 'turn/plan/updated') return mergeTurns(turns, [{ id: p.turnId, status: 'inProgress', plan: p.plan }]);
   if (event.method === 'turn/started' || event.method === 'turn/completed') return mergeTurns(turns, [p.turn]);
   if (event.method === 'item/started' || event.method === 'item/completed') return mergeTurns(turns, [{ id: p.turnId, status: 'inProgress', items: [p.item] }]);
   return turns;
