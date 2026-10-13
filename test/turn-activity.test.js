@@ -6,27 +6,35 @@ import path from 'node:path';
 import { createStore } from '../server/store.js';
 import { createTurnActivity } from '../server/turn-activity.js';
 import { currentThought } from '../shared/thinking.js';
+import { reasoningText } from '../shared/chat-content.js';
 import { elapsedTime, formatDuration, mergeActivity } from '../shared/turn-activity.js';
 import { applyDeltas, applyLifecycle, mergeTurns } from '../src/deltas.js';
 
-test('live direction follows indexed summaries and public progress, without using raw reasoning', () => {
+test('thinking status avoids duplicating process text while keeping active tool labels', () => {
   let turns = [{ id: 'turn', status: 'inProgress', items: [] }];
   turns = applyDeltas(turns, [
     { method: 'item/reasoning/summaryTextDelta', params: { turnId: 'turn', itemId: 'r', summaryIndex: 0, delta: '**检查界面**\n\n读取当前布局。' } },
     { method: 'item/reasoning/textDelta', params: { turnId: 'turn', itemId: 'r', contentIndex: 0, delta: 'raw content must not become the status' } }
   ]);
-  assert.equal(currentThought(turns[0]), '检查界面 · 读取当前布局。');
-  turns = applyLifecycle(turns, { method: 'item/started', params: { turnId: 'turn', item: { id: 'r', type: 'reasoning', summary: ['检查界面'] } } });
+  assert.equal(currentThought(turns[0]), '正在思考');
+  assert.ok(reasoningText(turns[0].items[0]).includes('读取当前布局。'));
+  turns = applyLifecycle(turns, { method: 'item/started', params: { turnId: 'turn', item: { id: 'r', type: 'reasoning', summary: ['**检查界面**\n\n读取当前布局。'] } } });
   turns = applyDeltas(turns, [{ method: 'item/reasoning/summaryTextDelta', params: { turnId: 'turn', itemId: 'r', summaryIndex: 1, delta: '**验证计时**\n\n检查刷新后的状态。' } }]);
-  assert.equal(currentThought(turns[0]), '验证计时 · 检查刷新后的状态。');
+  assert.equal(currentThought(turns[0]), '正在思考');
+  assert.ok(reasoningText(turns[0].items[0]).includes('检查刷新后的状态。'));
   turns = applyLifecycle(turns, { method: 'item/completed', params: { turnId: 'turn', item: { id: 'r', type: 'reasoning', summary: ['检查界面', '**完成验证**\n\n所有检查通过。'] } } });
-  assert.equal(currentThought(turns[0]), '完成验证 · 所有检查通过。');
+  assert.equal(currentThought(turns[0]), '正在思考');
+  assert.ok(reasoningText(turns[0].items[0]).includes('所有检查通过。'));
   turns = applyLifecycle(turns, { method: 'item/started', params: { turnId: 'turn', item: { id: 'cmd', type: 'commandExecution', status: 'inProgress', command: 'npm test' } } });
   assert.equal(currentThought(turns[0]), '正在运行命令：npm test');
   turns = applyLifecycle(turns, { method: 'item/completed', params: { turnId: 'turn', item: { id: 'msg', type: 'agentMessage', phase: 'commentary', text: '正在核对最后一项检查。' } } });
-  assert.equal(currentThought(turns[0]), '正在核对最后一项检查。');
-  assert.equal(currentThought({ items: [{ type: 'reasoning', content: ['raw only'] }] }), '正在梳理任务与下一步方向');
-  assert.equal(currentThought({ plan: [{ step: '检查数据来源', status: 'inProgress' }] }), '检查数据来源');
+  assert.equal(currentThought(turns[0]), '正在思考');
+  assert.equal(currentThought({ items: [{ type: 'reasoning', content: ['raw only'] }] }), '正在思考');
+  assert.equal(currentThought({ plan: [{ step: '检查数据来源', status: 'inProgress' }] }), '正在思考');
+  assert.equal(currentThought({ items: [] }), '正在思考');
+  assert.equal(currentThought({ items: [{ type: 'commandExecution', status: 'inProgress', command: 'npm test' }, { type: 'reasoning', summary: [] }] }), '正在思考');
+  assert.equal(currentThought({ items: [{ type: 'fileChange', status: 'inProgress', changes: [{ path: '/workspace/p/app.js' }] }] }), '正在修改文件：app.js');
+  assert.equal(currentThought({ items: [{ type: 'mcpToolCall', status: 'inProgress', tool: 'search' }] }), '正在使用 search');
 });
 
 test('completion freezes elapsed time and delayed snapshots cannot restart either clock or sidebar', () => {
