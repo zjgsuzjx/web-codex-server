@@ -5,7 +5,7 @@ function direction(value) {
   const heading = paragraphs.findLast(part => /^(?:\*\*[^*]+\*\*|#{1,6}\s+[^\n]+)$/.test(part));
   return [heading && heading !== latest ? heading : '', latest].filter(Boolean).join(' · ')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[*`#_]/g, '').replace(/\s+/g, ' ').trim().slice(0, 260);
+    .replace(/<br\s*\/?>/gi, ' ').replace(/[*`#_]/g, '').replace(/\s+/g, ' ').trim().slice(0, 260);
 }
 
 // The status line uses readable summaries and public progress messages only.

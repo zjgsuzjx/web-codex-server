@@ -233,6 +233,40 @@ input[type=checkbox],input[type=radio]{cursor:pointer}
 .chat-image-preview .chat-image-frame.loaded{display:flex;justify-content:center}
 .chat-image-preview img{max-height:60dvh}
 @media(max-width:600px){.chat-image-frame img{max-height:450px}.chat-image-preview img{max-height:60dvh}.website-link-domain{max-width:12ch}.website-link,.markdown a.website-link{gap:5px;padding:2px 7px}.chat-image-frame.loading,.image-skeleton{min-height:110px}}
+
+/* File references stay in the sentence while sharing the workspace link style. */
+.markdown{overflow-wrap:break-word;line-break:strict}
+.markdown a.file-link{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:1px 7px;margin:1px 2px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--accent);font-size:.92em;line-height:1.65;vertical-align:baseline;text-decoration:none;transition:background .16s,border-color .16s}
+.file-reference{display:inline-flex;align-items:baseline;max-width:100%;vertical-align:baseline}
+.file-reference .file-link{min-width:0;margin-right:1px}
+.file-reference-punctuation{flex-shrink:0}
+.file-link>svg{flex-shrink:0;align-self:center}
+.file-link-label{min-width:0;overflow-wrap:anywhere}
+.markdown .file-link code{padding:0;background:none;color:inherit;font-size:inherit}
+.markdown a.file-link:hover{border-color:var(--accent);background:var(--hover)}
+.markdown a:focus-visible,.markdown-table:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.markdown a{color:var(--accent)}
+.markdown strong{font-weight:650}
+.markdown li>p{margin:0 0 7px}
+.markdown li>p:last-child{margin-bottom:0}
+.markdown li>ul,.markdown li>ol{margin:6px 0 10px}
+.markdown ul.contains-task-list{list-style:none;padding-left:3px}
+.markdown .task-list-item>input{margin-right:8px;accent-color:var(--accent)}
+.markdown blockquote{margin:16px 0;padding:4px 0 4px 14px;border-color:var(--line)}
+.markdown blockquote>:last-child{margin-bottom:0}
+.markdown h5,.markdown h6{margin:15px 0 7px;font-size:1em}
+.markdown-table{max-width:100%;overflow:auto;overscroll-behavior-x:contain;margin:18px 0;border:1px solid var(--line);border-radius:10px}
+.markdown .markdown-table table{display:table;width:100%;margin:0;border-collapse:separate;border-spacing:0;font-size:.92em}
+.markdown .markdown-table table:has(tr>:nth-child(2)){min-width:360px}
+.markdown .markdown-table table:has(tr>:nth-child(3)){min-width:540px}
+.markdown .markdown-table th,.markdown .markdown-table td{min-width:100px;padding:10px 13px;border:0;border-right:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:top;line-height:1.8}
+.markdown .markdown-table th{background:var(--panel);font-weight:600;color:var(--text)}
+.markdown .markdown-table th:last-child,.markdown .markdown-table td:last-child{border-right:0}
+.markdown .markdown-table tbody tr:last-child td{border-bottom:0}
+.markdown .markdown-table td>:last-child{margin-bottom:0}
+.markdown .markdown-table td code{overflow-wrap:normal}
+@media(max-width:600px){.markdown a.file-link{padding:1px 6px}.markdown .markdown-table th,.markdown .markdown-table td{padding:9px 11px}}
+@media(forced-colors:active){.markdown a.file-link{border-color:LinkText}.markdown-table{border-color:CanvasText}}
 @media(forced-colors:active){.website-link,.chat-image-open,.image-load-error{border:1px solid LinkText}}
 
 /* Per-turn file changes use the workspace's panels and compact controls. */
