@@ -90,8 +90,9 @@ test('file references decode spaces and strip line/column/section suffixes', () 
   }
 });
 
-test('the plain thinking status turns safe HTML breaks into spaces', () => {
-  assert.equal(currentThought({ items: [{ type: 'reasoning', summary: ['**检查方向： **第一行<br>第二行<BR />第三行'] }] }), '检查方向： 第一行 第二行 第三行');
+test('thinking status does not repeat formatted reasoning and tool labels remain plain text', () => {
+  assert.equal(currentThought({ items: [{ type: 'reasoning', summary: ['**检查方向： **第一行<br>第二行<BR />第三行'] }] }), '正在思考');
+  assert.equal(currentThought({ items: [{ type: 'dynamicToolCall', status: 'inProgress', tool: '检查<br>结果' }] }), '正在使用 检查 结果');
 });
 
 test('file pills keep following punctuation outside the link and preserve sentence text', () => {
