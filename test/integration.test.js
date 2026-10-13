@@ -15,6 +15,7 @@ function mockCodex(config, emit) {
     calls.push({ method, params });
     if (method === 'thread/start') { const thread = { id: randomUUID(), turns: [] }; threads.set(thread.id, thread); return { thread }; }
     if (method === 'thread/read') return { thread: threads.get(params.threadId) };
+    if (method === 'thread/fork') { const thread = { ...structuredClone(threads.get(params.threadId)), id: randomUUID() }; threads.set(thread.id, thread); return { thread }; }
     if (method === 'account/read') return { account: { type: 'chatgpt' }, requiresOpenaiAuth: true };
     if (method === 'account/rateLimits/read') return { rateLimits: { limitId: 'codex', primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1800000000 }, secondary: { usedPercent: 7, windowDurationMins: 10080 } } };
     if (method === 'turn/start') { const turn = { id: randomUUID(), status: 'inProgress', items: [{id:randomUUID(),type:'userMessage',content:params.input}] }; threads.get(params.threadId).turns.push(turn); emit(u.id, { method: 'turn/started', params: { threadId: params.threadId, turn } }); return { turn }; }
@@ -187,6 +188,31 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       await fs.symlink(generatedDir,path.join(projectDir,'media-link'),process.platform==='win32'?'junction':'dir');
       assert.equal((await request(media('media-link/saved.png'),'GET',null,a)).status,403);
       assert.equal((await request(media('diagram.png'),'GET',null,b)).status,404);
+    });
+    await t.test('turn-scoped changes capture shell edits, isolate users, filter a single file and survive forks',async()=>{
+      const project = (await request('/projects', 'POST', { name: 'Diff project' }, a)).data;
+      await request(`/projects/${project.id}/file`, 'PUT', { path: 'app.js', content: 'preexisting edit\nold\n' }, a);
+      await request(`/projects/${project.id}/file`, 'PUT', { path: 'delete.txt', content: 'removed\n' }, a);
+      const tr = (await request('/threads', 'POST', { projectId: project.id }, a)).data;
+      const start = await s2.call('turn/start', { threadId: tr.id, text: 'modify files' });
+      const projectDir = path.join(dir, 'users', 'alice', 'projects', project.id);
+      await fs.writeFile(path.join(projectDir, 'app.js'), 'preexisting edit\nnew\nextra\n');
+      await fs.writeFile(path.join(projectDir, 'new.js'), 'created\n'); await fs.unlink(path.join(projectDir, 'delete.txt'));
+      instance.codex.emit(a.id, { method: 'item/completed', params: { threadId: tr.id, turnId: start.turn.id, item: { id: 'shell-diff', type: 'commandExecution', status: 'completed' } } });
+      const turn = instance.codex.threads.get(tr.id).turns[0]; turn.status = 'completed';
+      instance.codex.emit(a.id, { method: 'turn/completed', params: { threadId: tr.id, turn } });
+      const endpoint = `/threads/${tr.id}/turns/${turn.id}/changes`;
+      let details;
+      for (let i = 0; i < 100; i++) { details = await request(endpoint, 'GET', null, a); if (details.data?.source === 'snapshot' && details.data.status === 'completed') break; await new Promise(resolve => setTimeout(resolve, 5)); }
+      assert.equal(details.status, 200); assert.equal(details.data.files.length, 3); assert.equal(details.data.added, 3); assert.equal(details.data.removed, 2);
+      assert.equal((await request(endpoint, 'GET')).status, 401); assert.equal((await request(endpoint, 'GET', null, b)).status, 404);
+      const single = await request(endpoint + '?path=app.js', 'GET', null, a); assert.equal(single.data.files.length, 1); assert.equal(single.data.added, 2); assert.equal(single.data.removed, 1);
+      assert.equal((await request(endpoint + '?path=..%2Fsecret', 'GET', null, a)).status, 400);
+      assert.equal((await request(`/threads/${tr.id}/turns/wrong/changes`, 'GET', null, a)).status, 404);
+      const history = (await request(`/threads/${tr.id}`, 'GET', null, a)).data.thread.turns[0]; assert.equal(history.changes.files.length, 3); assert.equal('patches' in history.changes.files[0], false);
+      const other = (await request('/threads', 'POST', { projectId: project.id }, a)).data;
+      assert.equal((await request(`/threads/${other.id}/turns/${turn.id}/changes`, 'GET', null, a)).status, 404);
+      const fork = await s2.call('thread/fork', { threadId: tr.id }); const inherited = await request(`/threads/${fork.thread.id}/turns/${turn.id}/changes`, 'GET', null, a); assert.equal(inherited.data.added, 3);
     });
     await t.test('web login permits managed device flow but rejects browser callbacks and external tokens',async()=>{
       await s2.call('account/login/start',{type:'chatgptDeviceCode',accessToken:'ignored'});assert.deepEqual(instance.codex.calls.at(-1).params,{type:'chatgptDeviceCode'});

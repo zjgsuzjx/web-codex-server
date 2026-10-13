@@ -16,6 +16,8 @@ import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomic
 import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInputs } from './attachments.js';
 import { stageZip, publishZip } from './archives.js';
 import { imageResult, readMedia } from './chat-media.js';
+import { createTurnChanges } from './turn-changes.js';
+import { changesSummary, historicalChanges } from '../shared/file-changes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -39,7 +41,7 @@ export async function createApp(options = {}) {
   const store = createStore(config.dataDir), app = express(), server = createServer(app), wss = new WebSocketServer({ noServer: true, maxPayload: MB + 4096 });
   config.resolveUser = id => store.user(id);
   const clients = new Map(), uploads = new Map(), uploadLocks = new Set(), rates = new Map(), mutationLocks = new Map(), eventCounters = new Map();
-  let resources;
+  let resources, turnChanges;
   const titleJobs = new Map(), attachmentSends = new Map();
   const userDir = u => path.join(config.dataDir, 'users', u.username);
   const root = (u, p) => path.join(userDir(u), 'projects', p.id);
@@ -48,6 +50,7 @@ export async function createApp(options = {}) {
   const emit = (uid, msg) => {
     if(!store.user(uid))return;
     resources?.observe(uid, msg);
+    turnChanges?.observe(uid, msg);
     const tid = msg.params?.threadId || msg.params?.thread?.id || null;
     const t = tid && store.get('SELECT * FROM threads WHERE id=? AND user_id=?', tid, uid);
     if (t && msg.method === 'thread/tokenUsage/updated') store.run('UPDATE threads SET token_usage=? WHERE id=?', JSON.stringify(msg.params.tokenUsage), tid);
@@ -63,6 +66,8 @@ export async function createApp(options = {}) {
     if (t && msg.method === 'turn/completed' && msg.params.turn.status === 'completed') void autoTitle(uid, tid);
   };
   const codex = options.codexFactory ? options.codexFactory(config, emit) : new CodexManager(config, emit);
+  const changeRoots = (u, t) => [`/workspace/${t.project_id}`, path.posix.join(config.hostDataDir.replaceAll('\\', '/'), 'users', u.username, 'projects', t.project_id)];
+  turnChanges = createTurnChanges({ store, emit, root: (u, t) => root(u, { id: t.project_id }), cwd: changeRoots });
   function bindAttachments(uid, tid, turnId) {
     const pending = attachmentSends.get(`${uid}:${tid}`);
     for (const [index, id] of (pending?.ids || []).entries()) store.run('UPDATE attachments SET turn_id=?,message_text=? WHERE id=? AND user_id=? AND thread_id=? AND turn_id IS NULL', turnId, index === 0 ? pending.text : null, id, uid, tid);
@@ -82,7 +87,7 @@ export async function createApp(options = {}) {
     // original question and attachment chips in the browser, including forks.
     return { ...item, ...(original != null ? { text: original, content: [{ type: 'text', text: original }, ...(item.content || []).filter(content => content.type !== 'text')] } : {}), attachments: attachments.map(attachmentPublic) };
   }
-  function decorateTurn(uid, tid, turn) { return { ...turn, items: (turn.items || []).map(i => decorateItem(uid, tid, turn.id, i)) }; }
+  function decorateTurn(uid, tid, turn) { const thread = store.thread({ id: uid }, tid); return { ...turn, changes: turnChanges.summary(thread, turn), items: (turn.items || []).map(i => decorateItem(uid, tid, turn.id, i)) }; }
   function setTitle(uid, tid, title) {
     title = title.trim().slice(0, 100); if (!title) return;
     const changed = store.run("UPDATE threads SET title=?,title_state='generated' WHERE id=? AND user_id=? AND title_state!='manual'", title, tid, uid);
@@ -144,7 +149,7 @@ export async function createApp(options = {}) {
   });
   app.use(express.json({ limit: '3mb' }));
   app.get('/api/health', (req, res) => {
-    const busy = uploads.size || mutationLocks.size || titleJobs.size || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
+    const busy = uploads.size || mutationLocks.size || titleJobs.size || turnChanges.busy() || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
     res.json({ status: 'ok', version: '1.0.0', revision: process.env.APP_REVISION || null, deploymentReady: !busy });
   });
   app.get('/api/session', (req, res) => { const u = store.auth(req); res.json({ user: u ? publicUser(u) : null, inviteRequired: !!config.inviteCode || !!store.get('SELECT id FROM users LIMIT 1') }); });
@@ -269,6 +274,20 @@ export async function createApp(options = {}) {
     if (result.thread.name && t.title_state !== 'manual') setTitle(req.user.id, t.id, result.thread.name);
     res.json({ ...result, thread: { ...result.thread, title: store.thread(req.user, t.id).title, tokenUsage: t.token_usage ? JSON.parse(t.token_usage) : result.thread.tokenUsage, turns: result.thread.turns?.map(turn => decorateTurn(req.user.id, t.id, turn)) || [] } });
     if (t.title_state === 'pending' && result.thread.turns?.some(turn => turn.status === 'completed')) void autoTitle(req.user.id, t.id);
+  });
+  app.get('/api/threads/:id/turns/:turnId/changes', async (req, res) => {
+    const thread = store.thread(req.user, req.params.id);
+    let details = turnChanges.details(thread, req.params.turnId);
+    if (!details) {
+      await codex.resume(req.user, thread, threadSettings(settings(JSON.parse(req.user.settings))));
+      const result = await codex.call(req.user, 'thread/read', { threadId: thread.id, includeTurns: true });
+      const turn = result.thread.turns?.find(turn => turn.id === req.params.turnId);
+      if (!turn) fail(404, '本轮变更不存在');
+      const files = historicalChanges(turn, changeRoots(req.user, thread));
+      details = { ...changesSummary(files, { status: turn.status, source: 'history', warning: '此历史轮次仅保留操作补丁，行数为已记录的修改操作总计。' }), files };
+    }
+    if (req.query.path != null) { const selected = relativePath(req.query.path, false), files = details.files.filter(file => file.path === selected); details = { ...details, ...changesSummary(files, details), files }; }
+    res.json(details);
   });
   const sendImage = (req, res, image) => {
     res.type(image.mime);
@@ -470,15 +489,15 @@ export async function createApp(options = {}) {
       const key = `${u.id}:${t.id}`;
       if (attachmentSends.has(key)) fail(409,'消息正在发送，请稍候');
       attachmentSends.set(key, { ids, text: displayText });
-      try { const result = await codex.call(u, method, args); bindAttachments(u.id,t.id,result.turn.id); return {...result,turn:decorateTurn(u.id,t.id,result.turn)}; }
-      finally { attachmentSends.delete(key); }
+      try { await turnChanges.begin(u, t); const result = await codex.call(u, method, args); turnChanges.bind(u, t, result.turn.id); bindAttachments(u.id,t.id,result.turn.id); return {...result,turn:decorateTurn(u.id,t.id,result.turn)}; }
+      finally { attachmentSends.delete(key); turnChanges.cancel(u, t); }
     });
     if (['turn/interrupt', 'turn/steer', 'thread/compact/start', 'thread/fork', 'thread/shellCommand', 'thread/goal/get', 'thread/goal/set', 'thread/goal/clear'].includes(method)) {
       const t = store.thread(u, params.threadId); await codex.resume(u, t, threadSettings(settings(JSON.parse(store.user(u.id).settings))));
       if (method === 'thread/shellCommand' && (typeof params.command !== 'string' || params.command.length > 10000)) fail(400, '命令无效');
       if (method === 'thread/shellCommand') store.audit(u.id, `codex/shell/${executionTarget(u)}`);
       const result = await codex.call(u, method, params);
-      if (method === 'thread/fork') store.run('INSERT INTO threads(id,user_id,project_id,title,created) VALUES(?,?,?,?,?)', result.thread.id, u.id, t.project_id, `${t.title} · 分支`, Date.now());
+      if (method === 'thread/fork') { store.run('INSERT INTO threads(id,user_id,project_id,title,created) VALUES(?,?,?,?,?)', result.thread.id, u.id, t.project_id, `${t.title} · 分支`, Date.now()); turnChanges.fork(t.id, result.thread.id); }
       return result;
     }
     const methods = new Set(['model/list', 'account/read', 'account/login/start', 'account/login/cancel', 'account/logout', 'account/rateLimits/read', 'config/read', 'configRequirements/read', 'skills/list', 'skills/config/write', 'mcpServerStatus/list', 'mcpServer/oauth/login', 'config/mcpServer/reload', 'app/list', 'app/installed', 'permissionProfile/list', 'experimentalFeature/list', 'experimentalFeature/enablement/set']);
@@ -545,7 +564,7 @@ export async function createApp(options = {}) {
   app.use(express.static(path.resolve(here, '../dist'), { index: false, maxAge: 0 }));
   app.get('/{*path}', (req, res) => res.sendFile(path.resolve(here, '../dist/index.html')));
   app.use((e, req, res, next) => { if (res.headersSent) return res.destroy(); res.status(e.status || 500).json({ error: e.status ? e.message : '服务器操作失败，请重试' }); if (!e.status) console.error('Request failed:', e.code || e.name); });
-  return { app, server, store, codex, config, close: async () => { clearInterval(maintenance); for (const ws of wss.clients) ws.terminate(); await codex.shutdown(); for (const item of uploads.values()) await removeUpload(item); await new Promise(resolve => server.close(resolve)); store.db.close(); } };
+  return { app, server, store, codex, config, close: async () => { clearInterval(maintenance); for (const ws of wss.clients) ws.terminate(); await turnChanges.close(); await codex.shutdown(); for (const item of uploads.values()) await removeUpload(item); await new Promise(resolve => server.close(resolve)); store.db.close(); } };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.loadEnvFile(); } catch (e) { if (e.code !== 'ENOENT') throw e; }
