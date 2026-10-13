@@ -18,7 +18,8 @@ export function mergeTurn(previous = {}, incoming = {}) {
   }
   // A delayed start response must not resurrect a completed turn.
   const status = previous.status && previous.status !== 'inProgress' && incoming.status === 'inProgress' ? previous.status : incoming.status || previous.status;
-  return { ...previous, ...incoming, status, items };
+  const changes = previous.changes && (!incoming.changes || previous.changes.revision > incoming.changes.revision) ? previous.changes : incoming.changes;
+  return { ...previous, ...incoming, status, items, ...(changes ? { changes } : {}) };
 }
 export function mergeTurns(previous, incoming) {
   const turns = [...previous];
@@ -30,6 +31,7 @@ export function mergeTurns(previous, incoming) {
 }
 export function applyLifecycle(turns, event) {
   const p = event.params || {};
+  if (event.method === 'turn/changes/updated') return mergeTurns(turns, [{ id: p.turnId, status: p.changes.status, changes: p.changes }]);
   if (event.method === 'turn/started' || event.method === 'turn/completed') return mergeTurns(turns, [p.turn]);
   if (event.method === 'item/started' || event.method === 'item/completed') return mergeTurns(turns, [{ id: p.turnId, status: 'inProgress', items: [p.item] }]);
   return turns;

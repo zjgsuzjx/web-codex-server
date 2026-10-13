@@ -46,11 +46,12 @@ export async function anchored(root, rel) {
   const parts=rel.split('/');const name=parts.pop();let dir=await openDirectory(root);
   try{for(const part of parts){const next=await openDirectory(`/proc/self/fd/${dir.fd}/${part}`);await dir.close();dir=next;}return{target:`/proc/self/fd/${dir.fd}/${name}`,close:()=>dir.close()};}catch(e){await dir.close();throw e;}
 }
-export async function walk(root, max = 20000, start = '') {
+export async function walk(root, max = 20000, start = '', { skipNames } = {}) {
   const entries = [];
   async function visit(rel, dir) {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
       if (item.isSymbolicLink()) continue;
+      if (item.isDirectory() && skipNames?.has(item.name)) continue;
       const name = rel ? `${rel}/${item.name}` : item.name;
       try{relativePath(name,false);}catch{continue;}
       const target = path.join(dir,item.name);

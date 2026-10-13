@@ -26,6 +26,10 @@ export function createStore(dataDir) {
   if (!columns.has('title_state')) db.exec("ALTER TABLE threads ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'");
   if (!columns.has('token_usage')) db.exec('ALTER TABLE threads ADD COLUMN token_usage TEXT');
   if (!db.prepare('PRAGMA table_info(attachments)').all().some(column => column.name === 'message_text')) db.exec('ALTER TABLE attachments ADD COLUMN message_text TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS turn_changes(
+    thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    turn_id TEXT NOT NULL, revision INTEGER NOT NULL, summary TEXT NOT NULL, details TEXT NOT NULL,
+    PRIMARY KEY(thread_id,turn_id));`);
   // Upgrade the original installation owner once; never upgrade invited admins.
   db.exec('BEGIN IMMEDIATE');
   try {
