@@ -214,6 +214,29 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       assert.equal((await request(`/threads/${other.id}/turns/${turn.id}/changes`, 'GET', null, a)).status, 404);
       const fork = await s2.call('thread/fork', { threadId: tr.id }); const inherited = await request(`/threads/${fork.thread.id}/turns/${turn.id}/changes`, 'GET', null, a); assert.equal(inherited.data.added, 3);
     });
+    await t.test('turn clocks and sidebar activity survive reads and reconnects without leaking across users', async () => {
+      const tr = (await request('/threads', 'POST', { projectId: p.id }, a)).data;
+      const start = await s2.call('turn/start', { threadId: tr.id, text: 'observe task timing' });
+      assert.ok(start.turn.timing.startedAt > 0); assert.equal(start.turn.timing.completedAt, null);
+      const list = (await request('/threads', 'GET', null, a)).data;
+      assert.equal(list.find(thread => thread.id === tr.id).activeTurn.id, start.turn.id);
+      assert.ok(!(await request('/threads', 'GET', null, b)).data.some(thread => thread.id === tr.id));
+      const reconnect = await socket(base, a); sockets.push(reconnect);
+      const ready = await reconnect.wait('ready');
+      assert.deepEqual(ready.activeTurns.find(entry => entry.threadId === tr.id).turn.timing, start.turn.timing);
+      const running = (await request(`/threads/${tr.id}`, 'GET', null, a)).data.thread.turns[0];
+      assert.deepEqual(running.timing, start.turn.timing);
+      const turn = instance.codex.threads.get(tr.id).turns[0]; turn.status = 'completed';
+      instance.codex.emit(a.id, { method: 'turn/completed', params: { threadId: tr.id, turn } });
+      const done = (await request(`/threads/${tr.id}`, 'GET', null, a)).data.thread.turns[0];
+      assert.ok(done.timing.completedAt >= done.timing.startedAt);
+      instance.codex.emit(a.id, { method: 'turn/started', params: { threadId: tr.id, turn: { id: turn.id, status: 'inProgress', items: [] } } });
+      assert.equal((await request('/threads', 'GET', null, a)).data.find(thread => thread.id === tr.id).activeTurn, null);
+      assert.deepEqual((await request(`/threads/${tr.id}`, 'GET', null, a)).data.thread.turns[0].timing, done.timing);
+      const fork = await s2.call('thread/fork', { threadId: tr.id });
+      assert.deepEqual((await request(`/threads/${fork.thread.id}`, 'GET', null, a)).data.thread.turns[0].timing, done.timing);
+      await reconnect.close();
+    });
     await t.test('web login permits managed device flow but rejects browser callbacks and external tokens',async()=>{
       await s2.call('account/login/start',{type:'chatgptDeviceCode',accessToken:'ignored'});assert.deepEqual(instance.codex.calls.at(-1).params,{type:'chatgptDeviceCode'});
       await assert.rejects(s2.call('account/login/start',{type:'chatgptAuthTokens',accessToken:'forbidden'}));await assert.rejects(s2.call('account/login/start',{type:'chatgpt'}));

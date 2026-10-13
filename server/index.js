@@ -17,6 +17,7 @@ import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageM
 import { stageZip, publishZip } from './archives.js';
 import { imageResult, readMedia } from './chat-media.js';
 import { createTurnChanges } from './turn-changes.js';
+import { createTurnActivity } from './turn-activity.js';
 import { changesSummary, historicalChanges } from '../shared/file-changes.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +43,7 @@ export async function createApp(options = {}) {
   config.resolveUser = id => store.user(id);
   const clients = new Map(), uploads = new Map(), uploadLocks = new Set(), rates = new Map(), mutationLocks = new Map(), eventCounters = new Map();
   let resources, turnChanges;
+  const turnActivity = createTurnActivity(store);
   const titleJobs = new Map(), attachmentSends = new Map();
   const userDir = u => path.join(config.dataDir, 'users', u.username);
   const root = (u, p) => path.join(userDir(u), 'projects', p.id);
@@ -53,6 +55,8 @@ export async function createApp(options = {}) {
     turnChanges?.observe(uid, msg);
     const tid = msg.params?.threadId || msg.params?.thread?.id || null;
     const t = tid && store.get('SELECT * FROM threads WHERE id=? AND user_id=?', tid, uid);
+    if (msg.method === 'connection/lost') msg = { ...msg, params: { ...msg.params, stoppedTurns: turnActivity.disconnect(uid) } };
+    if (t && ['turn/started', 'turn/completed'].includes(msg.method)) turnActivity.observe(t, msg.params.turn);
     if (t && msg.method === 'thread/tokenUsage/updated') store.run('UPDATE threads SET token_usage=? WHERE id=?', JSON.stringify(msg.params.tokenUsage), tid);
     if (t && msg.method === 'turn/started') bindAttachments(uid, tid, msg.params.turn.id);
     if (t && msg.params?.item) msg = { ...msg, params: { ...msg.params, item: decorateItem(uid, tid, msg.params.turnId, msg.params.item) } };
@@ -87,7 +91,7 @@ export async function createApp(options = {}) {
     // original question and attachment chips in the browser, including forks.
     return { ...item, ...(original != null ? { text: original, content: [{ type: 'text', text: original }, ...(item.content || []).filter(content => content.type !== 'text')] } : {}), attachments: attachments.map(attachmentPublic) };
   }
-  function decorateTurn(uid, tid, turn) { const thread = store.thread({ id: uid }, tid); return { ...turn, changes: turnChanges.summary(thread, turn), items: (turn.items || []).map(i => decorateItem(uid, tid, turn.id, i)) }; }
+  function decorateTurn(uid, tid, turn) { const thread = store.thread({ id: uid }, tid); return { ...turnActivity.decorate(thread, turn), changes: turnChanges.summary(thread, turn), items: (turn.items || []).map(i => decorateItem(uid, tid, turn.id, i)) }; }
   function setTitle(uid, tid, title) {
     title = title.trim().slice(0, 100); if (!title) return;
     const changed = store.run("UPDATE threads SET title=?,title_state='generated' WHERE id=? AND user_id=? AND title_state!='manual'", title, tid, uid);
@@ -261,7 +265,10 @@ export async function createApp(options = {}) {
       await archive.finalize();
     }
   });
-  app.get('/api/threads', (req, res) => res.json(store.all('SELECT * FROM threads WHERE user_id=? AND archived=0 ORDER BY created DESC', req.user.id)));
+  app.get('/api/threads', (req, res) => {
+    const active = new Map(turnActivity.active(req.user.id).map(entry => [entry.threadId, entry.turn]));
+    res.json(store.all('SELECT * FROM threads WHERE user_id=? AND archived=0 ORDER BY created DESC', req.user.id).map(thread => ({ ...thread, activeTurn: active.get(thread.id) || null })));
+  });
   app.post('/api/threads', async (req, res) => {
     const p = store.project(req.user, req.body.projectId), s = settings(JSON.parse(req.user.settings));
     const result = await codex.call(req.user, 'thread/start', { cwd: projectCwd(config, req.user, p.id), ...threadSettings(s) });
@@ -489,7 +496,7 @@ export async function createApp(options = {}) {
       const key = `${u.id}:${t.id}`;
       if (attachmentSends.has(key)) fail(409,'消息正在发送，请稍候');
       attachmentSends.set(key, { ids, text: displayText });
-      try { await turnChanges.begin(u, t); const result = await codex.call(u, method, args); turnChanges.bind(u, t, result.turn.id); bindAttachments(u.id,t.id,result.turn.id); return {...result,turn:decorateTurn(u.id,t.id,result.turn)}; }
+      try { await turnChanges.begin(u, t); const result = await codex.call(u, method, args); turnChanges.bind(u, t, result.turn.id); turnActivity.observe(t, result.turn); bindAttachments(u.id,t.id,result.turn.id); return {...result,turn:decorateTurn(u.id,t.id,result.turn)}; }
       finally { attachmentSends.delete(key); turnChanges.cancel(u, t); }
     });
     if (['turn/interrupt', 'turn/steer', 'thread/compact/start', 'thread/fork', 'thread/shellCommand', 'thread/goal/get', 'thread/goal/set', 'thread/goal/clear'].includes(method)) {
@@ -497,7 +504,7 @@ export async function createApp(options = {}) {
       if (method === 'thread/shellCommand' && (typeof params.command !== 'string' || params.command.length > 10000)) fail(400, '命令无效');
       if (method === 'thread/shellCommand') store.audit(u.id, `codex/shell/${executionTarget(u)}`);
       const result = await codex.call(u, method, params);
-      if (method === 'thread/fork') { store.run('INSERT INTO threads(id,user_id,project_id,title,created) VALUES(?,?,?,?,?)', result.thread.id, u.id, t.project_id, `${t.title} · 分支`, Date.now()); turnChanges.fork(t.id, result.thread.id); }
+      if (method === 'thread/fork') { store.run('INSERT INTO threads(id,user_id,project_id,title,created) VALUES(?,?,?,?,?)', result.thread.id, u.id, t.project_id, `${t.title} · 分支`, Date.now()); turnChanges.fork(t.id, result.thread.id); turnActivity.fork(t.id, result.thread.id); }
       return result;
     }
     const methods = new Set(['model/list', 'account/read', 'account/login/start', 'account/login/cancel', 'account/logout', 'account/rateLimits/read', 'config/read', 'configRequirements/read', 'skills/list', 'skills/config/write', 'mcpServerStatus/list', 'mcpServer/oauth/login', 'config/mcpServer/reload', 'app/list', 'app/installed', 'permissionProfile/list', 'experimentalFeature/list', 'experimentalFeature/enablement/set']);
@@ -523,7 +530,7 @@ export async function createApp(options = {}) {
     if (!clients.has(u.id)) clients.set(u.id, new Set()); clients.get(u.id).add(ws); ws.alive = true;
     ws.on('pong', () => { ws.alive = true; });
     const current = eventCounters.get(u.id)||0;
-    send(ws, { type: 'ready', seq: current, pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
+    send(ws, { type: 'ready', seq: current, activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
     ws.on('message', (data, binary) => {
       if (++queued > 8) { ws.close(1008, '请等待服务器确认后发送'); return; }
       chain = chain.then(async () => {
