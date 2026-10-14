@@ -15,7 +15,8 @@ import { ROLES, isAdministrator, executionTarget, projectCwd } from './execution
 import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomicWrite, anchored, safeRename, safeRemove } from './files.js';
 import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInputs } from './attachments.js';
 import { stageZip, publishZip } from './archives.js';
-import { imageResult, readMedia } from './chat-media.js';
+import { imageResult, readMedia, mediaLocation } from './chat-media.js';
+import { attachmentHeader, downloadFile } from './downloads.js';
 import { createTurnChanges } from './turn-changes.js';
 import { createTurnActivity } from './turn-activity.js';
 import { changesSummary, historicalChanges } from '../shared/file-changes.js';
@@ -66,7 +67,7 @@ export async function createApp(options = {}) {
     // Keeping output deltas out of SQLite avoids duplicate unbounded history storage.
     const seq=(eventCounters.get(uid)||0)+1;eventCounters.set(uid,seq);
     if (msg.method === 'thread/archived' && tid) store.run('UPDATE threads SET archived=1 WHERE id=? AND user_id=?', tid, uid);
-    for (const ws of clients.get(uid) || []) send(ws, { type: 'codex/event', seq, event: msg });
+    for (const ws of clients.get(uid) || []) send(ws, { type: 'codex/event', seq, serverTime: Date.now(), event: msg });
     if (t && msg.method === 'turn/completed' && msg.params.turn.status === 'completed') void autoTitle(uid, tid);
   };
   const codex = options.codexFactory ? options.codexFactory(config, emit) : new CodexManager(config, emit);
@@ -249,11 +250,12 @@ export async function createApp(options = {}) {
   }));
   app.get('/api/projects/:id/download', async (req, res) => {
     const p = store.project(req.user, req.params.id), rel = relativePath(req.query.path || ''); const projectRoot = root(req.user, p), target = await safePath(projectRoot, rel), st = await fs.lstat(target);
+    if (st.isFile()) return downloadFile(res, projectRoot, rel);
     const filename = (rel ? path.basename(rel) : p.name).replace(/[\r\n"\\]/g, '_');
-    res.setHeader('Content-Disposition', `attachment; filename="download.zip"; filename*=UTF-8''${encodeURIComponent(filename + '.zip')}`);
+    res.setHeader('Content-Disposition', attachmentHeader(filename + '.zip'));
     {
       res.type('application/zip'); const archive = archiver('zip', { zlib: { level: 3 } }); archive.on('error', () => res.destroy()); res.on('close', () => archive.abort()); archive.pipe(res);
-      const entries = st.isFile() ? [{ type: 'file', path: path.basename(rel), source: rel }] : await walk(projectRoot,20000,rel);
+      const entries = await walk(projectRoot,20000,rel);
       for (const entry of entries) {
         const fullRel = entry.source || (rel ? `${rel}/${entry.path}` : entry.path);
         if (entry.type === 'directory') archive.append('', { name: `${entry.path}/` });
@@ -264,6 +266,11 @@ export async function createApp(options = {}) {
       }
       await archive.finalize();
     }
+  });
+  app.get('/api/threads/:id/download', async (req, res) => {
+    const thread = store.thread(req.user, req.params.id);
+    const { root, rel } = mediaLocation(config, req.user, thread, req.query.path);
+    return downloadFile(res, root, rel);
   });
   app.get('/api/threads', (req, res) => {
     const active = new Map(turnActivity.active(req.user.id).map(entry => [entry.threadId, entry.turn]));
@@ -427,6 +434,7 @@ export async function createApp(options = {}) {
   async function rpc(ws, u, method, params) {
     if (config.changingUsers.has(u.id)) fail(409, '账号权限正在更新，请重新登录');
     executionTarget(u);
+    if (method === 'connection/ping') return { ok: true };
     if (method === 'terminal/start') {
       const p = store.project(u, params.projectId); if (ws.terminal) ws.terminal.close();
       const cols = Math.max(20, Math.min(300, Number(params.cols) || 80)), rows = Math.max(5, Math.min(100, Number(params.rows) || 24));
@@ -530,7 +538,7 @@ export async function createApp(options = {}) {
     if (!clients.has(u.id)) clients.set(u.id, new Set()); clients.get(u.id).add(ws); ws.alive = true;
     ws.on('pong', () => { ws.alive = true; });
     const current = eventCounters.get(u.id)||0;
-    send(ws, { type: 'ready', seq: current, activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
+    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
     ws.on('message', (data, binary) => {
       if (++queued > 8) { ws.close(1008, '请等待服务器确认后发送'); return; }
       chain = chain.then(async () => {

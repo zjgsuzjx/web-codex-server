@@ -22,6 +22,8 @@ COPY src/deltas.js ./src/deltas.js
 COPY src/model-options.js ./src/model-options.js
 COPY src/completion-notice.js ./src/completion-notice.js
 COPY src/link-info.js ./src/link-info.js
+COPY src/editor-language.js ./src/editor-language.js
+COPY src/socket.js ./src/socket.js
 COPY scripts/smoke.mjs ./scripts/smoke.mjs
 COPY scripts/role-smoke.mjs ./scripts/role-smoke.mjs
 COPY scripts/deploy-release.sh ./scripts/deploy-release.sh

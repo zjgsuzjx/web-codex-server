@@ -4,7 +4,7 @@ import { Copy, Download, FileText, Globe2, Image, LoaderCircle, ExternalLink } f
 import { contentImage, mediaUrl, toolContent } from '../shared/chat-content.js';
 import { remarkReplyFormat } from '../shared/markdown-format.js';
 import ChatImage from './ChatImage';
-import { fileLinkInfo, rehypeFileReferences, websiteInfo } from './link-info';
+import { downloadLinkInfo, fileLinkInfo, rehypeFileReferences, websiteInfo } from './link-info';
 
 function WebsiteLink({ href, children, ...props }) {
   const website = websiteInfo(href);
@@ -15,11 +15,12 @@ function WebsiteLink({ href, children, ...props }) {
 
 const nodeText = node => typeof node === 'string' || typeof node === 'number' ? String(node) : Array.isArray(node) ? node.map(nodeText).join('') : nodeText(node?.props?.children || '');
 export function Markdown({ text = '', threadId, onFile, notify, onPreview }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkReplyFormat]} rehypePlugins={[rehypeFileReferences]} urlTransform={(url, key) => key === 'src' ? mediaUrl(url, threadId) : fileLinkInfo(url) ? url : defaultUrlTransform(url)} components={{
+  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkReplyFormat]} rehypePlugins={[rehypeFileReferences]} urlTransform={(url, key) => key === 'src' ? mediaUrl(url, threadId) : fileLinkInfo(url) || downloadLinkInfo(url, '', threadId) ? url : defaultUrlTransform(url)} components={{
     a: ({ node, href, children, ...props }) => {
       const local = fileLinkInfo(href), image = node.children?.some(child => child.tagName === 'img');
       const label = image ? '打开图片链接' : children;
-      const link = !href ? <span>{label}</span> : websiteInfo(href) ? <WebsiteLink href={href} {...props}>{label}</WebsiteLink> : local ?
+      const download = !image && downloadLinkInfo(href, nodeText(children), threadId);
+      const link = !href ? <span>{label}</span> : download ? <a {...props} className="file-link" href={download.url} download title={`下载文件：${download.path}`}><Download size={13} aria-hidden="true"/><span className="file-link-label">{label}</span></a> : websiteInfo(href) ? <WebsiteLink href={href} {...props}>{label}</WebsiteLink> : local ?
         <a {...props} className="file-link" href={href} title={`打开文件：${local.path}${local.line ? ` · 第 ${local.line} 行` : ''}`} onClick={onFile ? event => { event.preventDefault(); onFile(local.path); } : undefined}>
           <FileText size={13} aria-hidden="true"/><span className="file-link-label">{label}</span>
         </a> : <a {...props} href={href} rel="noopener noreferrer">{label}</a>;

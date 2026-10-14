@@ -5,6 +5,15 @@ export function isFileLineLink(href) {
   return Boolean(fileLinkInfo(href)?.line);
 }
 
+// Explicit download labels and sandbox artifacts bypass the code viewer.
+export function downloadLinkInfo(href, label, threadId) {
+  if (!threadId || typeof href !== 'string') return null;
+  const sandbox = href.startsWith('sandbox:');
+  const file = fileLinkInfo(sandbox ? href.slice(8) : href);
+  if (!file || !sandbox && !/(?:下载|download\b|save\s+(?:file|as)\b)/i.test(label || '')) return null;
+  return { ...file, url: `/api/threads/${encodeURIComponent(threadId)}/download?path=${encodeURIComponent(file.path)}` };
+}
+
 export function fileLinkInfo(href) {
   if (typeof href !== 'string' || !href || /^(?:\/\/|#|\/api(?:\/|$))/i.test(href)) return null;
   const [encodedPath, fragment = ''] = href.split('#');
