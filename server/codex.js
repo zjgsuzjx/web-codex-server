@@ -5,6 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fail } from './files.js';
 import { executionTarget, hostCommand, projectCwd, workerSpec } from './execution.js';
+import { PendingRequests } from './pending-requests.js';
 
 // Ordinary users/admins always receive non-root, scoped containers. Host execution
 // is a separate, explicitly selected superadmin-only backend; commands use argv.
@@ -49,12 +50,15 @@ export class CodexManager {
     }
     try { if (executionTarget(this.currentUser(user)) !== target) fail(403, '执行权限已改变'); }
     catch(e) { await container.remove({force:true}).catch(()=>{}); throw e; }
-    const cmd = target === 'server' ? hostCommand(this.config, user, ['/usr/bin/node', this.config.hostCodexScript, 'app-server']) : ['codex', 'app-server'];
+    const appServerArgs = ['app-server', '-c', 'features.default_mode_request_user_input=true'];
+    const cmd = target === 'server' ? hostCommand(this.config, user, ['/usr/bin/node', this.config.hostCodexScript, ...appServerArgs]) : ['codex', ...appServerArgs];
     const exec = await container.exec({ Cmd: cmd, AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: false });
     const stream = await exec.start({ hijack: true, stdin: true });
     const stdout = new PassThrough(), stderr = new PassThrough();
     container.modem.demuxStream(stream, stdout, stderr);
     const inst = { target, container, stream, pending: new Map(), requests: new Map(), titles: new Map(), hidden: new Set(), next: 1, last: Date.now(), loaded: new Set(), active: new Set(), terminals: new Set() };
+    inst.requestQueue = new PendingRequests(message => stream.write(JSON.stringify(message) + '\n'), params => this.emit(user.id, { method: 'serverRequest/resolved', params }));
+    inst.requests = inst.requestQueue.requests;
     this.instances.set(user.id, inst);
     stderr.on('data', () => {}); // Credentials/provider responses must never enter application logs.
     readline.createInterface({ input: stdout }).on('line', line => {
@@ -78,8 +82,10 @@ export class CodexManager {
           }
           return;
         }
-        if (msg.id != null) inst.requests.set(String(msg.id), msg);
-        if (msg.method === 'serverRequest/resolved') inst.requests.delete(String(msg.params?.requestId));
+        if (msg.id != null) msg = inst.requestQueue.add(msg);
+        if (msg.method === 'serverRequest/resolved') inst.requestQueue.remove(msg.params?.requestId);
+        if (msg.method === 'turn/started') inst.requestQueue.clearThread(tid);
+        if (msg.method === 'turn/completed') inst.requestQueue.clearThread(tid, msg.params?.turn?.id);
         this.emit(user.id, msg);
       }
     });
@@ -151,9 +157,10 @@ export class CodexManager {
     return { stream, exec, close() { if (!stream.destroyed) { stream.write('exit\n'); stream.end(); stream.destroy(); } end(); } };
   }
   async reply(user, requestId, result) {
-    const inst = await this.ensure(user); const request = inst.requests.get(String(requestId));
-    if (!request) fail(404, '该请求已失效');
-    inst.stream.write(JSON.stringify({ id: request.id, result }) + '\n'); inst.requests.delete(String(requestId));
+    user = this.currentUser(user);
+    const inst = this.instances.get(user.id);
+    if (!inst) fail(404, '该请求已失效');
+    inst.requestQueue.reply(requestId, result);
   }
   async resume(user, thread, settings) {
     const inst = await this.ensure(user);
@@ -162,6 +169,7 @@ export class CodexManager {
   drop(uid) {
     const inst = this.instances.get(uid); if (!inst) return;
     this.instances.delete(uid);
+    inst.requestQueue?.dispose();
     for (const p of inst.pending.values()) { clearTimeout(p.timer); p.reject(new Error('Codex 进程已断开，请重试')); }
     for (const title of inst.titles.values()) title.reject(new Error('Codex 进程已断开'));
     inst.stream.destroy();

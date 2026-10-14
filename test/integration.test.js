@@ -66,6 +66,11 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
     await t.test('binary websocket upload preserves folder paths and verifies content',async()=>{const task=await s.call('upload/begin',{projectId:p.id,path:'src/hello.txt',size:11});assert.equal((await s.chunk(Buffer.from('hello '))).offset,6);assert.equal((await s.chunk(Buffer.from('world'))).offset,11);const done=await s.call('upload/finish',{uploadId:task.uploadId});assert.match(done.sha256,/^[a-f0-9]{64}$/);assert.equal((await request(`/projects/${p.id}/file?path=src/hello.txt`,'GET',null,a)).data.content,'hello world');});
     await t.test('disconnect and resume upload at acknowledged offset',async()=>{const task=await s.call('upload/begin',{projectId:p.id,path:'resumed.txt',size:6});await s.chunk(Buffer.from('abc'));await s.close();const s2=await socket(base,a);sockets.push(s2);assert.equal((await s2.call('upload/resume',{uploadId:task.uploadId})).offset,3);await s2.chunk(Buffer.from('def'));await s2.call('upload/finish',{uploadId:task.uploadId});assert.equal((await request(`/projects/${p.id}/file?path=resumed.txt`,'GET',null,a)).data.content,'abcdef');});
     const s2=sockets.at(-1);
+    await t.test('latency ping uses the authenticated gateway without starting a Codex worker', async () => {
+      const before = instance.codex.calls.length;
+      assert.deepEqual(await s2.call('connection/ping'), { ok: true });
+      assert.equal(instance.codex.calls.length, before);
+    });
     await t.test('quota accounts for reserved bytes across concurrent connections',async()=>{const other=await socket(base,a);sockets.push(other);const task=await s2.call('upload/begin',{projectId:p.id,path:'reserve-one',size:30000});await assert.rejects(other.call('upload/begin',{projectId:p.id,path:'reserve-two',size:25000}),/配额/);await s2.call('upload/cancel',{uploadId:task.uploadId});await other.close();});
     await t.test('path traversal, symlinks, quota, and oversized files are rejected',async()=>{for(const rel of ['../escape','/etc/passwd','a/../../b','a\\b','a//b'])await assert.rejects(s2.call('upload/begin',{projectId:p.id,path:rel,size:2}));await assert.rejects(s2.call('upload/begin',{projectId:p.id,path:'big.txt',size:30001}));const outside=path.join(dir,'outside');await fs.mkdir(outside);await fs.symlink(outside,path.join(dir,'users','alice','projects',p.id,'link'),process.platform==='win32'?'junction':'dir');assert.equal((await request(`/projects/${p.id}/file?path=link/secret`,'GET',null,a)).status,403);const task=await s2.call('upload/begin',{projectId:p.id,path:'reservation',size:30000});await assert.rejects(s2.call('upload/begin',{projectId:p.id,path:'second',size:1000}));await s2.call('upload/cancel',{uploadId:task.uploadId});});
     await t.test('unfinished and conflicting uploads do not overwrite existing files',async()=>{const task=await s2.call('upload/begin',{projectId:p.id,path:'src/hello.txt',size:2});await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}));await s2.chunk(Buffer.from('XX'));await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}));assert.equal((await request(`/projects/${p.id}/file?path=src/hello.txt`,'GET',null,a)).data.content,'hello world');});
@@ -142,13 +147,35 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       await fs.unlink(path.join(dir,'users','alice','codex','chat-attachments',id,'missing.js'));const turns=instance.codex.calls.filter(c=>c.method==='turn/start').length;
       await assert.rejects(s2.call('turn/start',{threadId:tr.id,text:'read the missing file',attachments:[id]}),/文件不存在/);assert.equal(instance.codex.calls.filter(c=>c.method==='turn/start').length,turns);assert.equal(instance.store.get('SELECT turn_id FROM attachments WHERE id=?',id).turn_id,null);
     });
-    await t.test('ZIP imports extract safely without keeping the archive, and file downloads are ZIP too',async()=>{
+    await t.test('ZIP imports extract safely; single files keep their bytes and directories remain ZIP',async()=>{
       const data=Buffer.from(zipSync({'import/readme.txt':Buffer.from('zipped'),'import/empty/':new Uint8Array()}));
       const task=await s2.call('upload/begin',{projectId:p.id,path:'project.zip',size:data.length,extract:true});await s2.chunk(data);const result=await s2.call('upload/finish',{uploadId:task.uploadId});assert.equal(result.extracted,2);
       assert.equal((await request(`/projects/${p.id}/file?path=import/readme.txt`,'GET',null,a)).data.content,'zipped');assert.equal((await request(`/projects/${p.id}/file?path=project.zip`,'GET',null,a)).status,404);
-      const r=await fetch(base+`/api/projects/${p.id}/download?path=import/readme.txt`,{headers:{Cookie:a.cookie,Origin:base}});assert.equal(r.headers.get('content-type'),'application/zip');const zip=unzipSync(new Uint8Array(await r.arrayBuffer()));assert.equal(Buffer.from(zip['readme.txt']).toString(),'zipped');
+      const r=await fetch(base+`/api/projects/${p.id}/download?path=import/readme.txt`,{headers:{Cookie:a.cookie,Origin:base}});assert.equal(r.headers.get('content-type'),'application/octet-stream');assert.match(r.headers.get('content-disposition'),/attachment;.*readme\.txt/);assert.equal(await r.text(),'zipped');
+      const folder=await fetch(base+`/api/projects/${p.id}/download?path=import`,{headers:{Cookie:a.cookie}});assert.equal(folder.headers.get('content-type'),'application/zip');const zip=unzipSync(new Uint8Array(await folder.arrayBuffer()));assert.equal(Buffer.from(zip['readme.txt']).toString(),'zipped');
       const conflict=await s2.call('upload/begin',{projectId:p.id,path:'again.zip',size:data.length,extract:true});await s2.chunk(data);await assert.rejects(s2.call('upload/finish',{uploadId:conflict.uploadId}),/已存在/);
       const bomb=Buffer.from(zipSync({'too-large.txt':new Uint8Array(30001)}));const bad=await s2.call('upload/begin',{projectId:p.id,path:'big.zip',size:bomb.length,extract:true});await s2.chunk(bomb);await assert.rejects(s2.call('upload/finish',{uploadId:bad.uploadId}),/上限/);
+    });
+    await t.test('chat download streams original binary files and rejects foreign roots, folders and links', async () => {
+      const tr=(await request('/threads','POST',{projectId:p.id},a)).data;
+      const filename="报告 (final)'s.bin", bytes=Buffer.from([0,255,17,13,10,128]);
+      const projectRoot=path.join(dir,'users','alice','projects',p.id);
+      await fs.writeFile(path.join(projectRoot,filename),bytes);
+      const url=value=>base+`/api/threads/${tr.id}/download?path=${encodeURIComponent(value)}`;
+      for (const value of [filename,`/workspace/${p.id}/${filename}`,`${instance.config.hostDataDir.replaceAll('\\','/')}/users/alice/projects/${p.id}/${filename}`]) {
+        const response=await fetch(url(value),{headers:{Cookie:a.cookie}});
+        assert.equal(response.status,200);assert.equal(response.headers.get('content-length'),String(bytes.length));
+        assert.match(response.headers.get('content-disposition'),/filename\*=UTF-8''%E6/);
+        assert.deepEqual(Buffer.from(await response.arrayBuffer()),bytes);
+      }
+      assert.equal((await fetch(url(filename))).status,401);
+      assert.equal((await fetch(url(filename),{headers:{Cookie:b.cookie}})).status,404);
+      for (const value of ['../escape','/etc/passwd',`/workspace/another/${filename}`,'/home/node/.codex/auth.json','import']) assert.ok((await fetch(url(value),{headers:{Cookie:a.cookie}})).status>=400);
+      const outside=path.join(dir,'outside-download');await fs.mkdir(outside);await fs.writeFile(path.join(outside,'secret'),'private');
+      await fs.symlink(outside,path.join(projectRoot,'download-link'),process.platform==='win32'?'junction':'dir');
+      assert.equal((await fetch(url('download-link/secret'),{headers:{Cookie:a.cookie}})).status,403);
+      const generated=path.join(dir,'users','alice','codex','generated_images');await fs.mkdir(generated,{recursive:true});await fs.writeFile(path.join(generated,'artifact.txt'),'generated');
+      const response=await fetch(url('/home/node/.codex/generated_images/artifact.txt'),{headers:{Cookie:a.cookie}});assert.equal(response.status,200);assert.equal(await response.text(),'generated');
     });
     await t.test('completed turns generate a title once, preserve manual names, and persist current context statistics',async()=>{
       const tr=(await request('/threads','POST',{projectId:p.id},a)).data;const start=await s2.call('turn/start',{threadId:tr.id,text:'improve UX'});
