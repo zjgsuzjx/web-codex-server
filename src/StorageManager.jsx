@@ -43,9 +43,9 @@ export default function StorageManager({ api, Dialog, userId, onFiles, onDeleted
     try { setJob(await api('/storage/scan', { method: 'POST' })); } catch (e) { setError(e.message); } finally { pending.current = false; setBusy(false); }
   }
   async function confirm() {
-    if (pending.current || !selected.size || !beforeDelete(job.files.filter(file => selected.has(file.id)))) return;
+    if (pending.current || !selected.size) return;
     pending.current = true; setBusy(true); setError('');
-    try { setJob(await api(`/storage/jobs/${job.id}/confirm`, { method: 'POST', body: { ids: [...selected] } })); } catch (e) { setError(e.message); } finally { pending.current = false; setBusy(false); }
+    try { if (!await beforeDelete(job.files.filter(file => selected.has(file.id)))) return; setJob(await api(`/storage/jobs/${job.id}/confirm`, { method: 'POST', body: { ids: [...selected] } })); } catch (e) { setError(e.message); } finally { pending.current = false; setBusy(false); }
   }
   function acknowledge() { acknowledged.current.add(`${warning.source}:${warning.level}`); setWarning(null); }
   const chosen = job?.files?.filter(file => selected.has(file.id)) || [], total = chosen.reduce((n, file) => n + file.size, 0);
