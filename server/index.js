@@ -20,6 +20,9 @@ import { attachmentHeader, downloadFile } from './downloads.js';
 import { createTurnChanges } from './turn-changes.js';
 import { createTurnActivity } from './turn-activity.js';
 import { changesSummary, historicalChanges } from '../shared/file-changes.js';
+import { storageLimit, topPaths } from '../shared/storage.js';
+import { measure, createCleanup } from './storage.js';
+import { fileImageMime, serveFileImage } from './file-images.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -37,13 +40,13 @@ export async function createApp(options = {}) {
     publicUrl: process.env.PUBLIC_URL || 'http://localhost:3100', secure: process.env.COOKIE_SECURE === 'true', inviteCode: process.env.INVITE_CODE || '',
     workerImage: process.env.WORKER_IMAGE || 'starvalley-codex-worker:local', workerMemory: Number(process.env.WORKER_MEMORY_MB || 384), maxWorkers: Number(process.env.MAX_ACTIVE_WORKERS || 2),
     enableHostExecution: process.env.ENABLE_HOST_EXECUTION === 'true', hostCodexScript: process.env.HOST_CODEX_SCRIPT || '', hostCodexBin:process.env.HOST_CODEX_BIN || '/usr/local/bin', changingUsers: new Set(),
-    nestedSandbox: process.env.ENABLE_NESTED_SANDBOX === 'true', maxUsers: Number(process.env.MAX_USERS || 10), quota: Number(process.env.USER_QUOTA_MB || 512) * MB, maxFile: Number(process.env.MAX_FILE_MB || 256) * MB, ...options
+    nestedSandbox: process.env.ENABLE_NESTED_SANDBOX === 'true', maxUsers: Number(process.env.MAX_USERS || 10), maxFile: Number(process.env.MAX_FILE_MB || 256) * MB, ...options
   };
   config.templateDir ||= path.join(config.dataDir, 'template');
   const store = createStore(config.dataDir), app = express(), server = createServer(app), wss = new WebSocketServer({ noServer: true, maxPayload: MB + 4096 });
   config.resolveUser = id => store.user(id);
   const clients = new Map(), uploads = new Map(), uploadLocks = new Set(), rates = new Map(), mutationLocks = new Map(), eventCounters = new Map();
-  let resources, turnChanges;
+  let resources, turnChanges, cleanup;
   const turnActivity = createTurnActivity(store);
   const titleJobs = new Map(), attachmentSends = new Map();
   const userDir = u => path.join(config.dataDir, 'users', u.username);
@@ -133,14 +136,53 @@ export async function createApp(options = {}) {
     try { return await next; } finally { resources?.invalidateStorage(u.id); if (mutationLocks.get(u.id) === next) mutationLocks.delete(u.id); }
   }
   async function used(u) {
-    const dir = path.join(userDir(u), 'projects'); await fs.mkdir(dir, { recursive: true });
-    await fs.mkdir(attachmentRoot(config, u), { recursive: true });
-    return [...await walk(dir), ...await walk(attachmentRoot(config, u))].reduce((n, x) => n + (x.type === 'file' ? x.size : 0), 0);
+    return (await measure(userDir(u))).size;
   }
   resources = createResources(config, codex, used);
+  const pruneNames = new Set(['node_modules', '.git', '.venv', 'venv', '__pycache__', '.cache']);
+  function selectedPaths(value) {
+    if (!Array.isArray(value) || !value.length || value.length > 200) fail(400, '请选择 1–200 个文件或文件夹');
+    return topPaths(value.map(rel => relativePath(rel, false)));
+  }
+  function checkUploads(u, projectId, rel) {
+    const prefix = `${u.id}:${projectId}:`;
+    for (const key of uploadLocks) if (key === prefix + rel || key.startsWith(prefix + rel + '/')) fail(409, '该路径下存在上传任务，请先完成或取消上传');
+  }
+  async function deleteEntries(u, entries) {
+    const results = [];
+    for (const entry of entries) {
+      try {
+        const p = store.project(u, entry.projectId); checkUploads(u, p.id, entry.rel);
+        await safePath(root(u, p), entry.rel);
+        const current = await measure(root(u, p), entry.rel, true);
+        if (entry.fingerprint && current.fingerprint !== entry.fingerprint) fail(409, '文件在扫描后发生变化，请重新查看大小并确认');
+        await safeRemove(root(u, p), entry.rel);
+        results.push({ path: entry.path || entry.rel, projectId: p.id, rel: entry.rel, deleted: true, size: current.size });
+      } catch (e) { results.push({ path: entry.path || entry.rel, projectId: entry.projectId, rel: entry.rel, deleted: false, error: e.status ? e.message : '无法删除，请检查文件权限后重试' }); }
+    }
+    // Deletion must still report its result if a physically full SQLite cannot audit.
+    try { store.audit(u.id, 'file/bulk-delete'); } catch {}
+    return results;
+  }
+  cleanup = createCleanup({ codex, resources, mutation, currentUser: id => store.user(id), remove: deleteEntries, async inventory(u) {
+    const entries = [];
+    for (const p of store.all('SELECT id,name FROM projects WHERE user_id=?', u.id)) {
+      const tree = await walk(root(u, p), 20000, '', { pruneNames });
+      // Include root items and nested cache/build directories or large files.
+      const candidates = tree.filter(e => !e.path.includes('/') || e.type === 'directory' && /^(node_modules|\.cache|dist|build|\.next|\.nuxt|coverage|__pycache__|\.venv|venv|tmp|temp|logs)$/i.test(e.name) || e.type === 'file' && e.size >= 10 * MB);
+      for (const e of candidates.slice(0, Math.max(0, 600 - entries.length))) {
+        const stats = await measure(root(u, p), e.path, true);
+        entries.push({ id: randomUUID(), projectId: p.id, rel: e.path, path: `${p.name}/${e.path}`, type: e.type, size: stats.size, fingerprint: stats.fingerprint });
+      }
+      if (entries.length >= 600) break;
+    }
+    return entries.sort((a, b) => b.size - a.size);
+  } });
   async function quota(u, extra) {
     const reserved = [...uploads.values()].filter(x => x.uid === u.id).reduce((n, x) => n + x.size, 0);
-    if (await used(u) + reserved + extra > config.quota) fail(413, '用户存储配额不足');
+    const limit = storageLimit(u, config.quota);
+    // Shrinking existing files remains possible while over quota.
+    if (limit != null && extra > 0 && await used(u) + reserved + extra > limit) fail(413, '用户存储配额不足，请在文件管理器中强制删除不需要的文件，或使用 Codex 智能清理');
   }
   async function userDirs(u) {
     await fs.mkdir(path.join(userDir(u), 'projects'), { recursive: true });
@@ -154,7 +196,7 @@ export async function createApp(options = {}) {
   });
   app.use(express.json({ limit: '3mb' }));
   app.get('/api/health', (req, res) => {
-    const busy = uploads.size || mutationLocks.size || titleJobs.size || turnChanges.busy() || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
+    const busy = uploads.size || mutationLocks.size || titleJobs.size || cleanup?.busy() || turnChanges.busy() || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
     res.json({ status: 'ok', version: '1.0.0', revision: process.env.APP_REVISION || null, deploymentReady: !busy });
   });
   app.get('/api/session', (req, res) => { const u = store.auth(req); res.json({ user: u ? publicUser(u) : null, inviteRequired: !!config.inviteCode || !!store.get('SELECT id FROM users LIMIT 1') }); });
@@ -213,11 +255,24 @@ export async function createApp(options = {}) {
     store.run('INSERT INTO projects(id,user_id,name,created) VALUES(?,?,?,?)', p.id, req.user.id, p.name, p.created); store.audit(req.user.id, 'project/create'); res.status(201).json(p);
   });
   app.patch('/api/projects/:id', (req, res) => { store.project(req.user, req.params.id); const name = req.body.name?.trim(); if (!name || name.length > 80) fail(400, '项目名称无效'); store.run('UPDATE projects SET name=? WHERE id=? AND user_id=?', name, req.params.id, req.user.id); res.json({ ok: true }); });
-  app.get('/api/projects/:id/files', async (req, res) => { const p = store.project(req.user, req.params.id); res.json(await walk(root(req.user, p))); });
+  app.get('/api/projects/:id/files', async (req, res) => { const p = store.project(req.user, req.params.id); const start = relativePath(req.query.path || ''); const entries = await walk(root(req.user, p), 20000, start, { pruneNames }); res.json(entries.map(e => ({ ...e, path: start ? `${start}/${e.path}` : e.path, lazy: e.type === 'directory' && pruneNames.has(e.name) }))); });
+  app.post('/api/projects/:id/size', async (req, res) => {
+    const p = store.project(req.user, req.params.id), paths = selectedPaths(req.body.paths), entries = [];
+    for (const rel of paths) { await safePath(root(req.user, p), rel); entries.push({ path: rel, ...await measure(root(req.user, p), rel, true) }); }
+    res.json({ entries, size: entries.reduce((total, entry) => total + entry.size, 0) });
+  });
+  app.post('/api/projects/:id/delete', async (req, res) => mutation(req.user, async () => {
+    const p = store.project(req.user, req.params.id), paths = selectedPaths(req.body.paths);
+    const results = await deleteEntries(req.user, paths.map(rel => ({ projectId: p.id, rel, fingerprint: req.body.fingerprints?.[rel] })));
+    res.json({ results });
+  }));
+  app.get('/api/projects/:id/image', async (req, res) => { const p = store.project(req.user, req.params.id); await serveFileImage(res, root(req.user, p), relativePath(req.query.path, false)); });
   app.get('/api/projects/:id/file', async (req, res) => {
     const p = store.project(req.user, req.params.id), rel = relativePath(req.query.path, false);
     const { handle, stat } = await openSafe(root(req.user, p), rel);
     try {
+      const mime = await fileImageMime(handle, rel);
+      if (mime) return res.json({ kind: 'image', mime, size: stat.size, modified: stat.mtimeMs, url: `/api/projects/${p.id}/image?path=${encodeURIComponent(rel)}` });
       if (stat.size > 2 * MB) fail(413, '编辑器支持 2 MB 以内的文本文件，请下载查看');
       const data = await handle.readFile(); if (data.includes(0)) fail(415, '二进制文件，请使用下载功能');
       res.json({ content: data.toString('utf8'), etag: createHash('sha256').update(data).digest('hex') });
@@ -246,7 +301,7 @@ export async function createApp(options = {}) {
   app.delete('/api/projects/:id/file', async (req, res) => mutation(req.user, async () => {
     const p = store.project(req.user, req.params.id), rel = relativePath(req.body.path, false), target = await safePath(root(req.user, p), rel);
     for (const key of uploadLocks) if (key === `${req.user.id}:${p.id}:${rel}` || key.startsWith(`${req.user.id}:${p.id}:${rel}/`)) fail(409, '该路径下存在上传任务');
-    await safeRemove(root(req.user,p),rel);store.audit(req.user.id,'file/delete');res.json({ok:true});
+    await safeRemove(root(req.user,p),rel);try { store.audit(req.user.id,'file/delete'); } catch {}res.json({ok:true});
   }));
   app.get('/api/projects/:id/download', async (req, res) => {
     const p = store.project(req.user, req.params.id), rel = relativePath(req.query.path || ''); const projectRoot = root(req.user, p), target = await safePath(projectRoot, rel), st = await fs.lstat(target);
@@ -370,7 +425,10 @@ export async function createApp(options = {}) {
     const inst = codex.instances.get(req.user.id); if (inst?.requests.size || inst?.pending.size || inst?.active.size || inst?.terminals.size) fail(409, '请先停止当前任务并关闭终端后修改配置');
     await userDirs(req.user); await codex.prepareHome?.(req.user); await atomicWrite(path.join(userDir(req.user), 'codex'), 'config.toml', req.body.toml, uploadsDir(req.user)); await codex.restart(req.user); store.audit(req.user.id, 'codex/config'); res.json({ ok: true });
   });
-  app.get('/api/usage', async (req, res) => res.json({ used: await used(req.user), quota: config.quota, maxFile: config.maxFile }));
+  app.get('/api/usage', async (req, res) => res.json({ used: await used(req.user), quota: storageLimit(req.user, config.quota), maxFile: config.maxFile }));
+  app.post('/api/storage/scan', async (req, res) => res.json(await cleanup.scan(req.user)));
+  app.get('/api/storage/jobs/:id', (req, res) => res.json(cleanup.read(req.user, req.params.id)));
+  app.post('/api/storage/jobs/:id/confirm', (req, res) => res.json(cleanup.confirm(req.user, req.params.id, req.body.ids)));
   app.get('/api/dashboard', async (req, res) => res.json(await resources.read(req.user)));
   app.get('/api/codex-usage', async (req, res) => res.json(await resources.readCodex(req.user)));
   app.get('/api/admin/users', (req, res) => { if (!isAdministrator(req.user)) fail(403, '需要管理员权限'); res.json(store.all('SELECT id,username,role,created FROM users ORDER BY created')); });
@@ -461,7 +519,8 @@ export async function createApp(options = {}) {
         const staging = await fs.mkdtemp(path.join(uploadsDir(u), 'extract-'));
         try {
           const reserved = [...uploads.values()].filter(x => x.uid === u.id && x.id !== item.id).reduce((sum,x)=>sum+x.size,0);
-          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:config.quota - await used(u) - reserved});
+          const limit = storageLimit(u, config.quota);
+          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit == null ? Infinity : Math.max(0, limit - await used(u) - reserved)});
           await publishZip(root(u, item.project), staging, entries);
           store.audit(u.id, 'upload/extract'); return {ok:true,extracted:entries.length,sha256:checksum};
         } finally { await fs.rm(staging,{recursive:true,force:true}); await removeUpload(item); }
@@ -560,7 +619,7 @@ export async function createApp(options = {}) {
   const maintenance = setInterval(async () => {
     for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; ws.ping(); }
     for (const item of uploads.values()) if (!item.owner && Date.now() - item.touched > 30 * 60000) await removeUpload(item).catch(() => {});
-    await codex.stopIdle(clients).catch(() => {}); store.prune();
+    await codex.stopIdle(clients).catch(() => {}); try { store.prune(); } catch (e) { console.error('Maintenance failed:', e.code || e.name); }
     for (const item of store.all('SELECT * FROM attachments WHERE turn_id IS NULL AND created<?',Date.now()-86400000)) {
       const u = store.user(item.user_id);
       if (!u || [...attachmentSends.values()].some(ids=>ids.includes(item.id))) continue;
@@ -578,7 +637,7 @@ export async function createApp(options = {}) {
   app.use('/assets', express.static(path.resolve(here, '../dist/assets'), { maxAge: '1y', immutable: true, fallthrough: false, setHeaders: res => res.setHeader('Cache-Control', 'public, max-age=31536000, immutable') }));
   app.use(express.static(path.resolve(here, '../dist'), { index: false, maxAge: 0 }));
   app.get('/{*path}', (req, res) => res.sendFile(path.resolve(here, '../dist/index.html')));
-  app.use((e, req, res, next) => { if (res.headersSent) return res.destroy(); res.status(e.status || 500).json({ error: e.status ? e.message : '服务器操作失败，请重试' }); if (!e.status) console.error('Request failed:', e.code || e.name); });
+  app.use((e, req, res, next) => { if (res.headersSent) return res.destroy(); const full = ['ENOSPC', 'EDQUOT', 'SQLITE_FULL'].includes(e.code) || /ENOSPC|EDQUOT|SQLITE_FULL|database or disk is full|no space left/i.test(e.message || ''); res.status(full ? 507 : e.status || 500).json({ error: full ? '存储空间已满，请在文件管理器中强制删除不需要的文件，腾出空间后重试' : e.status ? e.message : '服务器操作失败，请重试', ...(full ? { code: 'STORAGE_FULL' } : {}) }); if (!e.status && !full) console.error('Request failed:', e.code || e.name); });
   return { app, server, store, codex, config, close: async () => { clearInterval(maintenance); for (const ws of wss.clients) ws.terminate(); await turnChanges.close(); await codex.shutdown(); for (const item of uploads.values()) await removeUpload(item); await new Promise(resolve => server.close(resolve)); store.db.close(); } };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

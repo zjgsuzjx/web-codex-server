@@ -46,7 +46,6 @@ WORKER_IMAGE=starvalley-codex-worker:local
 INVITE_CODE=$(openssl rand -hex 24)
 COOKIE_SECURE=true
 MAX_USERS=10
-USER_QUOTA_MB=512
 MAX_FILE_MB=256
 WORKER_MEMORY_MB=384
 MAX_ACTIVE_WORKERS=2
@@ -187,12 +186,14 @@ Keep local `AGENTS.md` and `MEMORY.md` out of Git, server uploads, deployment ar
 | Active workers at once | `MAX_ACTIVE_WORKERS=2`; additional accounts do not imply simultaneous worker capacity |
 | Per-worker resources | `WORKER_MEMORY_MB=384`, 0.75 CPU |
 | Worker idle stop | 15 minutes without connections or active tasks |
-| Web upload/editor quota | `USER_QUOTA_MB=512` per user |
+| Web upload/editor quota | Members: 1 GiB; admins: 5 GiB; superadmins: unlimited |
 | Project file upload size | `MAX_FILE_MB=256`; also constrained by remaining user quota |
 | Projects | 50 per user |
 | Chat attachments | Up to 10 per turn, 20 MB each, counted against storage quota |
 | In-browser folder compression | Up to 128 MB; prepare a ZIP locally for larger folders |
 | Interrupted uploads | Resume within the same page; expire after 30 minutes; service restart requires reupload |
+
+Storage usage includes projects, chat attachments, and Codex state. The old `USER_QUOTA_MB` environment setting is no longer used; limits follow the current role. The cleanup tool analyzes a bounded inventory of the user’s projects using their existing Codex connection. It never includes credentials or other users’ data. A second model request submits the user-approved manifest, then the gateway validates IDs and file changes before deleting. Physical disk exhaustion may prevent Codex from starting; manual file deletion remains the recovery path.
 
 Codex and terminal writes are not constrained by application storage quotas. Monitor host disk space and use filesystem quotas if you need a hard disk limit. Text attachments are inlined with bounded sizes; binary documents require model tools to read or parse them. ZIP extraction validates paths and sizes and rejects overwriting existing project files.
 

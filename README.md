@@ -137,6 +137,8 @@ The web interface covers the main coding workflow. Use the built-in terminal for
 
 **What should I know before hosting?**
 
+Members have a 1 GiB storage allowance, admins 5 GiB, and superadmins no application limit. At 90% usage, a persistent warning points to file management. Codex-assisted cleanup lists candidate files with sizes and purposes for selection before deletion; manual deletion works without model quota. The file viewer supports resizable panes, Ctrl/Cmd multi-selection, bulk size/deletion, and common image formats.
+
 Application storage quotas apply to web uploads and editor saves; Codex and terminal writes need host-level disk monitoring. Disabling a worker's network also blocks model/API connections. Optional host execution grants actual host root access and is disabled by default. See [operational limits](docs/deployment.md#operational-limits).
 
 ## Development and contributing

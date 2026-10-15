@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import { mergeQuota } from '../shared/usage.js';
+import { storageLimit } from '../shared/storage.js';
 
 export function createResources(config, codex, used) {
   const quotaCache = new Map(), pending = new Map(), storageCache = new Map();
@@ -18,9 +19,9 @@ export function createResources(config, codex, used) {
       memory: { total: totalMemory, available: availableMemory }, updatedAt: Date.now() };
     return machineCache;
   }
-  async function quota(user) {
+  async function quota(user, force = false) {
     const cached = quotaCache.get(user.id);
-    if (cached && Date.now() - cached.checkedAt < 30000) return cached;
+    if (!force && cached && Date.now() - cached.checkedAt < 30000) return cached;
     if (pending.has(user.id)) return pending.get(user.id);
     const request = (async () => {
       try {
@@ -49,8 +50,9 @@ export function createResources(config, codex, used) {
     },
     async read(user) {
       let storage = storageCache.get(user.id);
-      if (!storage || Date.now() - storage.updatedAt > 30000) {
-        const bytes = await used(user); storage = { used: bytes, available: Math.max(0, config.quota - bytes), quota: config.quota, maxFile: config.maxFile, updatedAt: Date.now() };
+      const limit = storageLimit(user, config.quota);
+      if (!storage || storage.quota !== limit || Date.now() - storage.updatedAt > 30000) {
+        const bytes = await used(user); storage = { used: bytes, available: limit == null ? null : Math.max(0, limit - bytes), quota: limit, maxFile: config.maxFile, updatedAt: Date.now() };
         storageCache.set(user.id, storage);
       }
       const server = await machine();

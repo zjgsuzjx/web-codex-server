@@ -43,9 +43,9 @@ export default memo(function UsageOverview({ api, socket, Dialog }) {
       {busy&&!data?.server&&<LoadingPlaceholder label="正在读取存储与内存…" rows={4}/>}
       {data?.server && data?.storage && <section className="capacity-section"><h3><HardDrive size={17}/>存储与内存</h3><div className="storage-grid">{[
         { label: '服务器磁盘可用', available: data.server.disk.available, total: data.server.disk.total, note: '项目、系统和其他服务共享此磁盘' },
-        { label: '我的项目配额剩余', available: data.storage.available, total: data.storage.quota, note: `已用 ${formatBytes(data.storage.used)} · 单文件上限 ${formatBytes(data.storage.maxFile)}` },
+        { label: '我的存储配额剩余', available: data.storage.available, total: data.storage.quota, unlimited: data.storage.quota == null, note: `已用 ${formatBytes(data.storage.used)} · 单文件上限 ${formatBytes(data.storage.maxFile)}` },
         { label: '服务器内存可用', available: data.server.memory.available, total: data.server.memory.total, note: '包含系统可回收缓存的可用内存' }
-      ].map(m => <div className="storage-card" key={m.label}><span>{m.label}</span><strong>{formatBytes(m.available)}</strong><Meter value={m.total ? Math.max(0, Math.min(100, m.available / m.total * 100)) : null}/><p>总量 {formatBytes(m.total)}</p><small>{m.note}</small></div>)}</div><p className="capacity-updated">容量更新于 {new Date(data.server.updatedAt).toLocaleTimeString('zh-CN')} · CLI/终端写入不受网页项目配额约束</p></section>}
+      ].map(m => <div className="storage-card" key={m.label}><span>{m.label}</span><strong>{m.unlimited ? '无限制' : formatBytes(m.available)}</strong><Meter value={m.total ? Math.max(0, Math.min(100, m.available / m.total * 100)) : null}/><p>{m.unlimited ? '超级管理员无存储上限' : `总量 ${formatBytes(m.total)}`}</p><small>{m.note}</small></div>)}</div><p className="capacity-updated">容量更新于 {new Date(data.server.updatedAt).toLocaleTimeString('zh-CN')} · 统计包含项目、附件与 Codex 数据；CLI/终端写入不受网页配额约束</p></section>}
     </div></Dialog>}
   </>;
 });

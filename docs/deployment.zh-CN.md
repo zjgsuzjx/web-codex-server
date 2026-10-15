@@ -46,7 +46,6 @@ WORKER_IMAGE=starvalley-codex-worker:local
 INVITE_CODE=$(openssl rand -hex 24)
 COOKIE_SECURE=true
 MAX_USERS=10
-USER_QUOTA_MB=512
 MAX_FILE_MB=256
 WORKER_MEMORY_MB=384
 MAX_ACTIVE_WORKERS=2
@@ -187,12 +186,14 @@ bash scripts/backup.sh
 | 同时活跃 worker | `MAX_ACTIVE_WORKERS=2`；可注册人数不等于并发 worker 容量 |
 | 每个 worker 资源 | `WORKER_MEMORY_MB=384`、0.75 CPU |
 | 闲置停止 | 没有连接或活跃任务时，15 分钟后停止 |
-| 网页上传及编辑配额 | 每用户 `USER_QUOTA_MB=512` |
+| 网页上传及编辑配额 | 成员 1 GiB；管理员 5 GiB；超级管理员不限量 |
 | 项目文件上传大小 | `MAX_FILE_MB=256`，同时受剩余用户配额限制 |
 | 项目数 | 每用户 50 个 |
 | 对话附件 | 每轮最多 10 个、每个 20 MB，计入存储配额 |
 | 浏览器文件夹压缩 | 最多 128 MB；更大目录先在本地生成 ZIP |
 | 上传中断 | 同一页面内恢复，30 分钟后过期；服务重启需重新上传 |
+
+容量统计包含项目、对话附件及 Codex 状态。旧 `USER_QUOTA_MB` 环境变量不再生效，上限按当前角色计算。智能清理使用用户已有的 Codex 连接，分析有界的本人项目文件清单，不包含凭据或其他用户数据。用户确认后再次发送清理清单，网关核对已批准的 ID 及文件变化后执行删除。物理磁盘满可能使 Codex 无法启动，此时仍需先在文件管理器中手动删除腾出空间。
 
 Codex 与终端写入不受应用存储配额约束，请监控主机磁盘；需要硬性容量限制时，使用文件系统配额。文本附件有正文内联上限，二进制文档需要模型工具读取或解析。ZIP 解压会验证路径和大小，并拒绝覆盖已有项目文件。
 
