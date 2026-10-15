@@ -58,9 +58,10 @@ export default memo(function FileTree({ entries, selected, onOpen, onAction, onC
     finally { pending.current = false; setBusy(false); }
   }
   async function remove() {
-    if (pending.current || !beforeDelete(detail.entries.map(e => e.path))) return;
+    if (pending.current) return;
     pending.current = true; setBusy(true); setError(''); const id = project.id;
     try {
+      if (!await beforeDelete(detail.entries.map(e => e.path)) || projectRef.current !== id) return;
       const { results } = await api(`/projects/${id}/delete`, { method: 'POST', body: { paths: detail.entries.map(e => e.path), fingerprints: Object.fromEntries(detail.entries.map(e => [e.path, e.fingerprint])) } });
       onDeleted(id, results); window.dispatchEvent(new Event('storage:refresh'));
       if (projectRef.current === id) { const failures = results.filter(e => !e.deleted); if (failures.length) { setError(failures.map(e => `${e.path}：${e.error}`).join('\n')); setDetail(prev => ({ ...prev, entries: prev.entries.filter(e => failures.some(f => f.rel === e.path)), size: prev.entries.filter(e => failures.some(f => f.rel === e.path)).reduce((n, e) => n + e.size, 0) })); } else { setDetail(null); setSelection(new Set()); } }
