@@ -7,6 +7,8 @@ export class LiveSocket {
     this.ws.onopen = () => { this.attempts = 0; this.onStatus('connected'); this.measureLatency(); this.latencyTimer = setInterval(() => this.measureLatency(), 60000); };
     this.ws.onmessage = event => {
       const msg = JSON.parse(event.data);
+      const failure = typeof msg.error === 'string' ? msg.error : msg.error?.message;
+      if (failure && /存储配额不足|存储空间已满|ENOSPC|EDQUOT|SQLITE_FULL|no space left|database or disk is full/i.test(failure)) this.onEvent({ type: 'storage/full' });
       if (msg.id != null) { const waiter = this.pending.get(msg.id); if (waiter) { clearTimeout(waiter.timer); this.pending.delete(msg.id); msg.error ? waiter.reject(new Error(msg.error.message)) : waiter.resolve(msg.result); } }
       else if (msg.type === 'upload/ack') { if (this.ack) { clearTimeout(this.ack.timer); this.ack.resolve(msg); this.ack = null; } }
       else if (msg.type === 'error') { if (this.ack) { clearTimeout(this.ack.timer); this.ack.reject(new Error(msg.error)); this.ack = null; } else this.onEvent(msg); }

@@ -46,7 +46,7 @@ export async function anchored(root, rel) {
   const parts=rel.split('/');const name=parts.pop();let dir=await openDirectory(root);
   try{for(const part of parts){const next=await openDirectory(`/proc/self/fd/${dir.fd}/${part}`);await dir.close();dir=next;}return{target:`/proc/self/fd/${dir.fd}/${name}`,close:()=>dir.close()};}catch(e){await dir.close();throw e;}
 }
-export async function walk(root, max = 20000, start = '', { skipNames } = {}) {
+export async function walk(root, max = 20000, start = '', { skipNames, pruneNames } = {}) {
   const entries = [];
   async function visit(rel, dir) {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
@@ -60,7 +60,7 @@ export async function walk(root, max = 20000, start = '', { skipNames } = {}) {
       if (!st.isDirectory() && !st.isFile()) continue;
       entries.push({ path: name, name: item.name, type: st.isDirectory() ? 'directory' : 'file', size: st.size, modified: st.mtimeMs });
       if (entries.length > max) fail(413, '文件数量超过上限');
-      if (st.isDirectory()) {if(process.platform==='linux'){const handle=await openDirectory(target);try{await visit(name,`/proc/self/fd/${handle.fd}`);}finally{await handle.close();}}else await visit(name,await safePath(root,start?`${start}/${name}`:name));}
+      if (st.isDirectory() && !pruneNames?.has(item.name)) {if(process.platform==='linux'){const handle=await openDirectory(target);try{await visit(name,`/proc/self/fd/${handle.fd}`);}finally{await handle.close();}}else await visit(name,await safePath(root,start?`${start}/${name}`:name));}
     }
   }
   if(process.platform==='linux'){let anchor;try{anchor=start?await anchored(root,start):null;const handle=await openDirectory(anchor?.target||root);try{await visit('',`/proc/self/fd/${handle.fd}`);}finally{await handle.close();}}finally{await anchor?.close();}}
