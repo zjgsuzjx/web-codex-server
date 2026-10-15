@@ -351,12 +351,13 @@ input[type=checkbox],input[type=radio]{cursor:pointer}
 .file-selection>div+div{margin-top:7px;justify-content:flex-start;flex-wrap:wrap}
 .file-selection button{display:inline-flex;align-items:center;gap:4px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-size:10px}
 .file-selection>div:first-child>button{border:0;background:none;padding:2px}
-.file-row .file-select{width:12px;height:12px;margin:0 4px;accent-color:var(--accent);flex-shrink:0;opacity:0}
+.file-row .file-select{width:12px;height:12px;margin:0 4px;accent-color:var(--accent);flex-shrink:0;opacity:.6}
 .file-row:hover .file-select,.file-select:focus-visible,.file-row.multi-selected .file-select{opacity:1}
 .file-row.multi-selected{box-shadow:inset 2px 0 var(--accent)}
 .file-row>button{min-width:0}.file-row>button>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.storage-entry{gap:5px;position:relative}.storage-entry.storage-alert{color:#c47716;background:#e8a12913;border-color:#d28a2844}
-.storage-entry>i{width:5px;height:5px;border-radius:50%;background:currentColor}
+.storage-entry{width:32px;padding:0;justify-content:center;flex-shrink:0}.storage-entry.storage-warning{color:#b77910;background:#e8a12913;border-color:#d28a2844}.storage-entry.storage-critical{color:#c44444;background:#d64b4b12;border-color:#d64b4b44}
+.storage-entry.storage-warning>svg,.storage-entry.storage-critical>svg{color:inherit}
+[data-theme=dark] .storage-entry.storage-warning{color:#efbf54;background:#e8a12918;border-color:#d7a53b50}[data-theme=dark] .storage-entry.storage-critical{color:#f08686;background:#d64b4b18;border-color:#e1767650}
 .storage-manager,.file-size-dialog,.storage-warning-dialog{padding:24px;max-height:72dvh;overflow:auto}
 .storage-overview{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;padding:20px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
 .storage-overview>div{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0}
