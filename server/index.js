@@ -23,6 +23,8 @@ import { changesSummary, historicalChanges } from '../shared/file-changes.js';
 import { storageLimit, topPaths } from '../shared/storage.js';
 import { measure, createCleanup } from './storage.js';
 import { fileImageMime, serveFileImage } from './file-images.js';
+import { validateAvatar } from './avatar.js';
+import { AVATAR_MAX_BYTES } from '../shared/avatar.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -121,7 +123,9 @@ export async function createApp(options = {}) {
     titleJobs.set(tid, job); await job; titleJobs.delete(tid);
   }
   const allowedOrigin = req => !req.headers.origin || req.headers.origin === new URL(config.publicUrl).origin;
-  const publicUser = u => ({ id: u.id, username: u.username, role: u.role, settings: settings(JSON.parse(u.settings)), nestedSandbox: config.nestedSandbox, hostExecution: u.role === 'superadmin' && config.enableHostExecution, hostProjectBase:u.role==='superadmin'?path.posix.join(config.hostDataDir.replaceAll('\\','/'),'users',u.username,'projects'):undefined, csrf: u.csrf });
+  const avatarUrl = u => { const avatar = store.get('SELECT version FROM user_avatars WHERE user_id=?', u.id); return avatar ? `/api/avatar?v=${avatar.version}` : null; };
+  const publicUser = u => ({ id: u.id, username: u.username, role: u.role, avatarUrl: avatarUrl(u), settings: settings(JSON.parse(u.settings)), nestedSandbox: config.nestedSandbox, hostExecution: u.role === 'superadmin' && config.enableHostExecution, hostProjectBase:u.role==='superadmin'?path.posix.join(config.hostDataDir.replaceAll('\\','/'),'users',u.username,'projects'):undefined, csrf: u.csrf });
+  function avatarUpdated(u) { const url = avatarUrl(u); for (const ws of clients.get(u.id) || []) send(ws, { type: 'profile/avatar', avatarUrl: url }); return { avatarUrl: url }; }
   const cookie = token => `sv_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800${config.secure ? '; Secure' : ''}`;
   function rate(req, category, limit) {
     const key = `${req.ip}:${category}`, now = Date.now();
@@ -179,7 +183,7 @@ export async function createApp(options = {}) {
     return entries.sort((a, b) => b.size - a.size);
   } });
   async function quota(u, extra) {
-    const reserved = [...uploads.values()].filter(x => x.uid === u.id).reduce((n, x) => n + x.size, 0);
+    const reserved = [...uploads.values()].filter(x => x.uid === u.id && !x.avatar).reduce((n, x) => n + x.size, 0);
     const limit = storageLimit(u, config.quota);
     // Shrinking existing files remains possible while over quota.
     if (limit != null && extra > 0 && await used(u) + reserved + extra > limit) fail(413, '用户存储配额不足，请在文件管理器中强制删除不需要的文件，或使用 Codex 智能清理');
@@ -240,6 +244,15 @@ export async function createApp(options = {}) {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers['x-csrf-token'] !== req.user.csrf) return res.status(403).json({ error: '安全令牌失效，请刷新页面' }); next();
   });
   app.post('/api/logout', (req, res) => { store.run('DELETE FROM sessions WHERE hash=?', req.user.session_hash); for (const ws of clients.get(req.user.id) || []) if (ws.sessionHash === req.user.session_hash) ws.close(4001, '已退出登录'); res.setHeader('Set-Cookie', 'sv_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'); res.json({ ok: true }); });
+  app.get('/api/avatar', (req, res) => {
+    const avatar = store.get('SELECT image FROM user_avatars WHERE user_id=?', req.user.id);
+    if (!avatar) fail(404, '尚未设置头像');
+    res.type('png').send(Buffer.from(avatar.image));
+  });
+  app.delete('/api/avatar', (req, res) => {
+    store.run('DELETE FROM user_avatars WHERE user_id=?', req.user.id);
+    res.json(avatarUpdated(req.user));
+  });
   app.post('/api/password', async (req, res) => {
     rate(req, 'password', 10); const { oldPassword, newPassword } = req.body;
     if (typeof oldPassword !== 'string' || oldPassword.length > 128 || typeof newPassword !== 'string' || newPassword.length < 10 || newPassword.length > 128) fail(400, '密码无效');
@@ -474,6 +487,16 @@ export async function createApp(options = {}) {
 
   async function uploadBegin(ws, u, params) {
     if (ws.activeUpload) fail(409, '请先完成当前文件');
+    if (params.scope === 'avatar') {
+      if (!Number.isSafeInteger(params.size) || params.size <= 0 || params.size > AVATAR_MAX_BYTES) fail(413, '裁剪后的头像大小上限为 256 KB');
+      for (const item of uploads.values()) if (item.uid === u.id && item.avatar) {
+        if (item.owner?.readyState === WebSocket.OPEN) fail(409, '已有头像正在上传，请先完成或取消');
+        await removeUpload(item);
+      }
+      const item = { id: randomUUID(), uid: u.id, avatar: true, size: params.size, offset: 0, data: Buffer.alloc(params.size), hash: createHash('sha256'), touched: Date.now(), owner: ws };
+      uploads.set(item.id, item); ws.activeUpload = item;
+      return { uploadId: item.id, offset: 0, chunkSize: AVATAR_MAX_BYTES };
+    }
     const attachment = params.scope === 'attachment';
     const thread = attachment ? store.thread(u, params.threadId) : null;
     const p = attachment ? null : store.project(u, params.projectId), rel = attachment ? attachmentName(params.path) : relativePath(params.path, false), size = params.size;
@@ -488,7 +511,7 @@ export async function createApp(options = {}) {
     const item = { id, uid: u.id, username: u.username, project: p, thread, attachment, extract: !!params.extract, path: rel, size, offset: 0, temp, handle, key, hash: createHash('sha256'), touched: Date.now(), owner: ws };
     uploads.set(id, item); uploadLocks.add(key); ws.activeUpload = item; return { uploadId: id, offset: 0, chunkSize: MB };
   }
-  async function removeUpload(item) { uploads.delete(item.id); uploadLocks.delete(item.key); if (item.owner) item.owner.activeUpload = null; await item.handle.close().catch(() => {}); await fs.rm(item.temp, { force: true }); }
+  async function removeUpload(item) { uploads.delete(item.id); uploadLocks.delete(item.key); if (item.owner?.activeUpload === item) item.owner.activeUpload = null; if (item.avatar) { item.data = null; return; } await item.handle.close().catch(() => {}); await fs.rm(item.temp, { force: true }); }
   async function rpc(ws, u, method, params) {
     if (config.changingUsers.has(u.id)) fail(409, '账号权限正在更新，请重新登录');
     executionTarget(u);
@@ -507,18 +530,28 @@ export async function createApp(options = {}) {
       const item = uploads.get(params.uploadId); if (!item || item.uid !== u.id) fail(404, '上传任务已过期');
       if (ws.activeUpload && ws.activeUpload !== item) fail(409, '请先完成当前文件');
       if (item.owner && item.owner !== ws && item.owner.readyState === WebSocket.OPEN) fail(409, '上传仍在另一个连接中进行');
-      item.owner = ws; item.touched = Date.now(); ws.activeUpload = item; return { uploadId: item.id, offset: item.offset, chunkSize: MB };
+      if (item.owner && item.owner !== ws && item.owner.activeUpload === item) item.owner.activeUpload = null;
+      item.owner = ws; item.touched = Date.now(); ws.activeUpload = item; return { uploadId: item.id, offset: item.offset, chunkSize: item.avatar ? AVATAR_MAX_BYTES : MB };
     }
     if (method === 'upload/cancel') { const item = uploads.get(params.uploadId); if (item?.uid === u.id) await removeUpload(item); return { ok: true }; }
     if (method === 'upload/finish') return mutation(u, async () => {
       const item = ws.activeUpload; if (!item || item.id !== params.uploadId) fail(400, '上传任务无效');
       if (item.offset !== item.size) fail(400, '文件尚未完整上传');
+      if (item.avatar) {
+        try {
+          const checksum = item.hash.digest('hex');
+          if (params.sha256 && params.sha256 !== checksum) fail(400, '文件校验失败');
+          const image = validateAvatar(item.data), version = createHash('sha256').update(image).digest('hex');
+          store.run('INSERT INTO user_avatars(user_id,image,version) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET image=excluded.image,version=excluded.version', u.id, image, version);
+          return { ok: true, ...avatarUpdated(u), sha256: checksum };
+        } finally { await removeUpload(item); }
+      }
       const checksum = item.hash.digest('hex'); if (params.sha256 && params.sha256 !== checksum) { await removeUpload(item); fail(400, '文件校验失败'); }
       await item.handle.sync(); await item.handle.close();
       if (item.extract) {
         const staging = await fs.mkdtemp(path.join(uploadsDir(u), 'extract-'));
         try {
-          const reserved = [...uploads.values()].filter(x => x.uid === u.id && x.id !== item.id).reduce((sum,x)=>sum+x.size,0);
+          const reserved = [...uploads.values()].filter(x => x.uid === u.id && x.id !== item.id && !x.avatar).reduce((sum,x)=>sum+x.size,0);
           const limit = storageLimit(u, config.quota);
           const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit == null ? Infinity : Math.max(0, limit - await used(u) - reserved)});
           await publishZip(root(u, item.project), staging, entries);
@@ -597,14 +630,16 @@ export async function createApp(options = {}) {
     if (!clients.has(u.id)) clients.set(u.id, new Set()); clients.get(u.id).add(ws); ws.alive = true;
     ws.on('pong', () => { ws.alive = true; });
     const current = eventCounters.get(u.id)||0;
-    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
+    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), avatarUrl: avatarUrl(u), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
     ws.on('message', (data, binary) => {
       if (++queued > 8) { ws.close(1008, '请等待服务器确认后发送'); return; }
       chain = chain.then(async () => {
         if (!store.get('SELECT hash FROM sessions WHERE hash=? AND expires>?', ws.sessionHash, Date.now())) { ws.close(4001, '登录已过期'); return; }
         if (binary) {
           const item = ws.activeUpload; if (!item || item.offset + data.length > item.size || data.length > MB) fail(400, '上传数据块无效');
-          const { bytesWritten } = await item.handle.write(data, 0, data.length, item.offset); if (bytesWritten !== data.length) fail(500, '磁盘写入不完整'); item.hash.update(data); item.offset += data.length; item.touched = Date.now(); send(ws, { type: 'upload/ack', uploadId: item.id, offset: item.offset });
+          if (item.avatar) data.copy(item.data, item.offset);
+          else { const { bytesWritten } = await item.handle.write(data, 0, data.length, item.offset); if (bytesWritten !== data.length) fail(500, '磁盘写入不完整'); }
+          item.hash.update(data); item.offset += data.length; item.touched = Date.now(); send(ws, { type: 'upload/ack', uploadId: item.id, offset: item.offset });
         } else {
           let msg; try { msg = JSON.parse(data.toString()); } catch { fail(400, '消息格式无效'); }
           if (!msg || typeof msg.id !== 'number' || typeof msg.method !== 'string' || !msg.params || typeof msg.params !== 'object' || Array.isArray(msg.params)) fail(400, '请求格式无效');
@@ -613,7 +648,7 @@ export async function createApp(options = {}) {
         }
       }).catch(e => send(ws, { type: 'error', error: e.status ? e.message : '上传失败，请重试' })).finally(() => { queued--; });
     });
-    ws.on('close', () => { clients.get(u.id)?.delete(ws); if (!clients.get(u.id)?.size) clients.delete(u.id); if (ws.activeUpload) ws.activeUpload.owner = null; ws.terminal?.close(); });
+    ws.on('close', () => { clients.get(u.id)?.delete(ws); if (!clients.get(u.id)?.size) clients.delete(u.id); if (ws.activeUpload?.owner === ws) ws.activeUpload.owner = null; ws.activeUpload = null; ws.terminal?.close(); });
     ws.on('error', () => {});
   });
   const maintenance = setInterval(async () => {

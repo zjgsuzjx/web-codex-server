@@ -34,6 +34,9 @@ export function createStore(dataDir) {
     thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     turn_id TEXT NOT NULL, status TEXT NOT NULL, started_at INTEGER NOT NULL,
     completed_at INTEGER, PRIMARY KEY(thread_id,turn_id));`);
+  db.exec(`CREATE TABLE IF NOT EXISTS user_avatars(
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    image BLOB NOT NULL CHECK(length(image)<=262144), version TEXT NOT NULL);`);
   // Upgrade the original installation owner once; never upgrade invited admins.
   db.exec('BEGIN IMMEDIATE');
   try {

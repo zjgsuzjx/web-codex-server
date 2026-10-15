@@ -88,6 +88,8 @@ Upload files, folders, or ZIP archives into a project. All uploads use acknowled
 
 Chat attachments stay separate from project files. Add documents, code, or pasted screenshots; preview supported images and text in the conversation. Generated images can be previewed and downloaded when the selected model and account support them.
 
+In **Settings → Personal account**, upload a JPG, PNG, or WebP image (up to 5 MB, 16 million pixels, and 8192 pixels per side). Drag and zoom to crop it; the avatar is saved to your account as a 256 × 256 PNG, up to 256 KB. You can restore the default avatar at any time. Signing in or reloading shows your avatar, a personal welcome, and the workspace connection status, with reduced-motion support.
+
 ### Keep an eye on work from your phone
 
 The mobile layout keeps chat and task controls accessible, with a collapsible sidebar and light/dark themes. Usage details show available Codex quota windows, reset times, storage, and server capacity. Connection bars report the browser-to-server WebSocket latency. A tab badge indicates completed tasks while the page remains connected in the background.
