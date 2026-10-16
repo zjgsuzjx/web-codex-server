@@ -19,7 +19,6 @@ test('main deployment extracts readable source while keeping runtime state priva
     await fs.writeFile(path.join(fixture, 'package.json'), '{}', { mode: 0o644 });
     await fs.writeFile(path.join(fixture, 'src/index.js'), 'export {};', { mode: 0o644 });
     await fs.writeFile(path.join(fixture, 'scripts/tool.sh'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-    await exec('/bin/tar', ['-cf', archive, '-C', fixture, 'package.json', 'src', 'scripts']);
     const script = await fs.readFile(new URL('../scripts/deploy-main.sh', import.meta.url), 'utf8');
     // Substitute only Git discovery; archive extraction and deployment flow are real.
     await fs.writeFile(path.join(app, 'scripts/deploy-main.sh'), script.replace('export PATH=/usr/local/bin:/usr/bin:/bin', 'export PATH="$DEPLOY_TEST_BIN:/usr/local/bin:/usr/bin:/bin"'));
@@ -32,7 +31,7 @@ case " $* " in
   *" archive "*) cat "$MOCK_ARCHIVE";;
 esac
 `, { mode: 0o755 });
-    await fs.writeFile(path.join(app, 'scripts/deploy-release.sh'), `#!/bin/bash
+    await fs.writeFile(path.join(fixture, 'scripts/deploy-release.sh'), `#!/bin/bash
 set -euo pipefail
 [[ "$(stat -c %a "$1")" == 700 ]]
 [[ "$(stat -c %a "$1/package.json")" == 644 ]]
@@ -42,6 +41,7 @@ set -euo pipefail
 [[ ! -e "$1/.env" && ! -e "$1/MEMORY.md" && ! -e "$1/AGENTS.md" ]]
 printf '%s\\n' "$2" > "$MOCK_RECORD"
 `);
+    await exec('/bin/tar', ['-cf', archive, '-C', fixture, 'package.json', 'src', 'scripts']);
     await fs.writeFile(path.join(app, '.env'), 'private runtime fixture', { mode: 0o600 });
     await exec('/bin/bash', [path.join(app, 'scripts/deploy-main.sh'), revision], { env: { ...process.env, DEPLOY_TEST_BIN: bin, MOCK_REVISION: revision, MOCK_ARCHIVE: archive, MOCK_RECORD: record } });
     assert.equal((await fs.readFile(record, 'utf8')).trim(), revision);
@@ -50,6 +50,19 @@ printf '%s\\n' "$2" > "$MOCK_RECORD"
     assert.equal((await fs.stat(path.join(app, '.env'))).mode & 0o777, 0o600);
     assert.equal(await fs.readFile(path.join(app, '.env'), 'utf8'), 'private runtime fixture');
     assert.deepEqual(await fs.readdir(path.join(app, '.deploy-releases')), []);
+    const result = JSON.parse(await fs.readFile(path.join(app, '.deploy-state/result-' + revision + '.json')));
+    assert.equal(result.status, 'succeeded'); assert.equal(result.exitCode, 0);
+    // A stale state file must never turn a broken/wrong live revision green.
+    await fs.writeFile(path.join(app, '.deploy-state/deployed-commit'), revision);
+    await fs.writeFile(path.join(bin, 'curl'), '#!/bin/bash\necho \'{"status":"ok","revision":"wrong"}\'\n', { mode: 0o755 });
+    const env = { ...process.env, DEPLOY_TEST_BIN: bin, MOCK_REVISION: revision, MOCK_ARCHIVE: archive, MOCK_RECORD: record };
+    await assert.rejects(exec('/bin/bash', [path.join(app, 'scripts/deploy-main.sh'), revision], { env }), error => error.code === 1);
+    assert.equal(JSON.parse(await fs.readFile(path.join(app, '.deploy-state/result-' + revision + '.json'))).status, 'failed');
+    await fs.writeFile(path.join(bin, 'curl'), `#!/bin/bash\necho '{"status":"ok","revision":"${revision}"}'\n`, { mode: 0o755 });
+    await exec('/bin/bash', [path.join(app, 'scripts/deploy-main.sh'), revision], { env });
+    await fs.rm(path.join(app, '.deploy-state/deployed-commit'));
+    await assert.rejects(exec('/bin/bash', [path.join(app, 'scripts/deploy-main.sh'), revision], { env: { ...env, MOCK_REVISION: 'b'.repeat(40) } }), error => error.code === 78);
+    assert.equal(JSON.parse(await fs.readFile(path.join(app, '.deploy-state/result-' + revision + '.json'))).exitCode, 78);
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });
 
@@ -58,31 +71,63 @@ test('release deployment validates, defers and restores without touching product
   const app = path.join(directory, 'apps/web-codex-server'), source = path.join(app, '.deploy-releases/candidate'), bin = path.join(directory, 'bin');
   await fs.mkdir(path.join(app, 'scripts'), { recursive: true }); await fs.mkdir(source, { recursive: true }); await fs.mkdir(bin);
   await fs.copyFile(new URL('../scripts/deploy-release.sh', import.meta.url), path.join(app, 'scripts/deploy-release.sh'));
+  for (const file of ['deploy-build.sh', 'deploy-swap.sh']) await fs.copyFile(new URL('../scripts/' + file, import.meta.url), path.join(app, 'scripts', file));
+  await fs.mkdir(path.join(app, 'deploy'));
+  await fs.copyFile(new URL('../deploy/buildkitd.toml', import.meta.url), path.join(app, 'deploy/buildkitd.toml'));
   for (const file of ['Dockerfile', 'Dockerfile.worker', 'compose.yml']) { await fs.writeFile(path.join(source, file), 'fixture'); await fs.writeFile(path.join(app, file), 'fixture'); }
   await fs.writeFile(path.join(app, '.env'), 'fixture runtime settings');
   const log = path.join(directory, 'calls'), counter = path.join(directory, 'curl-count');
   const wrappers = {
     docker: `#!/bin/bash
 printf '%s\\n' "$*" >> "$MOCK_LOG"
+if [[ "$1" == update && "$*" == *--cpus* ]]; then echo 'CPU quota/period already set' >&2; exit 1; fi
 if [[ "$1 $2" == 'image inspect' ]]; then echo "sha256:previous"; fi
+if [[ "$1" == inspect && "$*" == *Config.Image* ]]; then echo 'moby/buildkit@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3'; fi
+if [[ "$1" == inspect && "$*" == *HostConfig.Memory* ]]; then
+  if [[ "$MOCK_SCENARIO" == bad-limits ]]; then echo '0 0 0 0 0'; else echo '1073741824 3758096384 75000 100000 256'; fi
+fi
+if [[ "$1" == exec ]]; then
+  case "$*" in
+    *memory.max*) printf '1073741824\\n2684354560\\n75000 100000\\n';;
+    *buildkitd.toml*) echo '  max-parallelism = 1';;
+    *io.max*) if [[ "$MOCK_SCENARIO" != bad-io ]]; then echo '253:0 rbps=50331648 wbps=25165824 riops=max wiops=max'; fi;;
+  esac
+fi
+if [[ "$1 $2" == 'buildx build' && "$MOCK_SCENARIO" == failed-build ]]; then exit 1; fi
+if [[ "$1 $2" == 'buildx build' && "$MOCK_SCENARIO" == swap-build-failed ]]; then exit 1; fi
+if [[ "$1 $2" == 'buildx build' && "$MOCK_SCENARIO" == build-timeout ]]; then exit 124; fi
+if [[ "$1" == run && "$*" == *--privileged* ]]; then
+  if [[ "\${@: -1}" == create ]]; then touch "$MOCK_SWAP_STATE"; else rm -f "$MOCK_SWAP_STATE"; fi
+fi
 if [[ "$1" == run && "$MOCK_SCENARIO" == failed-tests ]]; then exit 1; fi
 `,
     curl: `#!/bin/bash
+if [[ "$*" == *--unix-socket* ]]; then echo '{"Warnings":null}'; exit; fi
 n=0; [[ ! -f "$MOCK_COUNTER" ]] || n=$(cat "$MOCK_COUNTER"); n=$((n+1)); echo "$n" > "$MOCK_COUNTER"
-if [[ "$MOCK_SCENARIO" == busy || ( "$MOCK_SCENARIO" == work-started && "$n" == 2 ) ]]; then echo '{"status":"ok","deploymentReady":false}';
-elif [[ "$MOCK_SCENARIO" == bootstrap && "$n" -lt 3 ]]; then echo '{"status":"ok"}';
+if [[ "$MOCK_SCENARIO" == busy || ( "$MOCK_SCENARIO" == work-started && "$n" -ge 2 && "$n" -le 22 ) || ( "$MOCK_SCENARIO" == work-finished && "$n" == 2 ) ]]; then echo '{"status":"ok","deploymentReady":false}';
+elif [[ "$MOCK_SCENARIO" == bootstrap && ( "$MOCK_BOOTSTRAP" != true || "$n" -lt 3 ) ]]; then echo '{"status":"ok"}';
 elif [[ "$n" -lt 3 ]]; then echo '{"status":"ok","deploymentReady":true}';
 elif [[ "$MOCK_SCENARIO" == failed-health ]]; then echo '{"status":"ok","revision":"wrong"}';
-else printf '{"status":"ok","revision":"%s"}\\n' "$MOCK_REVISION"; fi
+else printf '{"status":"ok","revision":"%s","deploymentReady":true}\\n' "$MOCK_REVISION"; fi
 `,
-    rsync: '#!/bin/bash\nprintf "promote\\n" >> "$MOCK_LOG"\n'
+    rsync: '#!/bin/bash\nprintf "promote\\n" >> "$MOCK_LOG"\n',
+    sleep: '#!/bin/bash\nexit 0\n',
+    df: '#!/bin/bash\nfree=7000000000; [[ "$MOCK_SCENARIO" != swap-low-disk ]] || free=4000000000\nprintf "Filesystem 1B-blocks Used Available Use%% Mounted\\n/dev/vda2 40000000000 30000000000 %s 75%% /\\n" "$free"\n',
+    lsblk: '#!/bin/bash\necho 253:0\n',
+    awk: `#!/bin/bash
+if [[ "$*" == *MemAvailable* ]]; then
+  if [[ "$MOCK_SCENARIO" == low-memory ]]; then echo 100000; else echo 1100000; fi
+elif [[ "$*" == *SwapFree* ]]; then
+  if [[ "$MOCK_SCENARIO" == swap-* && ! -f "$MOCK_SWAP_STATE" ]]; then echo 1500000; else echo 3000000; fi
+else exec /usr/bin/awk "$@"; fi
+`
   };
   for (const [name, script] of Object.entries(wrappers)) await fs.writeFile(path.join(bin, name), script, { mode: 0o755 });
   async function run(scenario, bootstrap = false) {
     await fs.writeFile(log, ''); await fs.rm(counter, { force: true });
     await fs.rm(path.join(app, '.deploy-state/deployed-commit'), { force: true });
     let code = 0;
-    try { await exec('/bin/bash', [path.join(app, 'scripts/deploy-release.sh'), source, revision, ...(bootstrap ? ['--bootstrap'] : [])], { env: { ...process.env, PATH: bin + ':' + process.env.PATH, MOCK_LOG: log, MOCK_COUNTER: counter, MOCK_SCENARIO: scenario, MOCK_REVISION: revision } }); }
+    try { await exec('/bin/bash', [path.join(app, 'scripts/deploy-release.sh'), source, revision, ...(bootstrap ? ['--bootstrap'] : [])], { env: { ...process.env, PATH: bin + ':' + process.env.PATH, MOCK_LOG: log, MOCK_COUNTER: counter, MOCK_SCENARIO: scenario, MOCK_REVISION: revision, MOCK_SWAP_STATE: path.join(directory, 'swap-state'), MOCK_BOOTSTRAP: String(bootstrap) } }); }
     catch (e) { code = e.code; }
     return { code, calls: await fs.readFile(log, 'utf8') };
   }
@@ -98,8 +143,27 @@ else printf '{"status":"ok","revision":"%s"}\\n' "$MOCK_REVISION"; fi
     });
     await t.test('busy application does not build or switch', async () => { const result = await run('busy'); assert.equal(result.code, 75); assert.equal(result.calls, ''); });
     await t.test('new work during build postpones the switch', async () => { const result = await run('work-started'); assert.equal(result.code, 75); assert.ok(result.calls.includes('run --rm')); assert.ok(!result.calls.includes('compose')); });
+    await t.test('work finishing after build reuses the tested candidate', async () => { const result = await run('work-finished'); assert.equal(result.code, 0); assert.equal(result.calls.match(/buildx build /g)?.length, 1); assert.equal(result.calls.match(/run --rm --network none --memory/g)?.length, 1); });
+    await t.test('low memory defers before any builder or swap starts', async () => { const result = await run('low-memory'); assert.equal(result.code, 75); assert.ok(!result.calls.includes('buildx')); assert.ok(!result.calls.includes('run --rm')); });
+    await t.test('insufficient disk refuses extra swap and leaves production intact', async () => { const result = await run('swap-low-disk'); assert.equal(result.code, 75); assert.ok(!result.calls.includes('--privileged')); assert.ok(!result.calls.includes('buildx')); });
+    for (const scenario of ['swap-success', 'swap-build-failed']) {
+      await t.test(scenario + ' stops the builder before removing temporary swap', async () => {
+        const result = await run(scenario); assert.equal(result.code, scenario === 'swap-success' ? 0 : 1);
+        assert.ok(result.calls.includes('--privileged'));
+        assert.ok(result.calls.lastIndexOf('buildx stop') < result.calls.indexOf(app + ' remove'));
+        assert.equal(await fs.stat(path.join(directory, 'swap-state')).then(() => true, () => false), false);
+      });
+    }
+    for (const scenario of ['bad-limits', 'bad-io', 'failed-build', 'build-timeout']) {
+      await t.test(scenario + ' stops the dedicated builder and preserves production', async () => {
+        const result = await run(scenario); assert.equal(result.code, scenario === 'build-timeout' ? 124 : 1);
+        assert.ok(result.calls.includes('buildx stop sv-codex-bounded-20261016'));
+        assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote'));
+        assert.ok(!result.calls.split('\n').some(call => call.startsWith('build ')), result.calls);
+      });
+    }
     await t.test('candidate test failure keeps the running image', async () => { const result = await run('failed-tests'); assert.equal(result.code, 1); assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote')); });
-    await t.test('failed health restores the previous image and original compose file', async () => { const result = await run('failed-health'); assert.equal(result.code, 1); assert.equal(result.calls.match(/compose /g)?.length, 2); assert.ok(result.calls.includes('tag sha256:previous starvalley-codex-web:local')); assert.ok(result.calls.includes('--file ' + path.join(app, 'compose.yml'))); assert.ok(!result.calls.includes('promote')); });
+    await t.test('failed health restores the previous image and a saved original compose file', async () => { const result = await run('failed-health'); assert.equal(result.code, 1); assert.equal(result.calls.match(/compose /g)?.length, 2); assert.ok(result.calls.includes('tag sha256:previous starvalley-codex-web:local')); assert.ok(result.calls.includes('--file ' + path.join(app, '.deploy-state/previous-compose.'))); assert.ok(!result.calls.includes('promote')); });
     await t.test('legacy health requires an explicit bootstrap flag', async () => { assert.equal((await run('bootstrap')).code, 75); assert.equal((await run('bootstrap', true)).code, 0); });
     await t.test('local memory or credentials cannot enter a release', async () => { await fs.writeFile(path.join(source, 'MEMORY.md'), 'local only'); const result = await run('success'); assert.equal(result.code, 1); assert.equal(result.calls, ''); });
   } finally { await fs.rm(directory, { recursive: true, force: true }); }
