@@ -8,6 +8,86 @@ import { execFile } from 'node:child_process';
 const exec = promisify(execFile);
 const revision = 'a'.repeat(40);
 
+test('build cache cleanup is bounded, scoped and runs before builder/swap teardown', async t => {
+  let bash = '/bin/bash';
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await exec('git', ['--exec-path']);
+      bash = path.resolve(stdout.trim(), '../../../bin/bash.exe');
+      await fs.access(bash);
+    } catch { t.skip('Git Bash is required for local deployment helper tests'); return; }
+  }
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'sv-build-cache-'));
+  try {
+    await fs.mkdir(path.join(directory, 'bin'));
+    await fs.copyFile(new URL('../scripts/deploy-build.sh', import.meta.url), path.join(directory, 'helper.sh'));
+    await fs.writeFile(path.join(directory, 'bin/docker'), `#!/bin/bash
+printf 'docker %s\\n' "$*" >> "$TEST_LOG"
+case "$1 $2" in
+  'buildx build') exit "$TEST_BUILD_EXIT";;
+  'buildx prune') echo 'Total: 1.25GB'; exit "$TEST_PRUNE_EXIT";;
+esac
+`, { mode: 0o755 });
+    // Record the real timeout arguments without waiting for a simulated timeout.
+    await fs.writeFile(path.join(directory, 'bin/timeout'), `#!/bin/bash
+printf 'timeout %s\\n' "$*" >> "$TEST_LOG"
+while [[ "$1" == --* ]]; do shift; done
+[[ "$1" =~ ^[0-9]+s$ ]] || exit 99
+shift
+exec "$@"
+`, { mode: 0o755 });
+    const harness = path.join(directory, 'harness.sh');
+    await fs.writeFile(harness, `#!/bin/bash
+set -euo pipefail
+TEST_DIR=$(cd "$(dirname "$0")" && pwd -P)
+export TEST_LOG="$TEST_DIR/calls" PATH="$TEST_DIR/bin:$PATH"
+[[ "$(command -v docker)" == "$TEST_DIR/bin/docker" ]]
+source "$TEST_DIR/helper.sh"
+build_swap() { printf 'swap %s\\n' "$1" >> "$TEST_LOG"; }
+BUILD_STARTED=true
+BUILD_SWAP=true
+BUILD_DEADLINE=$(($(date +%s) + TEST_BUDGET))
+result=0
+build_image --tag fixture-web "$TEST_DIR" || result=$?
+if [[ "$result" == 0 && "$TEST_SECOND_IMAGE" == true ]]; then build_image --tag fixture-worker "$TEST_DIR" || result=$?; fi
+finish_build || result=1
+# The release's EXIT trap calls finish_build again; it must be a no-op.
+finish_build
+printf 'state started=%s swap=%s dirty=%s\\n' "$BUILD_STARTED" "$BUILD_SWAP" "$BUILD_CACHE_DIRTY" >> "$TEST_LOG"
+exit "$result"
+`);
+    const scenarios = [
+      { name: 'two successful builds', second: true, code: 0, prunes: 1 },
+      { name: 'failed build', buildExit: 1, code: 1, prunes: 1 },
+      { name: 'timed out build', buildExit: 124, code: 124, prunes: 1 },
+      { name: 'failed prune', pruneExit: 1, code: 1, prunes: 1 },
+      { name: 'timed out prune', pruneExit: 124, code: 1, prunes: 1 },
+      { name: 'budget exhausted before building', budget: -1, code: 124, prunes: 0 }
+    ];
+    for (const scenario of scenarios) await t.test(scenario.name, async () => {
+      await fs.writeFile(path.join(directory, 'calls'), '');
+      let code = 0;
+      try {
+        await exec(bash, ['--noprofile', '--norc', harness], { env: { ...process.env, TEST_BUILD_EXIT: String(scenario.buildExit || 0), TEST_PRUNE_EXIT: String(scenario.pruneExit || 0), TEST_SECOND_IMAGE: String(!!scenario.second), TEST_BUDGET: String(scenario.budget ?? 60) } });
+      } catch (error) { code = error.code; }
+      const calls = (await fs.readFile(path.join(directory, 'calls'), 'utf8')).trim().split('\n');
+      assert.equal(code, scenario.code, calls.join('\n'));
+      const prunes = calls.filter(call => call.startsWith('docker buildx prune '));
+      assert.equal(prunes.length, scenario.prunes);
+      if (scenario.prunes) {
+        assert.equal(prunes[0], 'docker buildx prune --builder sv-codex-bounded-20261016 --all --force');
+        assert.ok(calls.includes('timeout --signal=TERM --kill-after=10s 120s docker buildx prune --builder sv-codex-bounded-20261016 --all --force'));
+        assert.ok(calls.findLastIndex(call => call.startsWith('docker buildx build ')) < calls.indexOf(prunes[0]));
+        assert.ok(calls.indexOf(prunes[0]) < calls.indexOf('docker buildx stop sv-codex-bounded-20261016'));
+      }
+      assert.ok(calls.indexOf('docker buildx stop sv-codex-bounded-20261016') < calls.indexOf('swap remove'));
+      assert.equal(calls.at(-1), 'state started=false swap=false dirty=false');
+      assert.ok(!calls.some(call => /docker (system|image|volume|builder) prune/.test(call)));
+      if (scenario.second) assert.equal(calls.filter(call => call.startsWith('docker buildx build ')).length, 2);
+    });
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
 test('main deployment extracts readable source while keeping runtime state private', { skip: process.platform !== 'linux' }, async () => {
   const directory = await fs.mkdtemp(path.join(os.userInfo().homedir, '.codex-main-deploy-test-'));
   const app = path.join(directory, 'apps/web-codex-server'), fixture = path.join(directory, 'fixture'), bin = path.join(directory, 'bin');
@@ -96,6 +176,11 @@ fi
 if [[ "$1 $2" == 'buildx build' && "$MOCK_SCENARIO" == failed-build ]]; then exit 1; fi
 if [[ "$1 $2" == 'buildx build' && "$MOCK_SCENARIO" == swap-build-failed ]]; then exit 1; fi
 if [[ "$1 $2" == 'buildx build' && "$MOCK_SCENARIO" == build-timeout ]]; then exit 124; fi
+if [[ "$1 $2" == 'buildx prune' ]]; then
+  if [[ "$MOCK_SCENARIO" == failed-prune || "$MOCK_SCENARIO" == swap-prune-failed ]]; then exit 1; fi
+  if [[ "$MOCK_SCENARIO" == prune-timeout ]]; then exit 124; fi
+  echo 'Total: 1.25GB'
+fi
 if [[ "$1" == run && "$*" == *--privileged* ]]; then
   if [[ "\${@: -1}" == create ]]; then touch "$MOCK_SWAP_STATE"; else rm -f "$MOCK_SWAP_STATE"; fi
 fi
@@ -138,8 +223,22 @@ else exec /usr/bin/awk "$@"; fi
       const tested = calls.findIndex(call => call.startsWith('run --rm --network none'));
       const promoted = calls.findIndex(call => call.startsWith('tag starvalley-codex-web:'));
       assert.ok(tested >= 0 && promoted > tested, result.calls);
+      const built = calls.findLastIndex(call => call.startsWith('buildx build '));
+      const pruned = calls.indexOf('buildx prune --builder sv-codex-bounded-20261016 --all --force');
+      const stopped = calls.findLastIndex(call => call === 'buildx stop sv-codex-bounded-20261016');
+      assert.ok(built < pruned && pruned < stopped && stopped < tested, result.calls);
+      assert.equal(calls.filter(call => call.startsWith('buildx prune ')).length, 1);
       assert.ok(result.calls.includes('promote')); assert.equal((await fs.readFile(path.join(app, '.deploy-state/deployed-commit'), 'utf8')).trim(), revision);
       assert.equal(await fs.readFile(path.join(app, '.env'), 'utf8'), 'fixture runtime settings');
+    });
+    await t.test('worker and web builds share cache until both images are loaded, then prune once', async () => {
+      await fs.writeFile(path.join(app, 'Dockerfile.worker'), 'previous worker');
+      try {
+        const result = await run('success'); assert.equal(result.code, 0);
+        assert.equal(result.calls.match(/buildx build /g)?.length, 2);
+        assert.equal(result.calls.match(/buildx prune /g)?.length, 1);
+        assert.ok(result.calls.lastIndexOf('buildx build ') < result.calls.indexOf('buildx prune '));
+      } finally { await fs.writeFile(path.join(app, 'Dockerfile.worker'), 'fixture'); }
     });
     await t.test('busy application does not build or switch', async () => { const result = await run('busy'); assert.equal(result.code, 75); assert.equal(result.calls, ''); });
     await t.test('new work during build postpones the switch', async () => { const result = await run('work-started'); assert.equal(result.code, 75); assert.ok(result.calls.includes('run --rm')); assert.ok(!result.calls.includes('compose')); });
@@ -150,6 +249,8 @@ else exec /usr/bin/awk "$@"; fi
       await t.test(scenario + ' stops the builder before removing temporary swap', async () => {
         const result = await run(scenario); assert.equal(result.code, scenario === 'swap-success' ? 0 : 1);
         assert.ok(result.calls.includes('--privileged'));
+        assert.equal(result.calls.match(/buildx prune /g)?.length, 1);
+        assert.ok(result.calls.indexOf('buildx prune ') < result.calls.lastIndexOf('buildx stop'));
         assert.ok(result.calls.lastIndexOf('buildx stop') < result.calls.indexOf(app + ' remove'));
         assert.equal(await fs.stat(path.join(directory, 'swap-state')).then(() => true, () => false), false);
       });
@@ -160,6 +261,17 @@ else exec /usr/bin/awk "$@"; fi
         assert.ok(result.calls.includes('buildx stop sv-codex-bounded-20261016'));
         assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote'));
         assert.ok(!result.calls.split('\n').some(call => call.startsWith('build ')), result.calls);
+        assert.equal(result.calls.match(/buildx prune /g)?.length || 0, ['failed-build', 'build-timeout'].includes(scenario) ? 1 : 0);
+      });
+    }
+    for (const scenario of ['failed-prune', 'prune-timeout', 'swap-prune-failed']) {
+      await t.test(scenario + ' fails before promotion and still stops the builder and removes swap', async () => {
+        const result = await run(scenario); assert.equal(result.code, 1);
+        assert.equal(result.calls.match(/buildx prune /g)?.length, 1, 'EXIT must not retry pruning or restart the builder');
+        assert.ok(result.calls.indexOf('buildx prune ') < result.calls.lastIndexOf('buildx stop'));
+        assert.ok(!result.calls.includes('run --rm --network none --memory'));
+        assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote'));
+        assert.equal(await fs.stat(path.join(directory, 'swap-state')).then(() => true, () => false), false);
       });
     }
     await t.test('candidate test failure keeps the running image', async () => { const result = await run('failed-tests'); assert.equal(result.code, 1); assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote')); });

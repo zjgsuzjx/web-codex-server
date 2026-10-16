@@ -59,6 +59,8 @@ if [[ -z "$PREVIOUS_WORKER" ]] || ! cmp -s "$SOURCE_DIR/Dockerfile.worker" "$APP
   build_image --file "$SOURCE_DIR/Dockerfile.worker" --tag "$WORKER_IMAGE" "$SOURCE_DIR"
 fi
 build_image --build-arg "APP_REVISION=$REVISION" --label "org.opencontainers.image.revision=$REVISION" --tag "$WEB_IMAGE" "$SOURCE_DIR"
+# Clear build cache while its verified resource limits and temporary swap apply.
+# The EXIT trap performs the same cleanup if either image build fails.
 finish_build
 # The candidate has no production data, host namespace or Docker socket mounted.
 timeout --kill-after=15s 300s docker run --rm --network none --memory 384m --cpus .75 "$WEB_IMAGE" sh -c 'npm run check && npm test'

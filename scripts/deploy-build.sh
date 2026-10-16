@@ -7,6 +7,7 @@ BUILD_IMAGE=moby/buildkit@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3c
 BUILD_DEVICE=/dev/vda
 BUILD_STARTED=false
 BUILD_SWAP=false
+BUILD_CACHE_DIRTY=false
 
 build_swap() {
   local cid_file result=0 cid
@@ -29,6 +30,19 @@ finish_build() {
   local result=0
   if [[ "$BUILD_STARTED" == true ]]; then
     docker exec "$BUILD_CONTAINER" cat /sys/fs/cgroup/memory.events || true
+    if [[ "$BUILD_CACHE_DIRTY" == true ]]; then
+      # Loaded release/rollback images live in Docker's image store. Only prune
+      # this application's BuildKit cache, under the verified build limits.
+      # Mark the attempt first so the EXIT trap never restarts a stopped builder.
+      BUILD_CACHE_DIRTY=false
+      echo "Clearing all reclaimable build cache: $BUILD_BUILDER"
+      if timeout --signal=TERM --kill-after=10s 120s docker buildx prune --builder "$BUILD_BUILDER" --all --force; then
+        echo 'Dedicated build cache cleanup completed'
+      else
+        echo 'Dedicated build cache cleanup failed; deployment cannot report success' >&2
+        result=1
+      fi
+    fi
     if timeout --kill-after=10s 40s docker buildx stop "$BUILD_BUILDER"; then
       BUILD_STARTED=false
     else
@@ -112,6 +126,7 @@ prepare_build() {
 build_image() {
   local remaining=$((BUILD_DEADLINE - $(date +%s)))
   [[ "$remaining" -gt 0 ]] || { echo 'Build time budget exhausted' >&2; return 124; }
+  BUILD_CACHE_DIRTY=true
   timeout --signal=TERM --kill-after=20s "${remaining}s" docker buildx build \
     --builder "$BUILD_BUILDER" --load --progress plain "$@"
 }
