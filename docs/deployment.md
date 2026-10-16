@@ -9,7 +9,7 @@ This guide covers a Linux Docker installation for a trusted group using its own 
 - Linux with Docker Engine, the Docker Compose plugin, Git, OpenSSL, and permission to manage Docker.
 - A domain pointing to your server and an HTTPS reverse proxy with a valid certificate.
 - Outbound connectivity from workers to the selected model provider.
-- Enough RAM and disk for the gateway, active workers, and image builds. The frontend build sets a 1.5 GiB Node heap limit; leave additional memory or swap for Docker and the operating system. This is not a measured minimum server size.
+- Enough RAM and disk for the gateway, active workers, and image builds. A Node heap limit alone does not bound a Docker build. The optional automation below uses a dedicated, resource-limited BuildKit container and serial Monaco worker compilation.
 - Node.js 24+ on the host if you use the optional deployment automation or host-execution mode. The regular Docker build does not require a host Node.js installation.
 
 ## First deployment
@@ -232,7 +232,27 @@ Configure repository Actions secrets:
 | `DEPLOY_KNOWN_HOSTS` | Host key records independently verified through a trusted channel |
 | `DEPLOY_PORT` | Optional port; defaults to `22` |
 
-Actions success means the SSH request was submitted, **not that deployment finished**. Check the request log path printed by Actions, `.deploy-state/deployed-commit`, and the health endpoint's `revision`. The initial manual build may report an unknown revision. Application upgrades briefly restart the gateway and reconnect browser clients.
+Actions stays connected until the server finishes. **Success requires candidate checks/tests, a successful switch, and a healthy endpoint reporting the requested revision.** A build failure, insufficient resources, busy timeout, stale request, or failed health check fails the workflow. Logs stream to Actions and the private `.deploy-state/request-*.log`; `.deploy-state/result-<commit>.json` records the exit status. The initial manual build may report an unknown revision. Application upgrades briefly restart the gateway and reconnect browser clients.
+
+### Build resource protection
+
+Automatic releases require Docker Buildx, Linux cgroup v2 with memory/swap/IO controllers, `timeout`, `lsblk`, and a local Docker socket. `scripts/deploy-build.sh` is configured for the original server's `/dev/vda` disk and the dedicated builder `sv-codex-bounded-20261016` (reusing its cache). Adapt the device for another host. It pins BuildKit by digest, leaves the default builder unchanged, verifies actual cgroup limits, and refuses to build if enforcement fails. It never falls back to an unrestricted build.
+
+| Build constraint | Value |
+| --- | --- |
+| Physical memory / combined memory and swap | 1024 MiB / 3584 MiB |
+| CPU / processes | 0.75 core / 256 |
+| Disk read / write | 48 MiB/s / 24 MiB/s |
+| BuildKit tasks / Monaco worker builds | One at a time |
+| Node old space / semi space | 1536 MiB / 8 MiB; explicit GC between workers |
+| Admission | At least 768 MiB available RAM, 2560 MiB free swap, 3328 MiB combined, 3.5 GiB free disk |
+| Time budget | 20 minutes for both image builds; readiness waits up to 10 minutes before building and before switching |
+
+If existing swap is insufficient, the script temporarily creates **only** `.deploy-state/build.swap` (2 GiB, root-owned, mode 0600). Creation requires 5.5 GiB free disk, leaving the 3.5 GiB build reserve. The existing local worker image runs a short privileged `nsenter` helper for this operation; this requires Docker host-management access. The helper validates the exact path, ownership, size and file type, does not edit `fstab`, and never operates on the existing system swap. After building, the dedicated builder stops before temporary swap is disabled and removed, even on errors. An unclean host shutdown can leave the file; the next admitted run validates and recovers it. A cleanup failure fails the deployment and prints the exact path for follow-up. Disk space remains subject to other host services; admission is a point-in-time check.
+
+The successful limited build on the original 2 GiB host took about seven minutes for Vite; this is not a timing or capacity guarantee. Swap trades speed for headroom. Insufficient capacity defers the release without stopping users or other services. Dedicated BuildKit cache GC targets 2 GiB maximum usage, 512 MiB retained, and 3.5 GiB free disk; these are GC targets, not hard disk quotas. No system-wide Docker cache/image/volume pruning is performed; monitor image growth and review cleanup separately.
+
+For an **existing installation upgrading from the previous deployment scripts**, install the reviewed new `scripts/deploy-main.sh` entry point on the server before merging/enabling this workflow (back up the old file privately). It fetches and archives the exact current `main`, then runs that release's deployment scripts. This makes new guards effective on the first deployment of the change. The other scripts/configuration arrive in the Git archive; never upload the whole local directory or local memory files. Until the workflow change is merged, the previous Actions workflow still only confirms background submission.
 
 ## Local development
 

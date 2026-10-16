@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-cd "$(dirname "$0")/.."
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd -P)
+cd "${DEPLOY_APP_DIR:-$SCRIPT_DIR/..}"
 APP_DIR=$(pwd -P)
 case "$APP_DIR" in /home/*/apps/web-codex-server) ;; *) echo 'Unexpected deployment directory' >&2; exit 1;; esac
 STATE_DIR="$APP_DIR/.deploy-state"
@@ -23,29 +24,57 @@ done
 ready() {
   local health
   health=$(curl --fail --silent --show-error --max-time 8 http://127.0.0.1:3100/api/health) || return 1
-  node -e 'const h=JSON.parse(process.argv[1]); process.exit(h.deploymentReady === true || (h.deploymentReady == null && process.argv[2] === "--bootstrap") ? 0 : 1)' "$health" "$BOOTSTRAP_MODE"
+  node -e 'const h=JSON.parse(process.argv[1]); process.exit(h.status === "ok" && (h.deploymentReady === true || (h.deploymentReady == null && process.argv[2] === "--bootstrap")) ? 0 : 1)' "$health" "$BOOTSTRAP_MODE"
 }
-ready || { echo 'Deployment deferred: application is busy or readiness is unavailable'; exit 75; }
+wait_ready() {
+  for attempt in {1..21}; do
+    if ready; then return 0; fi
+    [[ "$attempt" -lt 21 ]] || { echo 'Application remained busy or unavailable; rerun when idle' >&2; return 75; }
+    echo 'Waiting 30 seconds for application readiness'
+    sleep 30
+  done
+}
+wait_ready
 WEB_IMAGE="starvalley-codex-web:$REVISION"
 WORKER_IMAGE="starvalley-codex-worker:$REVISION"
 PREVIOUS_WEB=$(docker image inspect starvalley-codex-web:local --format '{{.Id}}')
 PREVIOUS_WORKER=$(docker image inspect starvalley-codex-worker:local --format '{{.Id}}' 2>/dev/null || true)
 BUILD_WORKER=false
+source "$SCRIPT_DIR/deploy-build.sh"
+PROMOTING=false
+cleanup() {
+  local result=$?
+  trap - EXIT
+  finish_build || result=1
+  if [[ "$PROMOTING" == true ]]; then rollback || result=1; fi
+  [[ -z "${PREVIOUS_COMPOSE:-}" ]] || rm -f -- "$PREVIOUS_COMPOSE"
+  exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM HUP
+trap 'exit 130' INT
+prepare_build
 if [[ -z "$PREVIOUS_WORKER" ]] || ! cmp -s "$SOURCE_DIR/Dockerfile.worker" "$APP_DIR/Dockerfile.worker"; then
   BUILD_WORKER=true
-  docker build --file "$SOURCE_DIR/Dockerfile.worker" --tag "$WORKER_IMAGE" "$SOURCE_DIR"
+  build_image --file "$SOURCE_DIR/Dockerfile.worker" --tag "$WORKER_IMAGE" "$SOURCE_DIR"
 fi
-docker build --build-arg "APP_REVISION=$REVISION" --label "org.opencontainers.image.revision=$REVISION" --tag "$WEB_IMAGE" "$SOURCE_DIR"
+build_image --build-arg "APP_REVISION=$REVISION" --label "org.opencontainers.image.revision=$REVISION" --tag "$WEB_IMAGE" "$SOURCE_DIR"
+finish_build
 # The candidate has no production data, host namespace or Docker socket mounted.
-docker run --rm --network none --memory 384m --cpus .75 "$WEB_IMAGE" sh -c 'npm run check && npm test'
-ready || { echo 'Candidate built; deployment deferred because work started during the build'; exit 75; }
+timeout --kill-after=15s 300s docker run --rm --network none --memory 384m --cpus .75 "$WEB_IMAGE" sh -c 'npm run check && npm test'
+# Wait here if work started during the build; reuse the tested candidate.
+wait_ready
 
 rollback() {
+  PROMOTING=false
   echo 'Restoring the previous application image' >&2
   docker tag "$PREVIOUS_WEB" starvalley-codex-web:local
   if [[ -n "$PREVIOUS_WORKER" && "$BUILD_WORKER" == true ]]; then docker tag "$PREVIOUS_WORKER" starvalley-codex-worker:local; fi
-  docker compose --project-directory "$APP_DIR" --env-file "$APP_DIR/.env" --project-name web-codex-server --file "$APP_DIR/compose.yml" up -d --no-build --wait --wait-timeout 120 web
+  docker compose --project-directory "$APP_DIR" --env-file "$APP_DIR/.env" --project-name web-codex-server --file "$PREVIOUS_COMPOSE" up -d --no-build --wait --wait-timeout 120 web
 }
+PREVIOUS_COMPOSE=$(mktemp "$STATE_DIR/previous-compose.XXXXXX")
+cp "$APP_DIR/compose.yml" "$PREVIOUS_COMPOSE"
+PROMOTING=true
 docker tag "$PREVIOUS_WEB" starvalley-codex-web:previous
 docker tag "$WEB_IMAGE" starvalley-codex-web:local
 if [[ "$BUILD_WORKER" == true ]]; then docker tag "$WORKER_IMAGE" starvalley-codex-worker:local; fi
@@ -60,4 +89,5 @@ fi
 rsync -a --no-owner --no-group "$SOURCE_DIR/" "$APP_DIR/"
 printf '%s\n' "$REVISION" > "$STATE_DIR/deployed-commit.tmp"
 mv "$STATE_DIR/deployed-commit.tmp" "$STATE_DIR/deployed-commit"
+PROMOTING=false
 echo "Deployed $REVISION; application healthy"

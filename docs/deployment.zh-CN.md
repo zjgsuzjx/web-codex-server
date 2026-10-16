@@ -9,7 +9,7 @@
 - Linux、Docker Engine、Docker Compose 插件、Git、OpenSSL，以及管理 Docker 的权限。
 - 指向服务器的域名、HTTPS 反向代理与有效证书。
 - worker 可以向所选模型服务商发起网络连接。
-- 为网关、活跃 worker 与镜像构建准备足够内存和磁盘。前端构建设置了 1.5 GiB 的 Node heap 上限，还需为 Docker 和系统留出额外内存或 swap；这不是经过测量的最低服务器配置。
+- 为网关、活跃 worker 与镜像构建准备足够内存和磁盘。单独限制 Node 堆不能限制整个 Docker 构建；下方可选自动部署使用专用受限 BuildKit 容器，并串行编译 Monaco Worker。
 - 使用可选部署自动化或宿主机执行模式时，宿主机需要 Node.js 24+。普通 Docker 构建不需要宿主机安装 Node.js。
 
 ## 首次部署
@@ -232,7 +232,27 @@ curl -fsS http://127.0.0.1:3100/api/health
 | `DEPLOY_KNOWN_HOSTS` | 通过可信渠道独立核对的主机密钥记录 |
 | `DEPLOY_PORT` | 可选端口，默认 `22` |
 
-Actions 成功表示 SSH 请求已提交，**不代表后台部署已经完成**。查看工作流给出的请求日志路径、`.deploy-state/deployed-commit`，以及健康接口的 `revision`。首次手动构建可能显示未知 revision。应用升级会短暂重启网关，浏览器随后重新连接。
+Actions 会等待服务器完成。**候选检查与测试、切换、目标 revision 健康检查全部成功，工作流才显示成功。** 构建失败、资源不足、持续忙碌超时、过期请求或健康检查失败都会使工作流失败。日志同时显示在 Actions 和私有 `.deploy-state/request-*.log` 中；`.deploy-state/result-<commit>.json` 记录退出结果。首次手动构建可能显示未知 revision。应用升级会短暂重启网关，浏览器随后重新连接。
+
+### 构建资源保护
+
+自动部署需要 Docker Buildx、启用内存／Swap／IO 控制器的 Linux cgroup v2、`timeout`、`lsblk` 及本机 Docker socket。`scripts/deploy-build.sh` 使用原服务器的 `/dev/vda` 系统盘及专用构建器 `sv-codex-bounded-20261016`，复用已有缓存；其他服务器需要调整设备路径。BuildKit 镜像按 digest 固定，不改变默认构建器。脚本验证实际 cgroup 限额，限制未生效时退出，没有无上限构建回退。
+
+| 构建约束 | 数值 |
+| --- | --- |
+| 物理内存／内存加 Swap 总额 | 1024 MiB／3584 MiB |
+| CPU／进程数 | 0.75 核／256 |
+| 磁盘读／写 | 48 MiB/s／24 MiB/s |
+| BuildKit 任务／Monaco Worker 编译 | 均串行 |
+| Node old space／semi space | 1536 MiB／8 MiB；Worker 结束后显式 GC |
+| 资源准入 | 可用内存至少 768 MiB、空闲 Swap 2560 MiB、两者合计 3328 MiB、空闲磁盘 3.5 GiB |
+| 时间预算 | 两个镜像合计构建 20 分钟；构建前和切换前分别最多等待空闲 10 分钟 |
+
+现有 Swap 不足时，脚本只创建 `.deploy-state/build.swap` 临时文件（2 GiB、root 所有、0600）。创建前要求至少 5.5 GiB 空闲磁盘，以保留 3.5 GiB 构建余量。操作通过已有本地 worker 镜像的短命特权 `nsenter` 助手执行，需要 Docker 宿主机管理权限；助手验证确切路径、所有者、大小及文件类型，不改 `fstab`，不操作已有系统 Swap。构建完成或报错时先停止专用构建器，再关闭并删除临时 Swap。主机异常断电可能留下文件，下次通过准入的部署会验证并恢复清理；清理失败则部署失败，并输出需要检查的路径。磁盘准入是时点检查，仍需监控其他服务的占用。
+
+原 2 GiB 主机上已完成的受限 Vite 构建约需七分钟，不能保证未来耗时和容量。Swap 用速度换取缓冲空间；容量不足时保留旧版本，不停止真实用户任务或其他服务。专用 BuildKit 缓存回收目标为最多 2 GiB、保留 512 MiB、磁盘空闲目标 3.5 GiB，这是 GC 目标而非硬磁盘配额。不进行全局 Docker 缓存、镜像或数据卷清理；镜像增长和有范围的清理应单独审查。
+
+**已有安装从旧部署脚本升级时**，合并／启用工作流前，先将审查过的新 `scripts/deploy-main.sh` 入口安装到服务器，并私下备份旧文件。入口拉取确切的当前 `main`，用 Git 归档中的新版本部署脚本执行，使本次改造第一次上线就受到保护。其他脚本和配置由 Git 归档带入，禁止上传整个本地目录或本机记忆文件。工作流变更合并前，旧 Actions 仍只确认后台请求提交。
 
 ## 本地开发
 

@@ -1,0 +1,6 @@
+[worker.oci]
+  max-parallelism = 1
+  gc = true
+  reservedSpace = 536870912
+  maxUsedSpace = 2147483648
+  minFreeSpace = 3758096384
