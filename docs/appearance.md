@@ -1,6 +1,6 @@
 # Wallpapers and appearance
 
-Open the palette button in the workspace header, or **Settings → 壁纸与外观** (Wallpapers and appearance).
+Open the palette button in the workspace header, or **Settings → 壁纸与外观** (Wallpapers and appearance). On narrow screens, the palette and web terminal are in **更多工具 (···)** (More tools). The light/dark theme switch is also available there when using the default appearance.
 
 1. Upload a JPG, PNG or WebP image, up to 20 MB. The browser scales it proportionally and strips source metadata. The canonical PNG travels over binary WebSocket, with a 6 MB / 4 megapixel / 2560 px limit.
 2. Optionally describe a style, then select **让 Codex 智能适配**. Your Codex account and selected model analyze the image and suggest colors, light/dark mode, and composition. This uses model quota and requires image input support. You may close settings and return for the result.
