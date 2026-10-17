@@ -1,24 +1,31 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Code2, Moon, MoreHorizontal, Palette, Settings, Sun, Terminal } from 'lucide-react';
+import { CircleAlert, Code, Moon, MoreHorizontal, Palette, Settings, Sun, Terminal } from 'lucide-react';
 import ConnectionSignal from './ConnectionSignal';
 import Tooltip from './Tooltip';
 
-function ToolButton({ label, description, icon: Icon, buttonRef, disabled, ...props }) {
-  return <Tooltip title={label} description={description} disabled={disabled}>
+function ToolButton({ label, tooltip = label, description, icon: Icon, buttonRef, disabled, ...props }) {
+  return <Tooltip title={tooltip} description={description} disabled={disabled} variant="toolbar">
     <button type="button" className="workspace-tool" aria-label={label} ref={buttonRef} disabled={disabled} {...props}>
-      <span className="workspace-tool-icon"><Icon size={17} strokeWidth={1.75}/></span>
+      <Icon size={18} strokeWidth={1.75}/>
     </button>
   </Tooltip>;
 }
 
-function ThemeSwitch({ theme, onClick }) {
-  const label = `切换到${theme === 'dark' ? '浅色' : '深色'}主题`;
-  return <Tooltip title={label}>
-    <button type="button" className="workspace-theme" aria-label={label} aria-pressed={theme === 'dark'} onClick={onClick}>
-      <span className={theme === 'light' ? 'is-active' : ''} aria-hidden="true"><Sun size={17} strokeWidth={1.75}/></span>
-      <span className={theme === 'dark' ? 'is-active' : ''} aria-hidden="true"><Moon size={17} strokeWidth={1.75}/></span>
-    </button>
-  </Tooltip>;
+function ThemeSwitch({ theme, onChange }) {
+  const root = useRef();
+  const modes = [{ value: 'light', label: '浅色主题', Icon: Sun }, { value: 'dark', label: '深色主题', Icon: Moon }];
+  function keydown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault(); event.stopPropagation();
+    const value = event.key === 'Home' ? 'light' : event.key === 'End' ? 'dark' : theme === 'dark' ? 'light' : 'dark';
+    root.current.querySelector(`[data-mode="${value}"]`).focus();
+    onChange(value);
+  }
+  return <div className="workspace-theme" role="radiogroup" aria-label="主题" data-value={theme} ref={root} onKeyDown={keydown}>
+    {modes.map(({ value, label, Icon }) => <Tooltip key={value} title={label} variant="toolbar">
+      <button type="button" role="radio" aria-checked={theme === value} aria-label={label} data-mode={value} tabIndex={theme === value ? 0 : -1} onClick={() => onChange(value)}><Icon size={16} strokeWidth={1.75}/></button>
+    </Tooltip>)}
+  </div>;
 }
 
 function MoreTools({ theme, customSkin, onAppearance, onTheme, onTerminal, hasProject }) {
@@ -67,29 +74,34 @@ function MoreTools({ theme, customSkin, onAppearance, onTheme, onTerminal, hasPr
     }
   }
   return <div className="workspace-more" ref={root} onKeyDown={keydown}>
-    <button type="button" className="workspace-tool" ref={trigger} title="更多工具" aria-label="更多工具" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
-      onClick={() => { firstItem.current = 0; setOpen(!open); }}><MoreHorizontal size={18} strokeWidth={1.75}/></button>
+    <ToolButton label="更多工具" icon={MoreHorizontal} buttonRef={trigger} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+      onClick={() => { firstItem.current = 0; setOpen(!open); }}/>
     {open && <div className="workspace-tool-menu" id={id} role="menu" aria-label="更多工作区工具" ref={menu}>
       <div className="workspace-menu-heading" aria-hidden="true">工作区工具</div>
       <button type="button" role="menuitem" onClick={() => run(onAppearance)}><Palette size={17} strokeWidth={1.75}/><span>壁纸与外观</span></button>
-      {!customSkin && <button type="button" role="menuitem" onClick={() => run(onTheme)}><ThemeIcon size={17} strokeWidth={1.75}/><span>{themeLabel}</span></button>}
+      {!customSkin && <button type="button" role="menuitem" onClick={() => run(() => onTheme(theme === 'dark' ? 'light' : 'dark'))}><ThemeIcon size={17} strokeWidth={1.75}/><span>{themeLabel}</span></button>}
       <div className="workspace-menu-divider" role="separator"/>
       <button type="button" role="menuitem" disabled={!hasProject} onClick={() => run(onTerminal)}><Terminal size={17} strokeWidth={1.75}/><span>网页终端{!hasProject && <small>请先选择项目</small>}</span></button>
     </div>}
   </div>;
 }
 
-export default function WorkspaceToolbar({ theme, customSkin, status, latency, hasProject, editor, editorToggle, settingsDisabled, onAppearance, onTheme, onTerminal, onEditor, onSettings }) {
+export default function WorkspaceToolbar({ theme, customSkin, status, latency, hasProject, terminalOpen, editor, editorToggle, settingsDisabled, onAppearance, onTheme, onTerminal, onEditor, onSettings }) {
   return <div className="workspace-toolbar" role="group" aria-label="工作区工具">
     <div className="workspace-tool-group workspace-appearance-tools" role="group" aria-label="外观">
-      <ToolButton label="壁纸与外观" description="壁纸、智能配色与个人预设" icon={Palette} onClick={onAppearance}/>
-      {!customSkin && <ThemeSwitch theme={theme} onClick={onTheme}/>}
+      <ToolButton label="壁纸与外观" tooltip="外观 / 皮肤" icon={Palette} onClick={onAppearance}/>
+      {!customSkin && <ThemeSwitch theme={theme} onChange={onTheme}/>}
     </div>
-    <ConnectionSignal status={status} latency={latency}/>
-    <div className="workspace-tool-group" role="group" aria-label="工作区操作">
-      <span className="workspace-terminal-tool"><ToolButton label="网页终端" description={hasProject ? '在当前项目中打开终端' : '请先选择项目'} icon={Terminal} disabled={!hasProject} onClick={onTerminal}/></span>
-      <ToolButton label={editor ? '收起代码面板' : '打开代码面板'} icon={Code2} buttonRef={editorToggle} aria-pressed={editor} aria-expanded={editor} aria-controls="workspace-editor" onClick={onEditor}/>
-      <ToolButton label="设置" description={settingsDisabled ? '正在保存配置，请稍候' : '模型、账号与工作区偏好'} icon={Settings} disabled={settingsDisabled} onClick={onSettings}/>
+    <span className="workspace-tool-separator workspace-appearance-separator" aria-hidden="true"/>
+    <div className="workspace-tool-group" role="group" aria-label="工作区面板">
+      <span className="workspace-terminal-tool"><ToolButton label="网页终端" tooltip="终端" description={hasProject ? undefined : '请先选择项目'} icon={Terminal} disabled={!hasProject} aria-pressed={terminalOpen} aria-haspopup="dialog" onClick={onTerminal}/></span>
+      <ToolButton label={editor ? '收起代码面板' : '打开代码面板'} tooltip="代码编辑器" icon={Code} buttonRef={editorToggle} aria-pressed={editor} aria-expanded={editor} aria-controls="workspace-editor" onClick={onEditor}/>
+    </div>
+    <span className="workspace-tool-separator" aria-hidden="true"/>
+    <div className="workspace-tool-group" role="group" aria-label="状态与设置">
+      <ConnectionSignal status={status} latency={latency}/>
+      <ToolButton label="提醒" description="功能即将开放" icon={CircleAlert} aria-disabled="true"/>
+      <ToolButton label="设置" description={settingsDisabled ? '正在保存配置，请稍候' : undefined} icon={Settings} disabled={settingsDisabled} onClick={onSettings}/>
       <MoreTools theme={theme} customSkin={customSkin} onAppearance={onAppearance} onTheme={onTheme} onTerminal={onTerminal} hasProject={hasProject}/>
     </div>
   </div>;
