@@ -857,7 +857,7 @@
   .avatar-crop-mask {
     outline: 2px solid Highlight;
   }
-  .action-error,.auth-error,.modal-heading-icon,.mode-trigger,.mode-menu {
+  .action-error,.auth-error,.modal-heading-icon {
     border: 1px solid CanvasText;
   }
 }

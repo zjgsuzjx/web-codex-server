@@ -90,29 +90,6 @@
 .capacity-meter i,.progress-bar i {
   transition: width .28s var(--motion-ease);
 }
-.storage-entry.storage-warning {
-  color: var(--warning);
-  background: color-mix(in srgb,var(--warning) 7.5%,transparent);
-  border-color: color-mix(in srgb,var(--warning) 26.7%,transparent);
-}
-.storage-entry.storage-critical {
-  color: var(--danger);
-  background: color-mix(in srgb,var(--danger) 7.1%,transparent);
-  border-color: color-mix(in srgb,var(--danger) 26.7%,transparent);
-}
-.storage-entry.storage-warning>svg,.storage-entry.storage-critical>svg {
-  color: inherit;
-}
-[data-theme=dark] .storage-entry.storage-warning {
-  color: var(--warning);
-  background: color-mix(in srgb,var(--warning) 9.4%,transparent);
-  border-color: color-mix(in srgb,var(--warning) 31.4%,transparent);
-}
-[data-theme=dark] .storage-entry.storage-critical {
-  color: var(--danger);
-  background: color-mix(in srgb,var(--danger) 9.4%,transparent);
-  border-color: color-mix(in srgb,var(--danger) 31.4%,transparent);
-}
 .storage-manager,.file-size-dialog,.storage-warning-dialog {
   padding: 24px;
   max-height: 72dvh;
@@ -630,16 +607,6 @@
   margin-top: 0;
   z-index: 1;
 }
-.storage-entry {
-  width: 30px;
-  padding: 0;
-  justify-content: center;
-  flex-shrink: 0;
-  border-color: transparent;
-  background: transparent;
-  border-radius: var(--ui-radius);
-  height: 30px;
-}
 .resource-storage-modal {
   display: flex;
   flex-direction: column;
@@ -784,9 +751,6 @@
   }
   .storage-warning-dialog>strong {
     font-size: 19px;
-  }
-  .storage-entry>span {
-    display: none;
   }
   .smart-cleanup>.cleanup-actions {
     bottom: -18px;
