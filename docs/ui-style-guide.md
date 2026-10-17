@@ -10,6 +10,8 @@ The workspace follows the toolbar's quiet visual language: neutral surfaces, fin
 
 Shared geometry and feedback use `--ui-radius-*`, `--ui-control`, `--ui-field-height`, `--ui-hover`, `--ui-press`, `--ui-selected`, `--ui-focus`, and `--ui-shadow-*`. Standard icon controls are 36px, fields are 40px, and their usual corner radius is 10px. Keep existing compact variants where the layout needs them. Avoid adding decorative shadows or movement to ordinary rows and buttons.
 
+The composer intentionally retains its original compact bordered controls, resource/usage cards, native icon hints, and animated reasoning accents. Its `--composer-*` palette is centralized in `tokens.css` and scoped to the composer and model popover, so it can keep the original blue light/dark appearance while other surfaces follow the newer toolbar design. Custom wallpaper themes replace this palette with semantic theme colors. Keep the composer rules together in `composer.css`.
+
 ## Controls and surfaces
 
 - Use `IconButton` for shared icon actions. Supply a meaningful `title`; it provides the accessible name and compact tooltip. Add `description` when an action needs explanation.

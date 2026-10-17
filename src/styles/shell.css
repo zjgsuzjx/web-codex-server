@@ -118,7 +118,7 @@
   flex: 1;
   min-height: 0;
 }
-.sidebar-brand,.sidebar-section,.topbar,.settings-nav,.select-trigger,.select-option,.permission-menu>header {
+.sidebar-brand,.sidebar-section,.topbar,.settings-nav,.select-trigger,.select-option {
   user-select: none;
 }
 .sidebar-search input {

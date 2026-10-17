@@ -111,10 +111,10 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]),textarea,[contente
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
-.icon-button,.new-chat,.project-item,.thread-row,.settings-nav>button,.permission-button,.primary,.secondary,.send-button,.user-profile {
+.icon-button,.new-chat,.project-item,.thread-row,.settings-nav>button,.primary,.secondary,.user-profile {
   transition: background .16s,color .16s,border-color .16s,box-shadow .16s,transform .16s var(--motion-ease);
 }
-.icon-button:active:not(:disabled),.send-button:active:not(:disabled),.primary:active:not(:disabled),.secondary:active:not(:disabled) {
+.icon-button:active:not(:disabled),.primary:active:not(:disabled),.secondary:active:not(:disabled) {
   transform: scale(.96);
 }
 .danger-button {

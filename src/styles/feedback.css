@@ -63,7 +63,7 @@
 /* Shared scrollbars, including horizontal code blocks and embedded surfaces. */
 /* Tooltips are rendered outside scroll containers so they stay within the viewport. */
 /* Keep the side rail mounted for both directions of the transition. */
-.upload-progress,.approval,.context-chip {
+.upload-progress,.approval {
   animation: content-in .2s var(--motion-ease);
 }
 /* Loading states reserve space without masking loaded content during refresh. */

@@ -199,7 +199,7 @@
   }
 }
 @media (prefers-reduced-motion:reduce) {
-  .suggestion-grid>button:hover,.conversation-tool:hover:not(:disabled),.conversation-tool:active:not(:disabled) {
+  .suggestion-grid>button:hover {
     transform: none;
   }
 }
