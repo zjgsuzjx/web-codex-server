@@ -8,18 +8,30 @@
 .workspace-tool:active:not(:disabled){transform:scale(.94);box-shadow:none}
 .workspace-tool[aria-pressed=true],.workspace-tool[aria-expanded=true]{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg));border-color:color-mix(in srgb,var(--accent) 28%,var(--line));box-shadow:none}
 .workspace-tool:focus-visible,.workspace-toolbar .connection-signal:focus-visible,.workspace-tool-menu button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.workspace-toolbar .connection-signal{--signal-empty:color-mix(in srgb,var(--muted) 24%,var(--bg));display:flex;align-items:center;gap:7px;height:36px;padding:0 4px;border-radius:8px;color:var(--muted);font-size:11px;white-space:nowrap;transition:background .16s}
-.workspace-toolbar .connection-signal:hover{background:var(--hover)}
-.connection-label{color:var(--muted)}
-.signal-glyph{display:block;overflow:visible;color:var(--subtle)}
+.workspace-toolbar .connection-signal{--signal-tone:var(--muted);--signal-empty:color-mix(in srgb,var(--muted) 25%,var(--bg));display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid color-mix(in srgb,var(--signal-tone) 16%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--signal-tone) 5%,var(--bg));color:var(--signal-tone);transition:background .16s,border-color .16s,transform .16s}
+.workspace-toolbar .connection-signal:hover{background:color-mix(in srgb,var(--signal-tone) 10%,var(--bg));border-color:color-mix(in srgb,var(--signal-tone) 35%,var(--line))}
+.workspace-toolbar .connection-signal:active{transform:scale(.94)}
+.signal-glyph{display:block;overflow:visible}
 .connection-signal .signal-bar{fill:var(--signal-empty);transition:fill .2s}
 .connection-signal .filled{fill:currentColor}
-.connection-signal.signal-1 .signal-glyph{color:var(--skin-color-e5484d,#e5484d)}
-.connection-signal.signal-2 .signal-glyph{color:var(--skin-color-c28b18,#c28b18)}
-.connection-signal.signal-3 .signal-glyph{color:var(--skin-color-289e57,#289e57)}
-:root[data-theme=dark] .connection-signal.signal-1 .signal-glyph{color:var(--skin-color-ff6961,#ff6961)}
-:root[data-theme=dark] .connection-signal.signal-2 .signal-glyph{color:var(--skin-color-f4c550,#f4c550)}
-:root[data-theme=dark] .connection-signal.signal-3 .signal-glyph{color:var(--skin-color-45c77b,#45c77b)}
+.connection-signal.signal-1{--signal-tone:var(--skin-color-e5484d,#e5484d)}
+.connection-signal.signal-2{--signal-tone:var(--skin-color-c28b18,#c28b18)}
+.connection-signal.signal-3{--signal-tone:var(--skin-color-289e57,#289e57)}
+:root[data-theme=dark] .connection-signal.signal-1{--signal-tone:var(--skin-color-ff6961,#ff6961)}
+:root[data-theme=dark] .connection-signal.signal-2{--signal-tone:var(--skin-color-f4c550,#f4c550)}
+:root[data-theme=dark] .connection-signal.signal-3{--signal-tone:var(--skin-color-45c77b,#45c77b)}
+.connection-signal[data-state=connecting],.connection-signal[data-state=measuring]{--signal-tone:var(--accent)}
+.connection-signal[data-state=reconnecting],.connection-signal[data-state=timeout]{--signal-tone:var(--warning)}
+.connection-signal[data-state=disconnected],.connection-signal[data-state=expired]{--signal-tone:var(--danger)}
+.connection-signal[data-state=disconnected] .signal-bar{fill:none;stroke:var(--signal-empty);stroke-width:1.3}
+.connection-signal[data-state=measuring] .signal-bar{fill:none;stroke:currentColor;stroke-width:1.3;animation:signal-measure 1.8s ease-in-out infinite}
+.connection-signal[data-state=measuring] .signal-bar:nth-child(2){animation-delay:.2s}
+.connection-signal[data-state=measuring] .signal-bar:nth-child(3){animation-delay:.4s}
+.signal-spinner{animation:signal-rotate 1.2s linear infinite}
+.connection-signal[data-state=reconnecting] .signal-spinner{animation-duration:1.8s}
+.signal-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@keyframes signal-rotate{to{transform:rotate(360deg)}}
+@keyframes signal-measure{0%,100%{opacity:.4}50%{opacity:1}}
 .workspace-more{position:relative;display:none}
 .workspace-tool-menu{position:absolute;right:0;top:calc(100% + 11px);z-index:45;width:210px;max-width:calc(100vw - 24px);padding:6px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 16px 40px var(--shadow),0 3px 8px var(--shadow);animation:workspace-menu-enter .14s ease-out;transform-origin:top right}
 .workspace-menu-heading{padding:8px 10px 10px;font-size:10px;font-weight:550;letter-spacing:.3px;color:var(--subtle)}
@@ -36,10 +48,8 @@
   .workspace-toolbar{gap:8px}
   .workspace-tool-group{gap:6px}
   .workspace-tool{min-width:36px;height:36px;padding:0 8px}
-  .workspace-toolbar .connection-signal{padding:0 3px}
-  .connection-label{display:none}
   .topbar-left{gap:7px}
   .topbar-left .workspace-name{min-width:0;max-width:none}
 }
-@media(prefers-reduced-motion:reduce){.workspace-tool,.workspace-toolbar .connection-signal,.connection-signal .signal-bar{transition:none}.workspace-tool-menu{animation:none}}
-@media(forced-colors:active){.connection-signal .signal-bar{fill:GrayText}.connection-signal .filled{fill:Highlight}.workspace-tool[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}}
+@media(prefers-reduced-motion:reduce){.workspace-tool,.workspace-toolbar .connection-signal,.connection-signal .signal-bar{transition:none}.workspace-tool-menu,.signal-spinner,.connection-signal[data-state=measuring] .signal-bar{animation:none}}
+@media(forced-colors:active){.connection-signal .signal-bar{fill:GrayText}.connection-signal .filled{fill:Highlight}.connection-signal[data-state=measuring] .signal-bar,.connection-signal[data-state=disconnected] .signal-bar{fill:none;stroke:GrayText}.connection-signal .signal-slash{stroke:ButtonText}.workspace-tool[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}}

@@ -1,7 +1,7 @@
 export class LiveSocket {
   constructor(user, onEvent, onStatus, onLatency = () => {}) { this.user = user; this.onEvent = onEvent; this.onStatus = onStatus; this.onLatency = onLatency; this.next = 1; this.pending = new Map(); this.ack = null; this.stopped = false; this.attempts = 0; this.connect(); }
   connect() {
-    this.onStatus('connecting');
+    this.onStatus(this.attempts ? 'reconnecting' : 'connecting');
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
     this.ws = new WebSocket(`${protocol}://${location.host}/ws?csrf=${encodeURIComponent(this.user.csrf)}`);
     this.ws.onopen = () => { this.attempts = 0; this.onStatus('connected'); this.measureLatency(); this.latencyTimer = setInterval(() => this.measureLatency(), 60000); };
