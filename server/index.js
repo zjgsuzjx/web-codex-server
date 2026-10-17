@@ -25,6 +25,8 @@ import { measure, createCleanup } from './storage.js';
 import { fileImageMime, serveFileImage } from './file-images.js';
 import { validateAvatar } from './avatar.js';
 import { AVATAR_MAX_BYTES } from '../shared/avatar.js';
+import { WALLPAPER_MAX_BYTES, skinDevice } from '../shared/skins.js';
+import { createSkins } from './skins.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -76,6 +78,7 @@ export async function createApp(options = {}) {
     if (t && msg.method === 'turn/completed' && msg.params.turn.status === 'completed') void autoTitle(uid, tid);
   };
   const codex = options.codexFactory ? options.codexFactory(config, emit) : new CodexManager(config, emit);
+  const skins = createSkins({ store, config, codex, broadcast: (uid, msg) => { for (const ws of clients.get(uid) || []) send(ws, msg); } });
   const changeRoots = (u, t) => [`/workspace/${t.project_id}`, path.posix.join(config.hostDataDir.replaceAll('\\', '/'), 'users', u.username, 'projects', t.project_id)];
   turnChanges = createTurnChanges({ store, emit, root: (u, t) => root(u, { id: t.project_id }), cwd: changeRoots });
   function bindAttachments(uid, tid, turnId) {
@@ -124,7 +127,7 @@ export async function createApp(options = {}) {
   }
   const allowedOrigin = req => !req.headers.origin || req.headers.origin === new URL(config.publicUrl).origin;
   const avatarUrl = u => { const avatar = store.get('SELECT version FROM user_avatars WHERE user_id=?', u.id); return avatar ? `/api/avatar?v=${avatar.version}` : null; };
-  const publicUser = u => ({ id: u.id, username: u.username, role: u.role, avatarUrl: avatarUrl(u), settings: settings(JSON.parse(u.settings)), nestedSandbox: config.nestedSandbox, hostExecution: u.role === 'superadmin' && config.enableHostExecution, hostProjectBase:u.role==='superadmin'?path.posix.join(config.hostDataDir.replaceAll('\\','/'),'users',u.username,'projects'):undefined, csrf: u.csrf });
+  const publicUser = u => ({ id: u.id, username: u.username, role: u.role, avatarUrl: avatarUrl(u), skins: skins.snapshot(u), settings: settings(JSON.parse(u.settings)), nestedSandbox: config.nestedSandbox, hostExecution: u.role === 'superadmin' && config.enableHostExecution, hostProjectBase:u.role==='superadmin'?path.posix.join(config.hostDataDir.replaceAll('\\','/'),'users',u.username,'projects'):undefined, csrf: u.csrf });
   function avatarUpdated(u) { const url = avatarUrl(u); for (const ws of clients.get(u.id) || []) send(ws, { type: 'profile/avatar', avatarUrl: url }); return { avatarUrl: url }; }
   const cookie = token => `sv_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800${config.secure ? '; Secure' : ''}`;
   function rate(req, category, limit) {
@@ -200,7 +203,7 @@ export async function createApp(options = {}) {
   });
   app.use(express.json({ limit: '3mb' }));
   app.get('/api/health', (req, res) => {
-    const busy = uploads.size || mutationLocks.size || titleJobs.size || cleanup?.busy() || turnChanges.busy() || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
+    const busy = uploads.size || mutationLocks.size || titleJobs.size || skins.busy() || cleanup?.busy() || turnChanges.busy() || codex.starting?.size || [...codex.instances.values()].some(i => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size);
     res.json({ status: 'ok', version: '1.0.0', revision: process.env.APP_REVISION || null, deploymentReady: !busy });
   });
   app.get('/api/session', (req, res) => { const u = store.auth(req); res.json({ user: u ? publicUser(u) : null, inviteRequired: !!config.inviteCode || !!store.get('SELECT id FROM users LIMIT 1') }); });
@@ -249,6 +252,7 @@ export async function createApp(options = {}) {
     if (!avatar) fail(404, '尚未设置头像');
     res.type('png').send(Buffer.from(avatar.image));
   });
+  skins.routes(app, mutation);
   app.delete('/api/avatar', (req, res) => {
     store.run('DELETE FROM user_avatars WHERE user_id=?', req.user.id);
     res.json(avatarUpdated(req.user));
@@ -497,18 +501,23 @@ export async function createApp(options = {}) {
       uploads.set(item.id, item); ws.activeUpload = item;
       return { uploadId: item.id, offset: 0, chunkSize: AVATAR_MAX_BYTES };
     }
+    const wallpaper = params.scope === 'wallpaper';
+    if (wallpaper) {
+      skins.begin(u, ws.device, params.device);
+      if (!Number.isSafeInteger(params.size) || params.size <= 0 || params.size > WALLPAPER_MAX_BYTES) fail(413, '处理后的壁纸大小上限为 6 MB');
+    }
     const attachment = params.scope === 'attachment';
     const thread = attachment ? store.thread(u, params.threadId) : null;
-    const p = attachment ? null : store.project(u, params.projectId), rel = attachment ? attachmentName(params.path) : relativePath(params.path, false), size = params.size;
+    const p = attachment || wallpaper ? null : store.project(u, params.projectId), rel = wallpaper ? 'wallpaper.png' : attachment ? attachmentName(params.path) : relativePath(params.path, false), size = params.size;
     if (!Number.isSafeInteger(size) || size < 0 || size > config.maxFile) fail(413, '文件大小超过上限');
     if (attachment && size > 20 * MB) fail(413, '聊天附件大小上限为 20 MB');
     if (attachment && store.get('SELECT COUNT(*) AS n FROM attachments WHERE user_id=? AND thread_id=? AND turn_id IS NULL', u.id, thread.id).n >= 10) fail(413, '每轮最多 10 个附件');
     if (params.extract && (attachment || !rel.toLowerCase().endsWith('.zip'))) fail(400, '自动解压只支持项目 ZIP 文件');
     if ([...uploads.values()].filter(x => x.uid === u.id).length >= 10) fail(429, '上传任务过多，请先完成或取消');
-    const key = `${u.id}:${attachment ? `attachment:${randomUUID()}` : p.id}:${rel}`; if (uploadLocks.has(key)) fail(409, '该文件正在上传');
-    if (!attachment) await safePath(root(u, p), rel, { missing: true }); await quota(u, size); await userDirs(u);
+    const key = `${u.id}:${wallpaper ? `wallpaper:${params.device}` : attachment ? `attachment:${randomUUID()}` : p.id}:${rel}`; if (uploadLocks.has(key)) fail(409, '该文件正在上传');
+    if (!attachment && !wallpaper) await safePath(root(u, p), rel, { missing: true }); await quota(u, size); await userDirs(u);
     const id = randomUUID(), temp = path.join(uploadsDir(u), id), handle = await fs.open(temp, 'wx', 0o600);
-    const item = { id, uid: u.id, username: u.username, project: p, thread, attachment, extract: !!params.extract, path: rel, size, offset: 0, temp, handle, key, hash: createHash('sha256'), touched: Date.now(), owner: ws };
+    const item = { id, uid: u.id, username: u.username, project: p, thread, attachment, wallpaper, device: wallpaper ? params.device : undefined, extract: !!params.extract, path: rel, size, offset: 0, temp, handle, key, hash: createHash('sha256'), touched: Date.now(), owner: ws };
     uploads.set(id, item); uploadLocks.add(key); ws.activeUpload = item; return { uploadId: id, offset: 0, chunkSize: MB };
   }
   async function removeUpload(item) { uploads.delete(item.id); uploadLocks.delete(item.key); if (item.owner?.activeUpload === item) item.owner.activeUpload = null; if (item.avatar) { item.data = null; return; } await item.handle.close().catch(() => {}); await fs.rm(item.temp, { force: true }); }
@@ -548,6 +557,10 @@ export async function createApp(options = {}) {
       }
       const checksum = item.hash.digest('hex'); if (params.sha256 && params.sha256 !== checksum) { await removeUpload(item); fail(400, '文件校验失败'); }
       await item.handle.sync(); await item.handle.close();
+      if (item.wallpaper) {
+        try { if (ws.device !== item.device) fail(403, '只能在对应设备上修改壁纸'); return { ok: true, ...await skins.finish(u, item), sha256: checksum }; }
+        finally { await removeUpload(item); }
+      }
       if (item.extract) {
         const staging = await fs.mkdtemp(path.join(uploadsDir(u), 'extract-'));
         try {
@@ -622,7 +635,7 @@ export async function createApp(options = {}) {
   server.on('upgrade', (req, socket, head) => {
     let u, url; try { url = new URL(req.url, config.publicUrl); u = store.auth(req); } catch {}
     if (url?.pathname !== '/ws' || !u || req.headers.origin !== new URL(config.publicUrl).origin || url.searchParams.get('csrf') !== u.csrf) { socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n'); return; }
-    wss.handleUpgrade(req, socket, head, ws => { ws.user = u; ws.sessionHash = u.session_hash; wss.emit('connection', ws, req); });
+    wss.handleUpgrade(req, socket, head, ws => { ws.user = u; ws.device = skinDevice(req.headers['user-agent']); ws.sessionHash = u.session_hash; wss.emit('connection', ws, req); });
   });
   wss.on('connection', (ws, req) => {
     const u = ws.user; let chain = Promise.resolve(), queued = 0;
@@ -630,7 +643,7 @@ export async function createApp(options = {}) {
     if (!clients.has(u.id)) clients.set(u.id, new Set()); clients.get(u.id).add(ws); ws.alive = true;
     ws.on('pong', () => { ws.alive = true; });
     const current = eventCounters.get(u.id)||0;
-    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), avatarUrl: avatarUrl(u), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
+    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), avatarUrl: avatarUrl(u), skins: skins.snapshot(u), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
     ws.on('message', (data, binary) => {
       if (++queued > 8) { ws.close(1008, '请等待服务器确认后发送'); return; }
       chain = chain.then(async () => {
@@ -652,6 +665,7 @@ export async function createApp(options = {}) {
     ws.on('error', () => {});
   });
   const maintenance = setInterval(async () => {
+    skins.prune();
     for (const ws of wss.clients) { if (!ws.alive) { ws.terminate(); continue; } ws.alive = false; ws.ping(); }
     for (const item of uploads.values()) if (!item.owner && Date.now() - item.touched > 30 * 60000) await removeUpload(item).catch(() => {});
     await codex.stopIdle(clients).catch(() => {}); try { store.prune(); } catch (e) { console.error('Maintenance failed:', e.code || e.name); }
@@ -673,7 +687,7 @@ export async function createApp(options = {}) {
   app.use(express.static(path.resolve(here, '../dist'), { index: false, maxAge: 0 }));
   app.get('/{*path}', (req, res) => res.sendFile(path.resolve(here, '../dist/index.html')));
   app.use((e, req, res, next) => { if (res.headersSent) return res.destroy(); const full = ['ENOSPC', 'EDQUOT', 'SQLITE_FULL'].includes(e.code) || /ENOSPC|EDQUOT|SQLITE_FULL|database or disk is full|no space left/i.test(e.message || ''); res.status(full ? 507 : e.status || 500).json({ error: full ? '存储空间已满，请在文件管理器中强制删除不需要的文件，腾出空间后重试' : e.status ? e.message : '服务器操作失败，请重试', ...(full ? { code: 'STORAGE_FULL' } : {}) }); if (!e.status && !full) console.error('Request failed:', e.code || e.name); });
-  return { app, server, store, codex, config, close: async () => { clearInterval(maintenance); for (const ws of wss.clients) ws.terminate(); await turnChanges.close(); await codex.shutdown(); for (const item of uploads.values()) await removeUpload(item); await new Promise(resolve => server.close(resolve)); store.db.close(); } };
+  return { app, server, store, codex, config, close: async () => { clearInterval(maintenance); for (const ws of wss.clients) ws.terminate(); await turnChanges.close(); await codex.shutdown(); await skins.close(); for (const item of uploads.values()) await removeUpload(item); await new Promise(resolve => server.close(resolve)); store.db.close(); } };
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.loadEnvFile(); } catch (e) { if (e.code !== 'ENOENT') throw e; }

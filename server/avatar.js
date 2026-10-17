@@ -15,9 +15,9 @@ export function pngCrc(data) {
 
 // Accept only a small, fully uploaded raster. Check the compressed scanlines,
 // not just the signature, and discard ancillary metadata (including EXIF).
-export function validateAvatar(data) {
-  if (data.length > AVATAR_MAX_BYTES) fail(413, '裁剪后的头像不能超过 256 KB');
-  const invalid = () => fail(400, '头像图片无效，请重新裁剪后上传');
+export function validatePng(data, { maxBytes = AVATAR_MAX_BYTES, wallpaper = false } = {}) {
+  if (data.length > maxBytes) fail(413, wallpaper ? '处理后的壁纸不能超过 6 MB' : '裁剪后的头像不能超过 256 KB');
+  const invalid = () => fail(400, wallpaper ? '壁纸图片无效，请重新选择后上传' : '头像图片无效，请重新裁剪后上传');
   if (!data.subarray(0, 8).equals(signature)) invalid();
   let offset = 8, header, ended = false, idatEnded = false;
   const image = [], chunks = [signature];
@@ -31,7 +31,9 @@ export function validateAvatar(data) {
     if (type === 'IHDR') {
       if (header || length !== 13) invalid();
       header = data.subarray(offset + 8, end - 4);
-      if (header.readUInt32BE(0) !== AVATAR_SIZE || header.readUInt32BE(4) !== AVATAR_SIZE) fail(400, '头像尺寸必须为 256 × 256');
+      const width = header.readUInt32BE(0), height = header.readUInt32BE(4);
+      if (wallpaper) { if (!width || !height || Math.max(width, height) > 2560 || width * height > 4_000_000) fail(400, '壁纸尺寸超出上限'); }
+      else if (width !== AVATAR_SIZE || height !== AVATAR_SIZE) fail(400, '头像尺寸必须为 256 × 256');
       if (header[8] !== 8 || ![2, 6].includes(header[9]) || header[10] || header[11] || header[12]) invalid();
       chunks.push(data.subarray(offset, end));
     } else if (type === 'IDAT') {
@@ -47,10 +49,11 @@ export function validateAvatar(data) {
     offset = end;
   }
   if (!ended) invalid();
-  const stride = AVATAR_SIZE * (header[9] === 6 ? 4 : 3) + 1, expected = stride * AVATAR_SIZE;
+  const stride = header.readUInt32BE(0) * (header[9] === 6 ? 4 : 3) + 1, expected = stride * header.readUInt32BE(4);
   let pixels;
   try { pixels = inflateSync(Buffer.concat(image), { maxOutputLength: expected }); } catch { invalid(); }
   if (pixels.length !== expected) invalid();
-  for (let row = 0; row < AVATAR_SIZE; row++) if (pixels[row * stride] > 4) invalid();
+  for (let row = 0; row < header.readUInt32BE(4); row++) if (pixels[row * stride] > 4) invalid();
   return Buffer.concat(chunks);
 }
+export const validateAvatar = data => validatePng(data);
