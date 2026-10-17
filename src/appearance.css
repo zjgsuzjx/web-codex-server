@@ -8,6 +8,18 @@
 
 /* Nested modal keeps keyboard focus in the preview bar while revealing the page. */
 body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal)){visibility:hidden}
-.modal-backdrop:has(.appearance-full-modal){background:transparent;backdrop-filter:none}.modal.appearance-full-modal{position:fixed;bottom:24px;width:540px;max-width:calc(100% - 28px);border-radius:16px;box-shadow:0 12px 50px var(--shadow)}.appearance-full-modal>header{padding:16px 20px 0;border:0}.appearance-full-modal>header h2{font-size:14px}.appearance-full-modal>header p{font-size:10px}.appearance-full-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 20px 16px}.appearance-full-actions>button{font-size:11px;padding:9px 13px}
+.modal-backdrop:has(.appearance-full-modal){background:transparent;backdrop-filter:none}
+.modal.appearance-full-modal{position:fixed;bottom:max(18px,env(safe-area-inset-bottom));display:grid;grid-template-columns:minmax(0,1fr) auto 28px;align-items:center;gap:12px;width:720px;max-width:calc(100% - 32px);padding:14px 16px;border-radius:15px;box-shadow:0 12px 50px var(--shadow)}
+/* Scope these rules above the shared modal styles, regardless of import order. */
+.modal.appearance-full-modal>header{display:contents}
+.modal.appearance-full-modal .modal-heading{grid-column:1;grid-row:1;display:flex;align-items:center;gap:10px;min-width:0}
+.modal.appearance-full-modal .modal-heading-icon{display:grid;place-items:center;flex-shrink:0;width:34px;height:34px;border-radius:10px;background:var(--hover);color:var(--accent)}
+.modal.appearance-full-modal>header h2{font-size:13px;line-height:20px;margin:0}
+.modal.appearance-full-modal>header p{font-size:10px;line-height:16px;margin:3px 0 0;color:var(--muted)}
+.modal.appearance-full-modal>header>.icon-button{grid-column:3;grid-row:1;width:28px;height:28px;margin:0;align-self:center}
+.modal.appearance-full-modal .appearance-full-actions{grid-column:2;grid-row:1;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0}
+.modal.appearance-full-modal .appearance-full-actions>button{flex:0 0 auto;min-height:36px;height:36px;margin:0;padding:0 12px;font-size:11px;line-height:18px;white-space:nowrap}
+.modal.appearance-full-modal>.form-error{grid-column:1 / -1;margin:0;font-size:11px;line-height:1.6}
+@media(max-width:640px){.modal.appearance-full-modal{bottom:max(12px,env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) 28px;max-width:calc(100% - 24px);padding:14px;gap:14px}.modal.appearance-full-modal>header>.icon-button{grid-column:2}.modal.appearance-full-modal .appearance-full-actions{grid-column:1 / -1;grid-row:2}.modal.appearance-full-modal .appearance-full-actions>button{flex:1;min-height:44px;height:44px;font-size:12px}}
 
 @media(max-width:600px){.appearance-settings .settings-layout{flex-direction:column}.appearance-settings .settings-nav{width:100%;display:flex;flex-direction:row;overflow-x:auto;gap:4px;flex-shrink:0;padding:8px;border-right:0;border-bottom:1px solid var(--line)}.appearance-settings .settings-nav>button{width:auto;white-space:nowrap;flex-shrink:0;font-size:10px;padding:9px 10px}.appearance-settings .settings-content{width:100%;padding:20px 16px}.appearance-settings .appearance-presets{grid-template-columns:repeat(3,minmax(0,1fr))}}
