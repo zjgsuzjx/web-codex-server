@@ -3,10 +3,10 @@ import { Code2, Moon, MoreHorizontal, Palette, Settings, Sun, Terminal } from 'l
 import ConnectionSignal from './ConnectionSignal';
 import Tooltip from './Tooltip';
 
-function ToolButton({ label, description, icon: Icon, children, buttonRef, disabled, ...props }) {
+function ToolButton({ label, description, icon: Icon, buttonRef, disabled, ...props }) {
   return <Tooltip title={label} description={description} disabled={disabled}>
-    <button type="button" className={`workspace-tool${children ? ' workspace-tool-label' : ''}`} aria-label={label} ref={buttonRef} disabled={disabled} {...props}>
-      <span className="workspace-tool-icon"><Icon size={17} strokeWidth={1.75}/></span>{children}
+    <button type="button" className="workspace-tool" aria-label={label} ref={buttonRef} disabled={disabled} {...props}>
+      <span className="workspace-tool-icon"><Icon size={17} strokeWidth={1.75}/></span>
     </button>
   </Tooltip>;
 }
@@ -88,7 +88,7 @@ export default function WorkspaceToolbar({ theme, customSkin, status, latency, h
     <ConnectionSignal status={status} latency={latency}/>
     <div className="workspace-tool-group" role="group" aria-label="工作区操作">
       <span className="workspace-terminal-tool"><ToolButton label="网页终端" description={hasProject ? '在当前项目中打开终端' : '请先选择项目'} icon={Terminal} disabled={!hasProject} onClick={onTerminal}/></span>
-      <ToolButton label={editor ? '收起代码面板' : '打开代码面板'} icon={Code2} buttonRef={editorToggle} aria-pressed={editor} aria-expanded={editor} aria-controls="workspace-editor" onClick={onEditor}><span className="workspace-code-label">代码</span></ToolButton>
+      <ToolButton label={editor ? '收起代码面板' : '打开代码面板'} icon={Code2} buttonRef={editorToggle} aria-pressed={editor} aria-expanded={editor} aria-controls="workspace-editor" onClick={onEditor}/>
       <ToolButton label="设置" description={settingsDisabled ? '正在保存配置，请稍候' : '模型、账号与工作区偏好'} icon={Settings} disabled={settingsDisabled} onClick={onSettings}/>
       <MoreTools theme={theme} customSkin={customSkin} onAppearance={onAppearance} onTheme={onTheme} onTerminal={onTerminal} hasProject={hasProject}/>
     </div>

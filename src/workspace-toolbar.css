@@ -4,7 +4,6 @@
 .workspace-tool-group{display:flex;align-items:center;gap:8px}
 .workspace-toolbar .tooltip-trigger,.workspace-terminal-tool{display:inline-flex;align-items:center}
 .workspace-tool{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:40px;min-width:40px;height:40px;padding:0;border:1px solid var(--toolbar-border);border-radius:999px;background:var(--toolbar-surface);color:var(--muted);font-size:11px;font-weight:550;white-space:nowrap;transition:color .16s,background .16s,border-color .16s,box-shadow .16s,transform .16s}
-.workspace-tool-label{width:auto;padding:0 12px 0 4px}
 .workspace-tool-icon{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border-radius:50%;transition:background .16s,box-shadow .16s}
 .workspace-tool:hover:not(:disabled){color:var(--text);background:var(--hover);border-color:var(--line);box-shadow:0 3px 9px var(--shadow);transform:translateY(-1px)}
 .workspace-tool:active:not(:disabled){transform:scale(.94);box-shadow:none}
@@ -48,7 +47,7 @@
 .workspace-tool-menu small{display:block;margin-top:4px;font-size:10px;color:var(--muted);font-weight:400}
 .workspace-menu-divider{height:1px;background:var(--line);margin:5px 8px}
 @keyframes workspace-menu-enter{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-@media(max-width:1000px){.workspace-toolbar{gap:12px}.workspace-code-label{display:none}.workspace-tool-label{width:40px;padding:0}}
+@media(max-width:1000px){.workspace-toolbar{gap:12px}}
 @media(max-width:640px){
   .workspace-appearance-tools,.workspace-terminal-tool{display:none}
   .workspace-more{display:flex}
