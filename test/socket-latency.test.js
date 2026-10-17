@@ -16,6 +16,7 @@ test('connected sockets sample immediately and every minute, clear stale latency
   globalThis.WebSocket=FakeSocket;globalThis.location={protocol:'http:',host:'localhost'};
   t.after(()=>{globalThis.WebSocket=previousSocket;globalThis.location=previousLocation;});
   const socket=new LiveSocket({csrf:'test'},()=>{},s=>states.push(s),ms=>samples.push(ms));
+  assert.deepEqual(states,['connecting']);
   const settle=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
   connections[0].open();await settle();
   assert.equal(connections[0].sent.length,1);assert.equal(connections[0].sent[0].method,'connection/ping');assert.ok(samples[0]>=1);
@@ -23,6 +24,6 @@ test('connected sockets sample immediately and every minute, clear stale latency
   t.mock.timers.tick(1);await settle();assert.equal(connections[0].sent.length,2);
   connections[0].respond=false;t.mock.timers.tick(60000);await settle();t.mock.timers.tick(10000);await settle();assert.equal(samples.at(-1),Infinity);
   connections[0].close();assert.equal(samples.at(-1),null);assert.equal(states.at(-1),'disconnected');
-  t.mock.timers.tick(1000);connections[1].open();await settle();assert.equal(connections[1].sent.length,1);
+  t.mock.timers.tick(1000);assert.equal(states.at(-1),'reconnecting');connections[1].open();await settle();assert.equal(connections[1].sent.length,1);assert.equal(states.at(-1),'connected');
   socket.close();t.mock.timers.tick(60000);await settle();assert.equal(connections[1].sent.length,1);assert.equal(connections.length,2);
 });
