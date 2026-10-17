@@ -5,8 +5,18 @@ import Tooltip from './Tooltip';
 
 function ToolButton({ label, description, icon: Icon, children, buttonRef, disabled, ...props }) {
   return <Tooltip title={label} description={description} disabled={disabled}>
-    <button type="button" className="workspace-tool" aria-label={label} ref={buttonRef} disabled={disabled} {...props}>
-      <Icon size={17} strokeWidth={1.75}/>{children}
+    <button type="button" className={`workspace-tool${children ? ' workspace-tool-label' : ''}`} aria-label={label} ref={buttonRef} disabled={disabled} {...props}>
+      <span className="workspace-tool-icon"><Icon size={17} strokeWidth={1.75}/></span>{children}
+    </button>
+  </Tooltip>;
+}
+
+function ThemeSwitch({ theme, onClick }) {
+  const label = `切换到${theme === 'dark' ? '浅色' : '深色'}主题`;
+  return <Tooltip title={label}>
+    <button type="button" className="workspace-theme" aria-label={label} aria-pressed={theme === 'dark'} onClick={onClick}>
+      <span className={theme === 'light' ? 'is-active' : ''} aria-hidden="true"><Sun size={17} strokeWidth={1.75}/></span>
+      <span className={theme === 'dark' ? 'is-active' : ''} aria-hidden="true"><Moon size={17} strokeWidth={1.75}/></span>
     </button>
   </Tooltip>;
 }
@@ -70,11 +80,10 @@ function MoreTools({ theme, customSkin, onAppearance, onTheme, onTerminal, hasPr
 }
 
 export default function WorkspaceToolbar({ theme, customSkin, status, latency, hasProject, editor, editorToggle, settingsDisabled, onAppearance, onTheme, onTerminal, onEditor, onSettings }) {
-  const ThemeIcon = theme === 'dark' ? Moon : Sun;
   return <div className="workspace-toolbar" role="group" aria-label="工作区工具">
     <div className="workspace-tool-group workspace-appearance-tools" role="group" aria-label="外观">
       <ToolButton label="壁纸与外观" description="壁纸、智能配色与个人预设" icon={Palette} onClick={onAppearance}/>
-      {!customSkin && <ToolButton label={`切换到${theme === 'dark' ? '浅色' : '深色'}主题`} icon={ThemeIcon} onClick={onTheme}/>}
+      {!customSkin && <ThemeSwitch theme={theme} onClick={onTheme}/>}
     </div>
     <ConnectionSignal status={status} latency={latency}/>
     <div className="workspace-tool-group" role="group" aria-label="工作区操作">
