@@ -382,7 +382,7 @@ const Message = memo(function Message({ item, onFile, notify, onAttachment, thre
   if (toolContent(item).some(contentImage)) return <div className="visible-tool-output"><ToolOutput item={item} threadId={threadId} onFile={onFile} notify={notify} onPreview={onAttachment}/></div>;
   return <details className="tool-item"><summary><Sparkles size={14}/><span>{item.tool||item.name||item.query||item.type}</span><span className="tool-status">{item.status||''}</span></summary><ToolOutput item={item} threadId={threadId} onFile={onFile} notify={notify} onPreview={onAttachment}/></details>;
 });
-function TurnMessages({turn,onFile,notify,onAttachment,threadId,onReview}) {
+const TurnMessages = memo(function TurnMessages({turn,onFile,notify,onAttachment,threadId,onReview}) {
   const items=turn.items||[],done=turn.status!=='inProgress';
   const process=isProcessItem;
   const thoughts=items.filter(process);
@@ -390,6 +390,6 @@ function TurnMessages({turn,onFile,notify,onAttachment,threadId,onReview}) {
   if(!done)return <>{items.map(render)}<ChangeSummary turn={turn} threadId={threadId} onReview={onReview}/></>;
   const before=items.filter(item=>item.type==='userMessage'),after=items.filter(item=>item.type!=='userMessage'&&!process(item));
   return <>{before.map(render)}{thoughts.length>0&&<details className="thought-group"><summary><Sparkles size={14}/><span>思考与执行过程</span><small>{thoughts.length} 项记录</small><ChevronDown size={14}/></summary><div>{thoughts.map(render)}</div></details>}{after.map(render)}<ChangeSummary turn={turn} threadId={threadId} onReview={onReview}/></>;
-}
+});
 
 createRoot(document.getElementById('root')).render(<App/>);

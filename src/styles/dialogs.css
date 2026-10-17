@@ -178,11 +178,8 @@
   margin-bottom: 20px;
 }
 .modal-backdrop.is-closing {
-  animation: fade-out .18s ease-in forwards;
+  animation: fade-out var(--dialog-duration) ease-in forwards;
   pointer-events: none;
-}
-.modal-backdrop.is-closing .modal {
-  animation: dialog-out .18s ease-in forwards;
 }
 .user-avatar>img {
   display: block;
@@ -449,8 +446,8 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: fade-in .18s ease-out;
-  backdrop-filter: blur(4px);
+  animation: fade-in var(--dialog-duration) ease-out;
+  backdrop-filter: none;
 }
 .modal {
   width: 480px;
@@ -462,17 +459,10 @@
   border-radius: var(--ui-radius-dialog);
   box-shadow: var(--ui-shadow-dialog);
   outline: none;
-  animation: dialog-in .22s var(--motion-ease);
+  animation: none;
 }
 .modal.wide {
   width: 860px;
-}
-/* Settings stay still while changing tabs or opening fixed-position menus. */
-.modal-backdrop:has(>.settings-dialog) {
-  backdrop-filter: none;
-}
-.modal.settings-dialog {
-  animation: fade-in .12s ease-out;
 }
 .modal>header {
   display: flex;
@@ -514,7 +504,7 @@
 .modal.action-dialog {
   width: 480px;
   border-radius: var(--ui-radius-dialog);
-  box-shadow: 0 25px 100px color-mix(in srgb,var(--accent) 25.1%,transparent);
+  box-shadow: var(--ui-shadow-dialog);
 }
 .action-dialog>header {
   padding: 24px 24px 20px;

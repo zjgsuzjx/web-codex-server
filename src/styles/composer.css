@@ -467,6 +467,9 @@
 .composer:not([data-effort=normal])::before {
   animation: reasoning-glow 7s ease-in-out infinite alternate;
 }
+#root[inert] .composer::before {
+  animation-play-state: paused;
+}
 .composer[data-effort=high] {
   --glow-opacity: .55;
   box-shadow: 0 5px 22px var(--composer-shadow-high);
