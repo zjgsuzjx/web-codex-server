@@ -36,29 +36,46 @@
 .workspace-theme::before{content:"";position:absolute;top:2px;left:2px;width:30px;height:28px;border-radius:8px;background:var(--toolbar-thumb);box-shadow:var(--toolbar-thumb-shadow);transition:transform .22s cubic-bezier(.3,.8,.3,1)}
 .workspace-theme[data-value=dark]::before{transform:translateX(30px)}
 
-.workspace-toolbar .connection-signal{--signal-tone:var(--toolbar-fg);--signal-empty:color-mix(in srgb,var(--muted) 25%,var(--bg));color:var(--signal-tone)}
-.workspace-toolbar .connection-signal:hover{color:var(--signal-tone)}
-.signal-glyph{display:block;overflow:visible}
-.connection-signal .signal-bar{fill:var(--signal-empty);transition:fill .2s}
-.connection-signal .filled{fill:currentColor}
-.connection-signal.signal-1{--signal-tone:var(--skin-color-e5484d,#e5484d)}
-.connection-signal.signal-2{--signal-tone:var(--skin-color-c28b18,#c28b18)}
-.connection-signal.signal-3{--signal-tone:var(--skin-color-289e57,#289e57)}
-:root[data-theme=dark] .connection-signal.signal-1{--signal-tone:var(--skin-color-ff6961,#ff6961)}
-:root[data-theme=dark] .connection-signal.signal-2{--signal-tone:var(--skin-color-f4c550,#f4c550)}
-:root[data-theme=dark] .connection-signal.signal-3{--signal-tone:var(--skin-color-45c77b,#45c77b)}
-.connection-signal[data-state=connecting],.connection-signal[data-state=measuring]{--signal-tone:var(--accent)}
-.connection-signal[data-state=reconnecting],.connection-signal[data-state=timeout]{--signal-tone:var(--warning)}
-.connection-signal[data-state=disconnected],.connection-signal[data-state=expired]{--signal-tone:var(--danger)}
-.connection-signal[data-state=disconnected] .signal-bar{fill:none;stroke:var(--signal-empty);stroke-width:1.3}
-.connection-signal[data-state=measuring] .signal-bar{fill:none;stroke:currentColor;stroke-width:1.3;animation:signal-measure 1.8s ease-in-out infinite}
-.connection-signal[data-state=measuring] .signal-bar:nth-child(2){animation-delay:.2s}
-.connection-signal[data-state=measuring] .signal-bar:nth-child(3){animation-delay:.4s}
-.signal-spinner{animation:signal-rotate 1.2s linear infinite}
-.connection-signal[data-state=reconnecting] .signal-spinner{animation-duration:1.8s}
+.connection-signal,.signal-card{--signal-good:var(--skin-color-289e57,#16a34a);--signal-mid:var(--skin-color-c28b18,#f59e0b);--signal-bad:var(--skin-color-e5484d,#ef4444);--signal-tone:var(--accent)}
+:root[data-theme=dark] :is(.connection-signal,.signal-card){--signal-good:var(--skin-color-45c77b,#4ade80);--signal-mid:var(--skin-color-f4c550,#fbbf24);--signal-bad:var(--skin-color-ff6961,#f87171)}
+:is(.connection-signal,.signal-card)[data-quality=good]{--signal-tone:var(--signal-good)}
+:is(.connection-signal,.signal-card)[data-quality=mid]{--signal-tone:var(--signal-mid)}
+:is(.connection-signal,.signal-card)[data-quality=bad]{--signal-tone:var(--signal-bad)}
+.signal-bars{display:flex;align-items:flex-end;gap:2px;height:14px}
+.signal-bars i{width:3px;border-radius:1.5px;background:var(--toolbar-fg);opacity:.22;transition:opacity .2s,background .2s}
+.signal-bars i:nth-child(1){height:5px}
+.signal-bars i:nth-child(2){height:8px}
+.signal-bars i:nth-child(3){height:11px}
+.signal-bars i:nth-child(4){height:14px}
+.signal-bars i.is-on{opacity:1;background:var(--signal-tone)}
+.connection-signal[data-state=connecting] .signal-bars i,.connection-signal[data-state=reconnecting] .signal-bars i,.connection-signal[data-state=measuring] .signal-bars i{background:var(--signal-tone);animation:signal-wave 1.2s ease-in-out infinite}
+.connection-signal .signal-bars i:nth-child(2){animation-delay:.15s}
+.connection-signal .signal-bars i:nth-child(3){animation-delay:.3s}
+.connection-signal .signal-bars i:nth-child(4){animation-delay:.45s}
+.connection-signal[data-state=measuring] .signal-bars i{background:transparent;box-shadow:inset 0 0 0 1px var(--signal-tone);animation-duration:1.8s}
+.connection-signal[data-state=disconnected] .signal-bars i,.connection-signal[data-state=timeout] .signal-bars i,.connection-signal[data-state=expired] .signal-bars i{background:var(--signal-tone);opacity:.35}
+.signal-error-dot,.signal-state-badge{position:absolute;top:7px;right:7px;background:var(--signal-tone);box-shadow:0 0 0 2px var(--bg);border-radius:50%;pointer-events:none}
+.signal-error-dot{width:8px;height:8px}
+.signal-error-dot::after{content:"";position:absolute;inset:0;background:inherit;border-radius:inherit;animation:signal-ping 1.6s ease-out infinite}
+.signal-state-badge{display:grid;place-items:center;width:11px;height:11px;top:5px;right:5px;color:var(--bg);font-size:8px;line-height:1;font-weight:700}
+.signal-state-badge svg{stroke-width:2}
+.connection-signal:not([data-state=disconnected]){cursor:default}
+.connection-signal:not([data-state=disconnected]):active{transform:none}
+.tooltip-bubble.connection-tooltip{min-width:164px;max-width:calc(100vw - 24px);padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--muted);box-shadow:0 8px 24px var(--shadow);font-size:12px;line-height:1.4;animation:signal-card-enter .15s ease-out}
+.signal-card-heading{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--text)}
+.signal-card-heading>i{width:7px;height:7px;flex-shrink:0;border-radius:50%;background:var(--signal-tone)}
+.signal-card-row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:6px}
+.signal-card-ms{display:flex;align-items:baseline;gap:4px;font-variant-numeric:tabular-nums;font-size:15px;font-weight:600;color:var(--text)}
+.signal-card-ms small{font-size:11px;font-weight:400;color:var(--muted)}
+.tooltip-bubble.connection-tooltip .signal-card-quality{margin:0;color:var(--success);font-size:12px;font-weight:500}
+.signal-card[data-quality=mid] .signal-card-quality{color:var(--warning)}
+.signal-card[data-quality=bad] .signal-card-quality{color:var(--danger)}
+.signal-card-note,.signal-card-detail{margin:6px 0 0;font-size:12px;line-height:1.5;max-width:220px}
+.signal-card-note{margin-top:8px;font-size:10px;color:var(--muted)}
 .signal-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
-@keyframes signal-rotate{to{transform:rotate(360deg)}}
-@keyframes signal-measure{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes signal-wave{0%,100%{opacity:.2}40%{opacity:1}}
+@keyframes signal-ping{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.6);opacity:0}}
+@keyframes signal-card-enter{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 
 .tooltip-bubble.workspace-tooltip{padding:4px 8px;border:0;border-radius:6px;background:var(--text);color:var(--bg);box-shadow:0 4px 12px var(--shadow);font-size:12px;line-height:1.3;animation:workspace-tooltip-in .15s ease-out}
 .tooltip-bubble.workspace-tooltip strong{font-size:12px;line-height:1.3;font-weight:400;color:inherit}
@@ -83,5 +100,5 @@
   .topbar-left{gap:7px}
   .topbar-left .workspace-name{min-width:0;max-width:none}
 }
-@media(prefers-reduced-motion:reduce){.workspace-toolbar *,.workspace-theme::before{transition:none!important}.workspace-tool-menu,.workspace-tooltip,.signal-spinner,.connection-signal[data-state=measuring] .signal-bar{animation:none}}
-@media(forced-colors:active){.workspace-tool-separator{background:GrayText}.workspace-theme{outline:1px solid ButtonText}.workspace-theme::before{background:Highlight;box-shadow:none}.workspace-theme button[aria-checked=true]{color:HighlightText}.connection-signal .signal-bar{fill:GrayText}.connection-signal .filled{fill:Highlight}.connection-signal[data-state=measuring] .signal-bar,.connection-signal[data-state=disconnected] .signal-bar{fill:none;stroke:GrayText}.connection-signal .signal-slash{stroke:ButtonText}.workspace-tool[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}.tooltip-bubble.workspace-tooltip{border:1px solid CanvasText;background:Canvas;color:CanvasText}}
+@media(prefers-reduced-motion:reduce){.workspace-toolbar *,.workspace-theme::before{transition:none!important}.workspace-tool-menu,.workspace-tooltip,.connection-tooltip,.connection-signal .signal-bars i,.signal-error-dot::after{animation:none}.connection-signal:is([data-state=connecting],[data-state=reconnecting],[data-state=measuring]) .signal-bars i{opacity:.7}}
+@media(forced-colors:active){.workspace-tool-separator{background:GrayText}.workspace-theme{outline:1px solid ButtonText}.workspace-theme::before{background:Highlight;box-shadow:none}.workspace-theme button[aria-checked=true]{color:HighlightText}.signal-bars i{background:GrayText!important}.signal-bars i.is-on{background:Highlight!important}.signal-state-badge,.signal-error-dot,.signal-card-heading>i{background:Highlight;color:HighlightText}.signal-state-badge,.signal-error-dot{box-shadow:0 0 0 2px Canvas}.signal-card-quality{color:CanvasText!important}.workspace-tool[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}.tooltip-bubble:is(.workspace-tooltip,.connection-tooltip){border:1px solid CanvasText;background:Canvas;color:CanvasText}}

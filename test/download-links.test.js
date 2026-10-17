@@ -20,6 +20,7 @@ test('registered language metadata handles uncommon extensions and extensionless
   for (const [file,id] of [['a.PHP','php'],['logo.svg','xml'],['a.cs','csharp'],['a.h','cpp'],['SConstruct','python'],['Dockerfile.worker','dockerfile'],['Containerfile','dockerfile'],['settings.toml','ini'],['.env.production','ini'],['a.tsx','typescript'],['a.jsx','javascript'],['unknown.blob','plaintext']]) assert.equal(editorLanguage(file,languages),id);
 });
 
-test('signal bars separate unknown latency from good, average and slow connections', () => {
-  assert.equal(signalLevel(null),0);assert.equal(signalLevel(1),3);assert.equal(signalLevel(149),3);assert.equal(signalLevel(150),2);assert.equal(signalLevel(499),2);assert.equal(signalLevel(500),1);assert.equal(signalLevel(Infinity),1);
+test('four signal bars preserve inclusive quality boundaries and leave unknown samples unfilled', () => {
+  for (const latency of [null, undefined, Infinity, NaN, -1]) assert.equal(signalLevel(latency), 0);
+  for (const [latency, level] of [[1,4],[80,4],[81,3],[150,3],[151,2],[300,2],[301,1]]) assert.equal(signalLevel(latency), level);
 });
