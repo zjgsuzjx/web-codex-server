@@ -93,7 +93,6 @@
   --composer-accent-ink: #fff;
   --composer-shadow: #00000008;
   --composer-popover-shadow: #17396820;
-  --composer-mode-shadow: #173d6c2b;
   --composer-permission-shadow: #203e6824;
   --composer-soft-shadow: #2563eb08;
   --composer-hover-shadow: #2563eb0c;
@@ -145,7 +144,6 @@
   --composer-accent-ink: var(--accent-ink);
   --composer-shadow: color-mix(in srgb,var(--text) 3.13%,transparent);
   --composer-popover-shadow: color-mix(in srgb,var(--accent) 12.54%,transparent);
-  --composer-mode-shadow: color-mix(in srgb,var(--accent) 16.86%,transparent);
   --composer-permission-shadow: color-mix(in srgb,var(--accent) 14.11%,transparent);
   --composer-soft-shadow: color-mix(in srgb,var(--accent) 3.13%,transparent);
   --composer-hover-shadow: color-mix(in srgb,var(--accent) 4.70%,transparent);
