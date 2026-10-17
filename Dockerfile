@@ -21,6 +21,7 @@ COPY test ./test
 COPY src/deltas.js ./src/deltas.js
 COPY src/model-options.js ./src/model-options.js
 COPY src/completion-notice.js ./src/completion-notice.js
+COPY src/connection-state.js ./src/connection-state.js
 COPY src/link-info.js ./src/link-info.js
 COPY src/editor-language.js ./src/editor-language.js
 COPY src/socket.js ./src/socket.js
