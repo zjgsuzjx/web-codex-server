@@ -19,9 +19,15 @@ export class LiveSocket {
       for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(new Error('连接已断开，请重试')); } this.pending.clear();
       if (this.ack) { clearTimeout(this.ack.timer); this.ack.reject(new Error('连接已断开')); this.ack = null; }
       if (this.stopped) return;
-      this.onStatus(e.code === 4001 ? 'expired' : 'disconnected');
+      this.expired = e.code === 4001;
+      this.onStatus(this.expired ? 'expired' : 'disconnected');
       if (e.code !== 4001) this.timer = setTimeout(() => this.connect(), Math.min(15000, 1000 * 2 ** this.attempts++));
     };
+  }
+  retry() {
+    if (this.stopped || this.expired || this.ws.readyState !== WebSocket.CLOSED) return;
+    clearTimeout(this.timer);
+    this.connect();
   }
   async ready() { if (this.ws.readyState === WebSocket.OPEN) return; for (let n = 0; n < 120; n++) { if (this.stopped) throw new Error('连接已关闭'); if (this.ws.readyState === WebSocket.OPEN) return; await new Promise(r => setTimeout(r, 250)); } throw new Error('无法连接服务器'); }
   async call(method, params = {}, timeoutMs = 130000) {

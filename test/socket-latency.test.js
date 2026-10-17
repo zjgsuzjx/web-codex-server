@@ -27,3 +27,28 @@ test('connected sockets sample immediately and every minute, clear stale latency
   t.mock.timers.tick(1000);assert.equal(states.at(-1),'reconnecting');connections[1].open();await settle();assert.equal(connections[1].sent.length,1);assert.equal(states.at(-1),'connected');
   socket.close();t.mock.timers.tick(60000);await settle();assert.equal(connections[1].sent.length,1);assert.equal(connections.length,2);
 });
+
+test('manual retry replaces the pending reconnect and ignores active, expired and stopped sockets', t => {
+  t.mock.timers.enable({ apis: ['setTimeout','setInterval'] });
+  const previousSocket=globalThis.WebSocket,previousLocation=globalThis.location;
+  const connections=[],states=[];
+  class FakeSocket {
+    static OPEN=1;static CLOSED=3;
+    constructor(){this.readyState=0;connections.push(this);}
+    send(){}
+    close(code=1000){this.readyState=3;this.onclose({code});}
+  }
+  globalThis.WebSocket=FakeSocket;globalThis.location={protocol:'http:',host:'localhost'};
+  t.after(()=>{globalThis.WebSocket=previousSocket;globalThis.location=previousLocation;});
+  const socket=new LiveSocket({csrf:'test'},()=>{},state=>states.push(state));
+  socket.retry();assert.equal(connections.length,1);
+  connections[0].close();assert.equal(states.at(-1),'disconnected');
+  socket.retry();assert.equal(connections.length,2);assert.equal(states.at(-1),'reconnecting');
+  socket.retry();t.mock.timers.tick(1000);assert.equal(connections.length,2);
+  connections[1].readyState=1;socket.retry();assert.equal(connections.length,2);
+  connections[1].close();socket.close();socket.retry();t.mock.timers.tick(30000);assert.equal(connections.length,2);
+  const expired=new LiveSocket({csrf:'test'},()=>{},state=>states.push(state));
+  connections[2].close(4001);assert.equal(states.at(-1),'expired');
+  expired.retry();t.mock.timers.tick(30000);assert.equal(connections.length,3);
+  expired.close();
+});

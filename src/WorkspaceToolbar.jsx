@@ -86,7 +86,7 @@ function MoreTools({ theme, customSkin, onAppearance, onTheme, onTerminal, hasPr
   </div>;
 }
 
-export default function WorkspaceToolbar({ theme, customSkin, status, latency, hasProject, terminalOpen, editor, editorToggle, settingsDisabled, onAppearance, onTheme, onTerminal, onEditor, onSettings }) {
+export default function WorkspaceToolbar({ theme, customSkin, status, latency, hasProject, terminalOpen, editor, editorToggle, settingsDisabled, onAppearance, onTheme, onTerminal, onEditor, onSettings, onRetry }) {
   return <div className="workspace-toolbar" role="group" aria-label="工作区工具">
     <div className="workspace-tool-group workspace-appearance-tools" role="group" aria-label="外观">
       <ToolButton label="壁纸与外观" tooltip="外观 / 皮肤" icon={Palette} onClick={onAppearance}/>
@@ -99,7 +99,7 @@ export default function WorkspaceToolbar({ theme, customSkin, status, latency, h
     </div>
     <span className="workspace-tool-separator" aria-hidden="true"/>
     <div className="workspace-tool-group" role="group" aria-label="状态与设置">
-      <ConnectionSignal status={status} latency={latency}/>
+      <ConnectionSignal status={status} latency={latency} onRetry={onRetry}/>
       <ToolButton label="提醒" description="功能即将开放" icon={CircleAlert} aria-disabled="true"/>
       <ToolButton label="设置" description={settingsDisabled ? '正在保存配置，请稍候' : undefined} icon={Settings} disabled={settingsDisabled} onClick={onSettings}/>
       <MoreTools theme={theme} customSkin={customSkin} onAppearance={onAppearance} onTheme={onTheme} onTerminal={onTerminal} hasProject={hasProject}/>
