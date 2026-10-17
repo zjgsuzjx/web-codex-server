@@ -11,7 +11,7 @@ export default function TerminalView({ socket, project, notify }) {
     setConnecting(true);
     let disposed = false, ready = false, input = '', timer;
     const colors = () => { const c = appearanceColors(); return { background: c.background, foreground: c.foreground, cursor: c.accent, selectionBackground: c.selection }; };
-    const term = new Terminal({ fontSize: 12, fontFamily: "Consolas, 'Cascadia Code', monospace", cursorBlink: true, scrollback: 3000, theme: colors() });
+    const term = new Terminal({ fontSize: 13, lineHeight: 1.5, fontFamily: "'Cascadia Code', Consolas, monospace", cursorBlink: true, scrollback: 3000, theme: colors() });
     const fit = new FitAddon(); term.loadAddon(fit); term.open(container.current); fit.fit();
     const recolor = () => { term.options.theme = colors(); };
     recolor(); window.addEventListener('appearancechange', recolor);

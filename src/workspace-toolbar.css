@@ -1,10 +1,10 @@
 .topbar-left{flex:1;overflow:hidden}
-.topbar-left>.icon-button{width:32px;height:32px;border-radius:9px}
+.topbar-left .icon-button{width:32px;height:32px;border-radius:9px}
 .workspace-toolbar{
   --toolbar-fg:var(--muted);
   --toolbar-strong:var(--text);
-  --toolbar-hover:color-mix(in srgb,var(--text) 6%,transparent);
-  --toolbar-press:color-mix(in srgb,var(--text) 10%,transparent);
+  --toolbar-hover:var(--ui-hover);
+  --toolbar-press:var(--ui-press);
   --toolbar-segment:color-mix(in srgb,var(--text) 5%,transparent);
   --toolbar-thumb:var(--bg);
   --toolbar-thumb-shadow:0 1px 2px color-mix(in srgb,var(--text) 12%,transparent),0 0 0 .5px color-mix(in srgb,var(--text) 6%,transparent);
@@ -36,8 +36,8 @@
 .workspace-theme::before{content:"";position:absolute;top:2px;left:2px;width:30px;height:28px;border-radius:8px;background:var(--toolbar-thumb);box-shadow:var(--toolbar-thumb-shadow);transition:transform .22s cubic-bezier(.3,.8,.3,1)}
 .workspace-theme[data-value=dark]::before{transform:translateX(30px)}
 
-.connection-signal,.signal-card{--signal-good:var(--skin-color-289e57,#16a34a);--signal-mid:var(--skin-color-c28b18,#f59e0b);--signal-bad:var(--skin-color-e5484d,#ef4444);--signal-tone:var(--accent)}
-:root[data-theme=dark] :is(.connection-signal,.signal-card){--signal-good:var(--skin-color-45c77b,#4ade80);--signal-mid:var(--skin-color-f4c550,#fbbf24);--signal-bad:var(--skin-color-ff6961,#f87171)}
+.connection-signal,.signal-card{--signal-good:var(--success);--signal-mid:var(--warning);--signal-bad:var(--danger);--signal-tone:var(--accent)}
+:root[data-theme=dark] :is(.connection-signal,.signal-card){--signal-good:var(--success);--signal-mid:var(--warning);--signal-bad:var(--danger)}
 :is(.connection-signal,.signal-card)[data-quality=good]{--signal-tone:var(--signal-good)}
 :is(.connection-signal,.signal-card)[data-quality=mid]{--signal-tone:var(--signal-mid)}
 :is(.connection-signal,.signal-card)[data-quality=bad]{--signal-tone:var(--signal-bad)}
@@ -77,10 +77,10 @@
 @keyframes signal-ping{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.6);opacity:0}}
 @keyframes signal-card-enter{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
 
-.tooltip-bubble.workspace-tooltip{padding:4px 8px;border:0;border-radius:6px;background:var(--text);color:var(--bg);box-shadow:0 4px 12px var(--shadow);font-size:12px;line-height:1.3;animation:workspace-tooltip-in .15s ease-out}
-.tooltip-bubble.workspace-tooltip strong{font-size:12px;line-height:1.3;font-weight:400;color:inherit}
-.tooltip-bubble.workspace-tooltip span{margin-top:4px;font-size:11px;line-height:1.5;color:inherit;opacity:.8}
-:root[data-theme=dark] .tooltip-bubble.workspace-tooltip{background:var(--side);color:var(--text);border:1px solid var(--line)}
+.tooltip-bubble.compact-tooltip{padding:4px 8px;border:0;border-radius:6px;background:var(--text);color:var(--bg);box-shadow:0 4px 12px var(--shadow);font-size:12px;line-height:1.3;animation:workspace-tooltip-in .15s ease-out}
+.tooltip-bubble.compact-tooltip strong{font-size:12px;line-height:1.3;font-weight:400;color:inherit}
+.tooltip-bubble.compact-tooltip span{margin-top:4px;font-size:11px;line-height:1.5;color:inherit;opacity:.8}
+:root[data-theme=dark] .tooltip-bubble.compact-tooltip{background:var(--side);color:var(--text);border:1px solid var(--line)}
 @keyframes workspace-tooltip-in{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:translateY(0)}}
 
 .workspace-more{position:relative;display:none}
@@ -100,5 +100,5 @@
   .topbar-left{gap:7px}
   .topbar-left .workspace-name{min-width:0;max-width:none}
 }
-@media(prefers-reduced-motion:reduce){.workspace-toolbar *,.workspace-theme::before{transition:none!important}.workspace-tool-menu,.workspace-tooltip,.connection-tooltip,.connection-signal .signal-bars i,.signal-error-dot::after{animation:none}.connection-signal:is([data-state=connecting],[data-state=reconnecting],[data-state=measuring]) .signal-bars i{opacity:.7}}
-@media(forced-colors:active){.workspace-tool-separator{background:GrayText}.workspace-theme{outline:1px solid ButtonText}.workspace-theme::before{background:Highlight;box-shadow:none}.workspace-theme button[aria-checked=true]{color:HighlightText}.signal-bars i{background:GrayText!important}.signal-bars i.is-on{background:Highlight!important}.signal-state-badge,.signal-error-dot,.signal-card-heading>i{background:Highlight;color:HighlightText}.signal-state-badge,.signal-error-dot{box-shadow:0 0 0 2px Canvas}.signal-card-quality{color:CanvasText!important}.workspace-tool[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}.tooltip-bubble:is(.workspace-tooltip,.connection-tooltip){border:1px solid CanvasText;background:Canvas;color:CanvasText}}
+@media(prefers-reduced-motion:reduce){.workspace-toolbar *,.workspace-theme::before{transition:none!important}.workspace-tool-menu,.compact-tooltip,.connection-tooltip,.connection-signal .signal-bars i,.signal-error-dot::after{animation:none}.connection-signal:is([data-state=connecting],[data-state=reconnecting],[data-state=measuring]) .signal-bars i{opacity:.7}}
+@media(forced-colors:active){.workspace-tool-separator{background:GrayText}.workspace-theme{outline:1px solid ButtonText}.workspace-theme::before{background:Highlight;box-shadow:none}.workspace-theme button[aria-checked=true]{color:HighlightText}.signal-bars i{background:GrayText!important}.signal-bars i.is-on{background:Highlight!important}.signal-state-badge,.signal-error-dot,.signal-card-heading>i{background:Highlight;color:HighlightText}.signal-state-badge,.signal-error-dot{box-shadow:0 0 0 2px Canvas}.signal-card-quality{color:CanvasText!important}.workspace-tool[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-2px}.tooltip-bubble:is(.compact-tooltip,.connection-tooltip){border:1px solid CanvasText;background:Canvas;color:CanvasText}}

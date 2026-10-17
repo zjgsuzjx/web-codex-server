@@ -1,0 +1,205 @@
+/* chat: shared semantic colors and control geometry live in tokens.css. */
+.chat-panel {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.chat-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  scrollbar-gutter: stable;
+}
+.welcome-kicker {
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 2.7px;
+  color: var(--subtle);
+  margin-bottom: 14px;
+}
+.suggestion-grid>button>svg:last-child {
+  position: absolute;
+  right: 15px;
+  top: 18px;
+  color: var(--subtle);
+}
+.welcome-create {
+  display: flex;
+  margin: 25px auto 0;
+}
+.turn {
+  margin-bottom: 18px;
+}
+.editor-open .welcome {
+  padding: 0 22px;
+  margin-top: 55px;
+}
+.editor-open .welcome h1 {
+  font-size: 23px;
+}
+.editor-open .suggestion-grid {
+  gap: 8px;
+}
+.editor-open .suggestion-grid>button {
+  padding: 13px;
+}
+.editor-open .suggestion-grid>button>span {
+  display: none;
+}
+.editor-open .suggestion-grid>button>svg:first-child {
+  margin-bottom: 10px;
+}
+.editor-open .suggestion-grid>button strong {
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+.editor-open .messages {
+  padding: 24px 20px 16px;
+}
+.turn {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+.welcome,.messages,.settings-content,.editor-placeholder {
+  animation: content-in .22s var(--motion-ease);
+}
+.welcome {
+  width: min(720px,100%);
+  padding: 0 28px;
+  margin: clamp(40px,11vh,120px) auto 40px;
+}
+.welcome-symbol .logo {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--ui-radius-lg);
+}
+.welcome-symbol {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.welcome h1 {
+  font-size: clamp(25px,2.4vw,32px);
+  letter-spacing: -1px;
+  font-weight: 550;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.welcome>p {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+.suggestion-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 32px;
+}
+.suggestion-grid>button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius-lg);
+  background: var(--bg);
+  transition: background var(--ui-duration),border-color var(--ui-duration);
+  transform: none;
+  box-shadow: none;
+}
+.suggestion-grid>button:hover {
+  background: var(--ui-hover);
+  border-color: var(--ui-border-hover);
+  transform: none;
+  box-shadow: none;
+}
+.suggestion-grid>button>svg:first-child {
+  color: var(--muted);
+  margin-bottom: 18px;
+  width: 18px;
+  height: 18px;
+}
+.suggestion-grid strong {
+  font-size: 13px;
+  font-weight: 550;
+  margin-bottom: 7px;
+}
+.suggestion-grid>button>span {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+  padding-right: 5px;
+}
+.messages {
+  width: 100%;
+  max-width: 860px;
+  padding: 36px 32px 24px;
+  margin: auto;
+}
+@media (min-width:1600px) {
+  .editor-open .welcome {
+    margin-top: 90px;
+  }
+  .editor-open .welcome h1 {
+    font-size: 28px;
+  }
+  .editor-open .suggestion-grid>button>span {
+    display: block;
+  }
+  .editor-open .suggestion-grid>button {
+    padding: 17px;
+  }
+  .editor-open .suggestion-grid>button strong {
+    font-size: 12px;
+  }
+}
+@media (max-width:1100px) {
+  .editor-open .chat-panel {
+    display: none;
+  }
+}
+@media (max-width:800px) {
+  .welcome-kicker {
+    font-size: 8px;
+  }
+  .welcome {
+    margin-top: 9vh;
+    max-width: 550px;
+    padding: 0 20px;
+    margin: 44px auto 28px;
+  }
+  .welcome h1 {
+    font-size: 26px;
+    letter-spacing: -.7px;
+  }
+  .welcome>p {
+    font-size: 12px;
+  }
+  .suggestion-grid {
+    margin-top: 24px;
+    gap: 10px;
+  }
+  .suggestion-grid>button {
+    padding: 16px;
+  }
+  .suggestion-grid strong {
+    font-size: 12px;
+  }
+  .suggestion-grid>button>span {
+    font-size: 11px;
+  }
+  .messages {
+    padding: 24px 16px 20px;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .suggestion-grid>button:hover,.conversation-tool:hover:not(:disabled),.conversation-tool:active:not(:disabled) {
+    transform: none;
+  }
+}
