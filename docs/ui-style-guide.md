@@ -20,6 +20,8 @@ The composer intentionally retains its original compact bordered controls, resou
 - Use `Modal` and `ActionDialog` for dialogs and confirmations. Preserve their focus management, inert background, busy state, and cancellation behavior.
 - `SettingsPanel` owns the settings navigation and consistent section headings; appearance editing remains in `Appearance` with its current-device restriction.
 
+General settings display a shared optimistic draft and persist through `createSettingsQueue()` in `shared/settings-save.js`. Requests are serialized, unsent edits are merged, and rejected fields revert to confirmed values while later changes continue saving. The queue belongs to the workspace so closing/reopening settings retains pending edits; composer settings use the same queue. Preserve stable controls and the close button during saves. Settings tabs have no entrance movement, and the dialog fades without backdrop blur or a transform that would disturb fixed-position dropdowns.
+
 Monaco and xterm cannot consume CSS expressions such as `color-mix()`. Read their palette through `appearanceColors()` in `appearance-runtime.js`, which resolves theme values to concrete hex colors. Keep the editor selection distinct from its quiet current-line highlight.
 
 ## Visual verification

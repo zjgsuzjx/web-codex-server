@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Settings, Palette, KeyRound, Code2, Sparkles, ShieldCheck, RefreshCw, LogOut, ChevronRight, LoaderCircle, Check } from 'lucide-react';
 import Modal from './Modal';
 import IconButton from './IconButton';
@@ -32,7 +32,7 @@ export default function SettingsPanel({
   onResetAppearance,
   initialTab = 'general',
   settings,
-  onSettings,
+  settingsQueue,
   socket,
   models,
   account,
@@ -49,16 +49,10 @@ export default function SettingsPanel({
     [result, setResult] = useState(null),
     [busy, setBusy] = useState(false);
   const pending = useRef(false);
-  async function applySettings(next) {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(true);
-    try {
-      await onSettings(next);
-    } catch {} finally {
-      pending.current = false;
-      setBusy(false);
-    }
+  const { value: draft, pending: saving, error: saveError } = useSyncExternalStore(settingsQueue.subscribe, settingsQueue.getSnapshot);
+  useEffect(() => { settingsQueue.sync(settings); }, [settings, settingsQueue]);
+  function applySettings(next) {
+    settingsQueue.update(next).catch(() => {}); // The queue rolls back and reports the failed fields.
   }
   useEffect(() => {
     let cancelled = false;
@@ -98,13 +92,13 @@ export default function SettingsPanel({
           setResult(null);
         }} aria-current={tab === t.id ? "page" : undefined}><t.icon size={16} />{t.name}</button>)}</nav><div className="settings-content" key={tab}>{tab !== "appearance" && <SettingsHeading page={settingsPages.find(page => page.id === tab)} />}
     {tab === 'appearance' && <Appearance api={api} socket={socket} onUpdate={onSkins} onReset={onResetAppearance} notify={notify} />}
-    {tab === 'general' && <><ModelControls models={models} value={settings} onChange={applySettings} disabled={busy} /><p className="field-hint">执行审批可在聊天输入框旁直接选择。</p><label>对话模式<Select value={settings.mode} disabled={busy} onChange={e => applySettings({
-              ...settings,
+    {tab === 'general' && <><ModelControls models={models} value={draft} onChange={applySettings} disabled={busy} /><p className="field-hint">执行审批可在聊天输入框旁直接选择。</p><label>对话模式<Select value={draft.mode} disabled={busy} onChange={e => applySettings({
+              ...draft,
               mode: e.target.value
-            })}><option value="default">执行模式</option><option value="plan">计划模式</option></Select></label><label className="checkbox-label"><input type="checkbox" checked={settings.networkAccess} disabled={busy || settings.executionTarget === 'server'} onChange={e => applySettings({
-              ...settings,
+            })}><option value="default">执行模式</option><option value="plan">计划模式</option></Select></label><label className="checkbox-label"><input type="checkbox" checked={draft.networkAccess} disabled={busy || draft.executionTarget === 'server'} onChange={e => applySettings({
+              ...draft,
               networkAccess: e.target.checked
-            })} />允许用户容器访问网络</label><p className="field-hint">{settings.executionTarget === 'server' ? '当前为服务器 root 模式。返回聊天框的执行权限菜单，可切回用户工作区。' : '工作区可以操作你自己的全部项目，不能修改服务器系统文件。切换网络权限会重启工作区。'}</p><p className="settings-apply-status" role="status">{busy ? <><LoaderCircle size={13} className="spin" />正在应用…</> : <><Check size={13} />更改会立即应用</>}</p></>}
+            })} />允许用户容器访问网络</label><p className="field-hint">{draft.executionTarget === 'server' ? '当前为服务器 root 模式。返回聊天框的执行权限菜单，可切回用户工作区。' : '工作区可以操作你自己的全部项目，不能修改服务器系统文件。切换网络权限会重启工作区。'}</p><p className="settings-apply-status" role="status">{saving ? <><LoaderCircle size={13} className="spin" />正在保存更改…</> : saveError ? '部分更改未保存' : <><Check size={13} />更改会立即应用</>}</p>{saveError && <p className="form-error" role="alert">{saveError}</p>}</>}
     {tab === 'account' && <><div className="account-status"><KeyRound size={22} /><div><strong>{account?.account?.type === 'chatgpt' ? account.account.email : account?.account?.type === 'apiKey' ? 'API Key 已配置' : account?.requiresOpenaiAuth === false ? '使用自定义服务商' : '尚未连接 Codex 账号'}</strong><span>{account?.account?.planType || '账号凭据仅存储在你的工作区'}</span></div><div className="account-actions"><IconButton title="刷新账号状态" disabled={busy} onClick={() => run(reload)}><RefreshCw size={15} /></IconButton>{account?.account && <IconButton title="退出 ChatGPT 账号" className="account-logout" disabled={busy} onClick={() => run(async () => {
                 await socket.call('account/logout');
                 await reload();

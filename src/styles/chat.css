@@ -62,7 +62,7 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 220px;
 }
-.welcome,.messages,.settings-content,.editor-placeholder {
+.welcome,.messages,.editor-placeholder {
   animation: content-in .22s var(--motion-ease);
 }
 .welcome {
