@@ -1,6 +1,6 @@
-import Select from './Select';
+import IconButton from './IconButton';
+import SettingsPanel from './SettingsPanel';
 import ModelPicker from './ModelPicker';
-import ModelControls from './ModelControls';
 import { effortTone } from './model-options';
 import Tooltip from './Tooltip';
 import RowMenu, { useRowMenuDismissal } from './RowMenu';
@@ -11,12 +11,12 @@ import Modal from './Modal';
 import useActionDialog from './ActionDialog';
 import ModePicker from './ModePicker';
 import UserAvatar from './UserAvatar';
-import ProfileAvatar from './ProfileAvatar';
-import Appearance, { AppearanceProvider, useAppearance } from './Appearance';
+
+import { AppearanceProvider, useAppearance } from './Appearance';
 import WorkspaceWelcome from './WorkspaceWelcome';
-import React, { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Plus, ArrowUp, Square, Settings, PanelLeft, Code2, MessageSquare, Folder, FolderOpen, File, Upload, Download, X, ChevronRight, ChevronDown, Search, LogOut, Check, Copy, Save, Terminal, ShieldCheck, Sparkles, ArrowRight, RefreshCw, GitFork, Archive, LoaderCircle, Paperclip, Menu, KeyRound, ExternalLink, Pencil, Trash2, AlertCircle, Palette } from 'lucide-react';
+import { Plus, ArrowUp, Square, Settings, PanelLeft, Code2, MessageSquare, Folder, FolderOpen, File, Upload, Download, X, ChevronRight, ChevronDown, Search, Check, Copy, Save, Terminal, ShieldCheck, Sparkles, ArrowRight, RefreshCw, GitFork, Archive, LoaderCircle, Paperclip, Pencil, Trash2, AlertCircle } from 'lucide-react';
 import { Markdown, GeneratedImage, ToolOutput } from './ChatOutput';
 import { contentImage, isProcessItem, reasoningText, toolContent } from '../shared/chat-content.js';
 import { LiveSocket } from './socket';
@@ -25,7 +25,7 @@ import './workspace-toolbar.css';
 import '@fontsource-variable/inter';
 import PermissionPicker from './PermissionPicker';
 import UsageOverview from './UsageOverview';
-import UserManagement, { roleName } from './UserManagement';
+import { roleName } from './UserManagement';
 import { createDeltaBuffer, applyDeltas, applyLifecycle, mergeTurns } from './deltas';
 import { AttachmentList, AttachmentPreview } from './Attachments';
 import ContextUsage from './ContextUsage';
@@ -36,8 +36,7 @@ import UserInputRequest from './UserInputRequest';
 import ApprovalRequests from './ApprovalRequests';
 import { isUserInput } from '../shared/user-input.js';
 import { isRunning, mergeActivity } from '../shared/turn-activity.js';
-import InviteManagement from './InviteManagement';
-import ChatGPTLogin from './ChatGPTLogin';
+
 import FileTree, { ExplorerDivider } from './FileExplorer';
 import FileImage from './FileImage';
 import StorageManager from './StorageManager';
@@ -52,7 +51,7 @@ async function api(url, options = {}) {
 }
 const bytes = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
 function Logo({ small = false }) { return <div className={`logo ${small ? 'small' : ''}`}><Sparkles size={small ? 16 : 23} strokeWidth={1.6} /></div>; }
-function IconButton({ title, children, onClick, disabled, className = '', buttonRef, ...props }) { return <button type="button" className={`icon-button ${className}`} title={title} aria-label={title} onClick={onClick} disabled={disabled} ref={buttonRef} {...props}>{children}</button>; }
+
 function usePresence(open) {
   const [present, setPresent] = useState(open);
   useEffect(() => { if (open) { setPresent(true); return; } const timer = setTimeout(() => setPresent(false), window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240); return () => clearTimeout(timer); }, [open]);
@@ -360,7 +359,7 @@ function Workspace({ user, setUser, theme, setTheme }) {
     {progress&&<div className="upload-progress"><Upload size={17}/><div><strong>{progress.phase||'正在上传'} {progress.index}/{progress.count}</strong><span>{progress.name} · {bytes(progress.done)} / {bytes(progress.total)}</span><div className="progress-bar"><i style={{width:`${progress.total?progress.done/progress.total*100:0}%`}}/></div></div><IconButton title="取消上传" onClick={()=>abortUpload.current.abort()}><X size={16}/></IconButton></div>}
     {toast&&<div className={`toast ${toast.error?'error':''}`} role="status">{toast.error?<ShieldCheck size={16}/>:<Check size={16}/>}<span>{toast.message}</span><IconButton title="关闭提示" onClick={()=>setToast(null)}><X size={14}/></IconButton></div>}
     {modal==='project'&&<Modal title="新建项目" subtitle="每个项目都是一个独立的创作空间。" onClose={()=>setModal(null)}><form className="modal-form" onSubmit={async e=>{e.preventDefault();try{await newProject(new FormData(e.target).get('name'));}catch(e){notify(e.message,true);}}}><label>项目名称<input name="name" required autoFocus maxLength={80} placeholder="例如：我的个人网站"/></label><p className="field-hint">创建后，你可以上传现有代码，或让 Codex 从头开始。</p><button className="primary full"><Plus size={16}/>创建项目</button></form></Modal>}
-    {['settings','appearance'].includes(modal)&&<SettingsPanel user={user} onAvatar={updateAvatar} onSkins={updateSkins} onResetAppearance={()=>setTheme('light')} initialTab={modal==='appearance'?'appearance':'general'} settings={settings} onSettings={updateSettings} socket={socket.current} models={models} account={account} reload={()=>loadCapabilities(true)} notify={notify} onClose={()=>setModal(null)} onLogout={async()=>{await api('/logout',{method:'POST'});setUser(null);}}/>}
+    {['settings','appearance'].includes(modal)&&<SettingsPanel api={api} user={user} onAvatar={updateAvatar} onSkins={updateSkins} onResetAppearance={()=>setTheme('light')} initialTab={modal==='appearance'?'appearance':'general'} settings={settings} onSettings={updateSettings} socket={socket.current} models={models} account={account} reload={()=>loadCapabilities(true)} notify={notify} onClose={()=>setModal(null)} onLogout={async()=>{await api('/logout',{method:'POST'});setUser(null);}}/>}
     {modal==='liveTerminal'&&project&&<Modal title="网页终端" subtitle={settings.executionTarget==='server'?'服务器 root 终端，可以操作系统文件和服务。':'你的独立项目终端，只能修改自己的工作区。输入 codex 即可启动。'} wide onClose={()=>setModal(null)}><Suspense fallback={<LoadingPlaceholder label="正在加载终端…" variant="code" rows={8}/>}><TerminalView socket={socket.current} project={project} notify={notify} theme={theme}/></Suspense></Modal>}{modal==='terminal'&&<Modal title="项目终端" subtitle={settings.executionTarget==='server'?'命令会以 root 权限在服务器执行，输出显示在对话里。':'命令会在你的独立用户工作区执行，输出显示在对话里。'} onClose={()=>setModal(null)}><form className="modal-form" onSubmit={async e=>{e.preventDefault();if(commandPending.current||!thread||!command.trim())return;commandPending.current=true;setCommandBusy(true);try{await socket.current.call('thread/shellCommand',{threadId:thread.id,command,timeoutMs:60000});setModal(current=>current==='terminal'?null:current);}catch(e){notify(e.message,true);}finally{commandPending.current=false;setCommandBusy(false);}}}><label>Shell 命令<textarea className="code-input" value={command} onChange={e=>setCommand(e.target.value)} placeholder="git status --short" rows={3} required/></label><button className="primary full" disabled={commandBusy||!command.trim()||status!=="connected"}>{commandBusy?<LoaderCircle size={15} className="spin"/>:<Terminal size={15}/>} {commandBusy?"执行中…":"执行命令"}</button></form></Modal>}
   </div>{dialogs.element}{welcomeVisible && <WorkspaceWelcome user={user} ready={status==='connected'&&!listsLoading&&!welcomeError} error={welcomeError} onExited={enterWorkspace} onContinue={enterWorkspace} onRetry={()=>location.reload()}/>}</>;
 }
@@ -388,19 +387,5 @@ function TurnMessages({turn,onFile,notify,onAttachment,threadId,onReview}) {
   const before=items.filter(item=>item.type==='userMessage'),after=items.filter(item=>item.type!=='userMessage'&&!process(item));
   return <>{before.map(render)}{thoughts.length>0&&<details className="thought-group"><summary><Sparkles size={14}/><span>思考与执行过程</span><small>{thoughts.length} 项记录</small><ChevronDown size={14}/></summary><div>{thoughts.map(render)}</div></details>}{after.map(render)}<ChangeSummary turn={turn} threadId={threadId} onReview={onReview}/></>;
 }
-function SettingsPanel({ user, onAvatar, onSkins, onResetAppearance, initialTab = 'general', settings, onSettings, socket, models, account, reload, notify, onClose, onLogout }) {
-  const [tab,setTab]=useState(initialTab),[toml,setToml]=useState(''),[loadedConfig,setLoadedConfig]=useState(false),[configError,setConfigError]=useState(false),[apiKey,setApiKey]=useState(''),[result,setResult]=useState(null),[busy,setBusy]=useState(false);
-  const pending = useRef(false);
-  async function applySettings(next) { if (pending.current) return; pending.current = true; setBusy(true); try { await onSettings(next); } catch {} finally { pending.current = false; setBusy(false); } }
-  useEffect(()=>{let cancelled=false;if(tab==='advanced'&&!loadedConfig){setConfigError(false);api('/config').then(r=>{if(!cancelled){setToml(r.toml);setLoadedConfig(true);}}).catch(e=>{if(!cancelled){setConfigError(true);notify(e.message,true);}});}return()=>{cancelled=true;};},[tab]);
-  async function run(fn){if(pending.current)return;pending.current=true;setBusy(true);try{await fn();}catch(e){notify(e.message,true);}finally{pending.current=false;setBusy(false);}}
-  return <Modal title="工作区设置" subtitle="让 Codex 按照你的方式工作。" className={tab==='appearance'?'appearance-settings':''} dismissible={!busy} onClose={onClose} wide><div className="settings-layout"><nav className="settings-nav">{[{id:'general',icon:Settings,name:'通用'},{id:'appearance',icon:Palette,name:'壁纸与外观'},{id:'account',icon:KeyRound,name:'Codex 账号'},{id:'advanced',icon:Code2,name:'高级配置'},{id:'tools',icon:Sparkles,name:'工具与技能'},{id:'profile',icon:ShieldCheck,name:'个人账号'}].map(t=><button key={t.id} className={tab===t.id?'active':''} onClick={()=>{setTab(t.id);setResult(null);}}><t.icon size={16}/>{t.name}</button>)}</nav><div className="settings-content" key={tab}>
-    {tab==='appearance'&&<Appearance api={api} socket={socket} onUpdate={onSkins} onReset={onResetAppearance} notify={notify}/>}
-    {tab==='general'&&<><h3>模型与执行</h3><ModelControls models={models} value={settings} onChange={applySettings} disabled={busy}/><p className="field-hint">执行审批可在聊天输入框旁直接选择。</p><label>对话模式<Select value={settings.mode} disabled={busy} onChange={e=>applySettings({...settings,mode:e.target.value})}><option value="default">执行模式</option><option value="plan">计划模式</option></Select></label><label className="checkbox-label"><input type="checkbox" checked={settings.networkAccess} disabled={busy||settings.executionTarget==='server'} onChange={e=>applySettings({...settings,networkAccess:e.target.checked})}/>允许用户容器访问网络</label><p className="field-hint">{settings.executionTarget==='server'?'当前为服务器 root 模式。返回聊天框的执行权限菜单，可切回用户工作区。':'工作区可以操作你自己的全部项目，不能修改服务器系统文件。切换网络权限会重启工作区。'}</p><p className="settings-apply-status" role="status">{busy?<><LoaderCircle size={13} className="spin"/>正在应用…</>:<><Check size={13}/>更改会立即应用</>}</p></>}
-    {tab==='account'&&<><h3>Codex 账号</h3><div className="account-status"><KeyRound size={22}/><div><strong>{account?.account?.type==='chatgpt'?account.account.email:account?.account?.type==='apiKey'?'API Key 已配置':account?.requiresOpenaiAuth===false?'使用自定义服务商':'尚未连接 Codex 账号'}</strong><span>{account?.account?.planType||'账号凭据仅存储在你的工作区'}</span></div><div className="account-actions"><IconButton title="刷新账号状态" disabled={busy} onClick={()=>run(reload)}><RefreshCw size={15}/></IconButton>{account?.account&&<IconButton title="退出 ChatGPT 账号" className="account-logout" disabled={busy} onClick={()=>run(async()=>{await socket.call('account/logout');await reload();notify('ChatGPT 账号已退出');})}><LogOut size={15}/></IconButton>}</div></div><h4>使用 ChatGPT 账号</h4><ChatGPTLogin socket={socket} reload={reload} notify={notify} disabled={busy}/><div className="settings-divider"/><h4>使用 API Key</h4><label>OpenAI API Key<input type="password" autoComplete="off" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="sk-…"/></label><button className="primary full" disabled={busy||!apiKey} onClick={()=>run(async()=>{await socket.call('account/login/start',{type:'apiKey',apiKey});setApiKey('');reload();notify('API Key 已保存');})}>连接 API Key</button></>}
-    {tab==='advanced'&&<><h3>完整 Codex CLI 配置</h3><p className="field-hint">这里直接编辑你工作区的 config.toml，支持自定义服务商、MCP、功能开关、配置档案及其他 CLI 设置。保存会重启该用户的 Codex 进程，请先停止运行中的任务。</p>{!loadedConfig&&(configError?<p className="form-error" role="alert">配置读取失败，请切换标签后重试。</p>:<LoadingPlaceholder label="正在读取配置…" variant="code" rows={7}/>)}<textarea hidden={!loadedConfig} className="toml-editor" aria-label="Codex TOML 配置" spellCheck="false" value={toml} onChange={e=>setToml(e.target.value)}/><button className="primary full" disabled={busy||!loadedConfig} onClick={()=>run(async()=>{await api('/config',{method:'PUT',body:{toml}});notify('配置已保存，Codex 将重新连接');reload();})}>保存并重启 Codex</button></>}
-    {tab==='tools'&&<><h3>工具与技能</h3><p className="field-hint">MCP 和功能开关可以在高级配置中管理。项目内的 AGENTS.md、技能和代码会被 Codex 自动读取。</p><div className="tool-buttons">{[['skills/list','查看已安装技能'],['mcpServerStatus/list','查看 MCP 工具'],['app/list','查看连接器'],['experimentalFeature/list','查看功能开关']].map(([method,title])=><button className="secondary" disabled={busy} key={method} onClick={()=>run(async()=>{setResult(await socket.call(method,{limit:100}));})}>{title}<ChevronRight size={14}/></button>)}</div><button className="secondary full" disabled={busy} onClick={()=>run(async()=>{await socket.call('config/mcpServer/reload');notify('MCP 配置已重新加载');})}><RefreshCw size={14}/>重新加载 MCP</button>{result&&<pre className="settings-result">{JSON.stringify(result,null,2)}</pre>}</>}
-    {tab==='profile'&&<><h3>个人账号</h3><ProfileAvatar user={user} socket={socket} api={api} onUpdate={onAvatar} notify={notify} Dialog={Modal}/><h4>修改密码</h4><form onSubmit={e=>{e.preventDefault();const values=Object.fromEntries(new FormData(e.target));run(async()=>{await api('/password',{method:'POST',body:values});notify('密码已修改，请重新登录');location.reload();});}}><label>原密码<input type="password" name="oldPassword" required autoComplete="current-password"/></label><label>新密码<input type="password" name="newPassword" minLength={10} maxLength={128} required autoComplete="new-password"/></label><button className="secondary full" disabled={busy}>修改密码</button></form>{['admin','superadmin'].includes(user.role)&&<><div className="settings-divider"/><UserManagement api={api} user={user} notify={notify}/>{user.role==='superadmin'&&<><div className="settings-divider"/><InviteManagement api={api} notify={notify}/></>}<button className="secondary full" onClick={()=>run(async()=>setResult(await api('/admin/audit')))}>查看操作记录</button></>}{result&&<pre className="settings-result">{JSON.stringify(result,null,2)}</pre>}<div className="settings-divider"/><button className="secondary full danger-text" onClick={()=>run(onLogout)}><LogOut size={15}/>退出登录</button></>}
-  </div></div></Modal>;
-}
+
 createRoot(document.getElementById('root')).render(<App/>);

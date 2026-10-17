@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { Check, ImagePlus, LoaderCircle, Monitor, Palette, RotateCcw, Smartphone, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { avatarDimensions } from '../shared/avatar.js';
 import { skinDevice, skinTokens, WALLPAPER_MAX_BYTES } from '../shared/skins.js';
-import { legacySkinColors } from './skin-colors';
 import Select from './Select';
 import Modal from './Modal';
 import './appearance.css';
@@ -20,7 +19,7 @@ export function AppearanceProvider({ user, fallbackTheme, children }) {
     root.dataset.theme = theme;
     if (current && tokens) {
       root.dataset.skin = 'custom';
-      const values = { ...tokens, ...legacySkinColors(tokens), 'scroll-thumb': tokens.line, 'scroll-hover': tokens.muted, 'scroll-active': tokens.accent,
+      const values = { ...tokens, 'scroll-thumb': tokens.line, 'scroll-hover': tokens.muted, 'scroll-active': tokens.accent,
         'diff-add': tokens.success, 'diff-remove': tokens.danger, 'diff-add-bg': `color-mix(in srgb,${tokens.success} 12%,${tokens.panel})`, 'diff-remove-bg': `color-mix(in srgb,${tokens.danger} 12%,${tokens.panel})`,
         'permission-full': tokens.warning, 'permission-full-bg': `color-mix(in srgb,${tokens.warning} 10%,${tokens.panel})`, 'permission-full-line': tokens.warning,
         wallpaper: `url("${current.imageUrl}")`, 'wallpaper-fit': current.config.wallpaper.fit, 'wallpaper-position': `${current.config.wallpaper.x}% ${current.config.wallpaper.y}%`, 'wallpaper-shade': current.config.wallpaper.shade };

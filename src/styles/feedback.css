@@ -1,0 +1,367 @@
+/* feedback: shared semantic colors and control geometry live in tokens.css. */
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.initial-loading {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+}
+.toast>svg {
+  color: var(--accent);
+}
+.toast.error {
+  border-color: color-mix(in srgb,var(--danger) 31.4%,transparent);
+}
+.toast.error>svg {
+  color: var(--danger);
+}
+.toast>span {
+  line-height: 1.7;
+}
+.toast .icon-button {
+  height: 20px;
+  width: 20px;
+}
+.upload-progress>svg {
+  color: var(--accent);
+}
+.upload-progress>div {
+  flex: 1;
+  min-width: 0;
+}
+.upload-progress strong {
+  font-size: 11px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 7px;
+}
+.upload-progress span {
+  font-size: 9px;
+  color: var(--muted);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 11px;
+}
+.upload-progress .icon-button {
+  width: 20px;
+  height: 20px;
+}
+/* Static page text has no insertion caret; real editing surfaces keep theirs. */
+/* Shared scrollbars, including horizontal code blocks and embedded surfaces. */
+/* Tooltips are rendered outside scroll containers so they stay within the viewport. */
+/* Keep the side rail mounted for both directions of the transition. */
+.upload-progress,.approval,.context-chip {
+  animation: content-in .2s var(--motion-ease);
+}
+/* Loading states reserve space without masking loaded content during refresh. */
+.loading-placeholder {
+  width: 100%;
+  min-width: 0;
+  padding: 24px;
+  color: var(--muted);
+  animation: fade-in .18s ease-out;
+}
+.loading-caption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+.skeleton {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 12px;
+  border-radius: var(--ui-radius-sm);
+  background: var(--hover);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg,transparent,color-mix(in srgb,var(--bg) 65%,transparent),transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+.skeleton:nth-child(3n+2) {
+  width: 82%;
+}
+.skeleton:nth-child(3n) {
+  width: 62%;
+}
+.loading-list {
+  padding: 10px 12px;
+}
+.loading-list .loading-caption {
+  font-size: 10px;
+}
+.loading-list .skeleton-lines {
+  gap: 14px;
+  margin-top: 14px;
+}
+.loading-list .skeleton {
+  height: 13px;
+}
+.loading-conversation {
+  padding: 10px 0;
+}
+.loading-conversation .skeleton-lines {
+  gap: 16px;
+  margin-top: 28px;
+}
+.loading-conversation .skeleton:first-child {
+  width: 52%;
+  height: 50px;
+  margin-left: auto;
+  border-radius: var(--ui-radius-lg);
+}
+.loading-conversation .skeleton:nth-child(2) {
+  width: 25%;
+  margin-top: 16px;
+}
+.loading-conversation .skeleton:nth-child(5) {
+  height: 80px;
+  width: 100%;
+  margin: 7px 0;
+}
+.loading-code {
+  flex: 1;
+  padding: 26px 22px;
+  min-height: 220px;
+}
+.loading-code .skeleton {
+  height: 10px;
+}
+.loading-code .skeleton-lines {
+  gap: 15px;
+}
+.loading-code .skeleton:nth-child(even) {
+  margin-left: 16px;
+  width: 65%;
+}
+.initial-loading {
+  flex-direction: column;
+  gap: 8px;
+}
+.initial-loading>.loading-placeholder {
+  max-width: 290px;
+  padding: 15px 24px;
+}
+.initial-loading .loading-caption {
+  justify-content: center;
+}
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes content-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(.98);
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%,8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%,0);
+  }
+}
+/* Composer model controls share the settings dropdowns and workspace tokens. */
+/* Generated media stays visible alongside the completed answer. */
+/* Link pills retain the label and make the destination easy to recognize. */
+/* Reserve space while decoding images, including newly opened previews. */
+/* File references stay in the sentence while sharing the workspace link style. */
+/* Per-turn file changes use the workspace's panels and compact controls. */
+/* Live reasoning fits the message rhythm; only the text carries the shimmer. */
+@keyframes thinking-shimmer {
+  0%,100% {
+    background-position: 100% 0;
+    opacity: 1;
+  }
+  50% {
+    background-position: 0% 0;
+    opacity: .75;
+  }
+}
+/* Storage recovery and the resizable file workspace. */
+/* Account portraits and a bounded, touch and keyboard friendly crop editor. */
+/* The welcome view follows the authenticated session and gateway readiness. */
+@keyframes entry-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes entry-workspace-in {
+  from {
+    opacity: .65;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes entry-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+/* Keep authentication content in normal flow, including long server errors. */
+/* Shared application dialogs: clear intent, contextual detail, inline errors. */
+/* The mode control shares the size and visual rhythm of the permission picker. */
+/* Permissions, immediate settings and the header theme control. */
+/* Approval requests remain discoverable after closing their automatic dialog. */
+.toast {
+  position: fixed;
+  bottom: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  z-index: 150;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-popover);
+  font-size: 12px;
+  max-width: min(90vw,660px);
+  color: var(--text);
+  animation: toast-in .2s var(--motion-ease);
+}
+.upload-progress {
+  position: fixed;
+  bottom: 25px;
+  right: 25px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 340px;
+  max-width: 90vw;
+  padding: 17px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--ui-shadow-popover);
+  border-radius: var(--ui-radius-lg);
+  z-index: 90;
+}
+@media (max-width:800px) {
+  .toast {
+    bottom: 20px;
+  }
+  .loading-code {
+    padding: 20px 16px;
+  }
+  .loading-list {
+    padding: 10px 8px;
+  }
+}
+@media (forced-colors:active) {
+  .skeleton {
+    background: GrayText;
+  }
+  .skeleton::after {
+    display: none;
+  }
+}

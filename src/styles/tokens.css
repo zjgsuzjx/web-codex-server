@@ -1,0 +1,81 @@
+/* Shared foundations. Custom wallpaper themes replace the semantic colors below. */
+:root {
+  font-family: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+  font-synthesis: none;
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+  color: var(--text);
+  --bg: #ffffff;
+  --side: #f7f8fa;
+  --panel: #f8fafc;
+  --text: #182230;
+  --muted: #64748b;
+  --subtle: #8793a5;
+  --line: #e5e9f0;
+  --accent: #3b6cf6;
+  --accent-ink: #ffffff;
+  --danger: #c7354e;
+  --success: #16803d;
+  --warning: #94620b;
+  --editor: var(--bg);
+  --hover: color-mix(in srgb, var(--text) 6%, transparent);
+  --shadow: #18223014;
+
+  --ui-hover: color-mix(in srgb, var(--text) 6%, transparent);
+  --ui-press: color-mix(in srgb, var(--text) 10%, transparent);
+  --ui-selected: color-mix(in srgb, var(--accent) 10%, transparent);
+  --ui-field: color-mix(in srgb, var(--text) 3%, var(--bg));
+  --ui-border-hover: color-mix(in srgb, var(--text) 20%, var(--bg));
+  --ui-focus: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ui-radius-sm: 6px;
+  --ui-radius: 10px;
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+  --ui-radius-dialog: 20px;
+  --ui-control: 36px;
+  --ui-field-height: 40px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-shadow-sm: 0 1px 3px var(--shadow);
+  --ui-shadow-popover: 0 8px 24px var(--shadow), 0 1px 3px var(--shadow);
+  --ui-shadow-dialog: 0 24px 80px color-mix(in srgb, var(--text) 16%, transparent);
+  --ui-duration: .15s;
+  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+  --scroll-thumb: color-mix(in srgb, var(--muted) 30%, transparent);
+  --scroll-hover: color-mix(in srgb, var(--muted) 55%, transparent);
+  --scroll-active: var(--accent);
+  --diff-add: var(--success);
+  --diff-remove: var(--danger);
+  --diff-add-bg: color-mix(in srgb, var(--success) 9%, var(--bg));
+  --diff-remove-bg: color-mix(in srgb, var(--danger) 9%, var(--bg));
+  --permission-full: var(--warning);
+  --permission-full-bg: color-mix(in srgb, var(--warning) 8%, var(--bg));
+  --permission-full-line: color-mix(in srgb, var(--warning) 26%, var(--bg));
+}
+
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --bg: #11151c;
+  --side: #0d1117;
+  --panel: #1c2128;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --subtle: #7e8b9c;
+  --line: #2a323e;
+  --accent: #91acff;
+  --accent-ink: #10192e;
+  --danger: #fda4af;
+  --success: #86efac;
+  --warning: #fcd58a;
+  --hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --shadow: #00000050;
+  --ui-hover: color-mix(in srgb, var(--text) 7%, transparent);
+  --ui-press: color-mix(in srgb, var(--text) 12%, transparent);
+}
