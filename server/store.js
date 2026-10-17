@@ -37,6 +37,17 @@ export function createStore(dataDir) {
   db.exec(`CREATE TABLE IF NOT EXISTS user_avatars(
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     image BLOB NOT NULL CHECK(length(image)<=262144), version TEXT NOT NULL);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS wallpapers(
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device TEXT NOT NULL CHECK(device IN ('desktop','mobile')), created INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS skin_presets(
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device TEXT NOT NULL CHECK(device IN ('desktop','mobile')), wallpaper_id TEXT NOT NULL REFERENCES wallpapers(id),
+    config TEXT NOT NULL, created INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS user_skins(
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device TEXT NOT NULL CHECK(device IN ('desktop','mobile')), preset_id TEXT REFERENCES skin_presets(id) ON DELETE SET NULL,
+    PRIMARY KEY(user_id,device));`);
   // Upgrade the original installation owner once; never upgrade invited admins.
   db.exec('BEGIN IMMEDIATE');
   try {

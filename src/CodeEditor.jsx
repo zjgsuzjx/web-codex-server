@@ -1,5 +1,6 @@
 import Editor, { loader } from '@monaco-editor/react';
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
+import { appearanceColors } from './appearance-runtime';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/monaco.contribution';
@@ -20,5 +21,15 @@ monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: false });
 for (const defaults of [monaco.languages.css.cssDefaults, monaco.languages.css.scssDefaults, monaco.languages.css.lessDefaults]) defaults.setOptions({ validate: false });
 export default memo(function CodeEditor({ file, content, onChange, onSave, readonly = false, theme = 'light' }) {
   const saveRef=useRef(onSave);saveRef.current=onSave;
-  return <Editor path={file} value={content} language={editorLanguage(file, monaco.languages.getLanguages())} theme={theme === 'light' ? 'vs' : 'vs-dark'} onChange={onChange} loading={<LoadingPlaceholder label="正在准备编辑器…" variant="code" rows={9}/>} onMount={editor => editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>saveRef.current?.())} options={{ renderValidationDecorations: 'off', fontSize: 13, fontFamily: "'Cascadia Code', 'SFMono-Regular', Consolas, monospace", minimap: { enabled: false }, padding: { top: 16 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', smoothScrolling: true, scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }} />;
+  const updateTheme = () => {
+    const c = appearanceColors();
+    monaco.editor.defineTheme('starvalley-skin', { base: document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs', inherit: true, rules: [], colors: {
+      'editor.background': c.background, 'editor.foreground': c.foreground, 'editorLineNumber.foreground': c.muted, 'editorCursor.foreground': c.accent,
+      'editor.selectionBackground': c.selection, 'editor.lineHighlightBackground': c.selection, 'editorWidget.background': c.background, 'editorWidget.border': c.line,
+      'editorSuggestWidget.background': c.background, 'editorSuggestWidget.foreground': c.foreground, 'editorSuggestWidget.selectedBackground': c.selection, 'editorGutter.background': c.background
+    } });
+    monaco.editor.setTheme(document.documentElement.dataset.skin ? 'starvalley-skin' : document.documentElement.dataset.theme === 'dark' ? 'vs-dark' : 'vs');
+  };
+  useEffect(() => { updateTheme(); window.addEventListener('appearancechange', updateTheme); return () => window.removeEventListener('appearancechange', updateTheme); }, [theme]);
+  return <Editor path={file} value={content} language={editorLanguage(file, monaco.languages.getLanguages())} theme={theme === 'light' ? 'vs' : 'vs-dark'} onChange={onChange} loading={<LoadingPlaceholder label="正在准备编辑器…" variant="code" rows={9}/>} onMount={editor => { updateTheme(); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>saveRef.current?.()); }} options={{ renderValidationDecorations: 'off', fontSize: 13, fontFamily: "'Cascadia Code', 'SFMono-Regular', Consolas, monospace", minimap: { enabled: false }, padding: { top: 16 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', smoothScrolling: true, scrollbar: { verticalScrollbarSize: 9, horizontalScrollbarSize: 9, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }} />;
 });

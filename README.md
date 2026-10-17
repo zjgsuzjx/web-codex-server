@@ -31,6 +31,7 @@ The browser combines streaming chat, a code editor, file transfers, a terminal, 
 | Development from a browser | Ask Codex, edit with Monaco, run terminal commands, and inspect changes in one workspace. Members need no local CLI installation. |
 | Control over the server | Docker deployment, persistent local data, configurable worker limits, account roles, and usage visibility. |
 | A smooth everyday workflow | Streaming responses, reconnecting WebSockets, recoverable conversation history, light/dark themes, and a layout that adapts to phones. |
+| Your own look | [Wallpaper-driven skins](docs/appearance.md), Codex-assisted colors, reusable presets, and independent desktop/mobile appearance. |
 
 Workspaces are private between ordinary members. The deployment operator controls the host and can access stored data; see [the isolation boundaries](docs/deployment.md#isolation-and-permissions).
 

@@ -1,0 +1,140 @@
+// Compatibility tokens for existing CSS; new controls use semantic theme variables.
+const roles = {
+  "editor": [
+    "00000005",
+    "00000008",
+    "00000012",
+    "0004",
+    "0006",
+    "0007",
+    "111214"
+  ],
+  "accent": [
+    "07112699",
+    "102d5940",
+    "1739680c",
+    "1739681c",
+    "17396820",
+    "17396822",
+    "17396824",
+    "173d6c2b",
+    "203e6824",
+    "203e683d",
+    "244b9010",
+    "2558b3",
+    "2563eb",
+    "2563eb06",
+    "2563eb08",
+    "2563eb0b",
+    "2563eb0c",
+    "2563eb0d",
+    "2563eb12",
+    "2563eb24",
+    "2c61b81c",
+    "3567c1",
+    "3568c2",
+    "3669b008",
+    "3978e7",
+    "3b6dcc",
+    "3b6ee1",
+    "3b82f6",
+    "3b82f612",
+    "3c4c65",
+    "405778",
+    "422936",
+    "4679cb",
+    "4c7bd0",
+    "4c83dd",
+    "547caf",
+    "558cff66",
+    "5a83c570",
+    "5f8bce50",
+    "6483af",
+    "6590d450",
+    "7366ee",
+    "7366ee1c",
+    "789bd2",
+    "84a8e855",
+    "a855e8",
+    "a855e825"
+  ],
+  "success": [
+    "168244",
+    "183b32",
+    "289e57",
+    "45c77b",
+    "77daa2",
+    "a8c3af",
+    "eaf8ef"
+  ],
+  "warning": [
+    "3a281f",
+    "805238",
+    "b45309",
+    "b6a57755",
+    "b77910",
+    "b89865",
+    "bd741a",
+    "bd8624",
+    "c28b18",
+    "c64d0b",
+    "c78018",
+    "ca8a292e",
+    "d28a2833",
+    "d28a2844",
+    "d5c89d",
+    "d69c3010",
+    "d7a53b50",
+    "daa12f",
+    "e8a12913",
+    "e8a12918",
+    "efbf54",
+    "f4c550",
+    "f7b98e",
+    "fde68a",
+    "ffad73",
+    "fff4eb",
+    "fffbeb"
+  ],
+  "line": [
+    "76a8ff18",
+    "86afff",
+    "a59bff16",
+    "a9bfe3",
+    "b2c4df",
+    "b6d2ff55",
+    "c5cdd8"
+  ],
+  "danger": [
+    "a86c6250",
+    "b42318",
+    "b53737",
+    "c44444",
+    "c83c4b",
+    "d0766930",
+    "d64b4b12",
+    "d64b4b18",
+    "d64b4b44",
+    "da6545",
+    "e1767650",
+    "e5484d",
+    "f08686",
+    "ff6961",
+    "ff9aa6",
+    "fff0f1"
+  ],
+  "panel": [
+    "ffffff01",
+    "ffffff04",
+    "ffffffc4"
+  ]
+};
+export function legacySkinColors(tokens) {
+  const values = {};
+  for (const [role, colors] of Object.entries(roles)) for (const original of colors) {
+    const full = original.length < 5 ? [...original].map(c => c + c).join('') : original;
+    const opacity = full.length === 8 ? parseInt(full.slice(6), 16) / 255 : 1;
+    values['skin-color-' + original] = opacity < 1 ? `color-mix(in srgb,${tokens[role]} ${opacity * 100}%,transparent)` : tokens[role];
+  }
+  return values;
+}
