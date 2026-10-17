@@ -1,5 +1,6 @@
 import IconButton from './IconButton';
 import SettingsPanel from './SettingsPanel';
+import { createSettingsQueue } from '../shared/settings-save.js';
 import ModelPicker from './ModelPicker';
 import { effortTone } from './model-options';
 import Tooltip from './Tooltip';
@@ -123,6 +124,8 @@ function Workspace({ user, setUser, theme, setTheme }) {
   const attachmentPicker=useRef(),archiveInput=useRef(),sendPending=useRef(false);
   const draftKey=thread?.id||`new:${project?.id||''}`, attachments=draftAttachments[draftKey]||[];
   const notify = useCallback((message, error = false) => setToast({ message, error, key: Date.now() }), []);
+  const settingsQueue = useRef();
+  if (!settingsQueue.current) settingsQueue.current = createSettingsQueue(user.settings, { save: persistSettings });
   const selectedFileRef = useRef(), openFileRef = useRef(), fileActionRef = useRef(), saveFileRef = useRef(), capabilityCache = useRef({ time: 0, pending: null });
   selectedFileRef.current = selectedFile; openFileRef.current = openFile; fileActionRef.current = fileAction; saveFileRef.current = saveFile;
   const openCurrentFile = useCallback((...args) => openFileRef.current(...args), []);
@@ -265,7 +268,8 @@ function Workspace({ user, setUser, theme, setTheme }) {
   async function removeAttachment(item) {
     try {if(item.saved)await api(`/attachments/${item.saved.id}`,{method:'DELETE'});setDraftAttachments(prev=>({...prev,[draftKey]:(prev[draftKey]||[]).filter(x=>x.id!==item.id)}));}catch(e){notify(e.message,true);}
   }
-  async function updateSettings(s) { try { const result = await api('/settings', { method: 'PUT', body: s }); setSettings(result); } catch (e) { notify(e.message, true); throw e; } }
+  async function persistSettings(s) { try { const result = await api('/settings', { method: 'PUT', body: s }); setSettings(result); return result; } catch (e) { notify(e.message, true); throw e; } }
+  function updateSettings(s) { return settingsQueue.current.update(s, settings); }
   async function upload(e) {
     const list = [...(e.target.files || [])]; e.target.value = ''; if (!list.length || !project) return;
     if(progress||sendPending.current)return;
@@ -359,7 +363,7 @@ function Workspace({ user, setUser, theme, setTheme }) {
     {progress&&<div className="upload-progress"><Upload size={17}/><div><strong>{progress.phase||'正在上传'} {progress.index}/{progress.count}</strong><span>{progress.name} · {bytes(progress.done)} / {bytes(progress.total)}</span><div className="progress-bar"><i style={{width:`${progress.total?progress.done/progress.total*100:0}%`}}/></div></div><IconButton title="取消上传" onClick={()=>abortUpload.current.abort()}><X size={16}/></IconButton></div>}
     {toast&&<div className={`toast ${toast.error?'error':''}`} role="status">{toast.error?<ShieldCheck size={16}/>:<Check size={16}/>}<span>{toast.message}</span><IconButton title="关闭提示" onClick={()=>setToast(null)}><X size={14}/></IconButton></div>}
     {modal==='project'&&<Modal title="新建项目" subtitle="每个项目都是一个独立的创作空间。" onClose={()=>setModal(null)}><form className="modal-form" onSubmit={async e=>{e.preventDefault();try{await newProject(new FormData(e.target).get('name'));}catch(e){notify(e.message,true);}}}><label>项目名称<input name="name" required autoFocus maxLength={80} placeholder="例如：我的个人网站"/></label><p className="field-hint">创建后，你可以上传现有代码，或让 Codex 从头开始。</p><button className="primary full"><Plus size={16}/>创建项目</button></form></Modal>}
-    {['settings','appearance'].includes(modal)&&<SettingsPanel api={api} user={user} onAvatar={updateAvatar} onSkins={updateSkins} onResetAppearance={()=>setTheme('light')} initialTab={modal==='appearance'?'appearance':'general'} settings={settings} onSettings={updateSettings} socket={socket.current} models={models} account={account} reload={()=>loadCapabilities(true)} notify={notify} onClose={()=>setModal(null)} onLogout={async()=>{await api('/logout',{method:'POST'});setUser(null);}}/>}
+    {['settings','appearance'].includes(modal)&&<SettingsPanel api={api} user={user} onAvatar={updateAvatar} onSkins={updateSkins} onResetAppearance={()=>setTheme('light')} initialTab={modal==='appearance'?'appearance':'general'} settings={settings} settingsQueue={settingsQueue.current} socket={socket.current} models={models} account={account} reload={()=>loadCapabilities(true)} notify={notify} onClose={()=>setModal(null)} onLogout={async()=>{await api('/logout',{method:'POST'});setUser(null);}}/>}
     {modal==='liveTerminal'&&project&&<Modal title="网页终端" subtitle={settings.executionTarget==='server'?'服务器 root 终端，可以操作系统文件和服务。':'你的独立项目终端，只能修改自己的工作区。输入 codex 即可启动。'} wide onClose={()=>setModal(null)}><Suspense fallback={<LoadingPlaceholder label="正在加载终端…" variant="code" rows={8}/>}><TerminalView socket={socket.current} project={project} notify={notify} theme={theme}/></Suspense></Modal>}{modal==='terminal'&&<Modal title="项目终端" subtitle={settings.executionTarget==='server'?'命令会以 root 权限在服务器执行，输出显示在对话里。':'命令会在你的独立用户工作区执行，输出显示在对话里。'} onClose={()=>setModal(null)}><form className="modal-form" onSubmit={async e=>{e.preventDefault();if(commandPending.current||!thread||!command.trim())return;commandPending.current=true;setCommandBusy(true);try{await socket.current.call('thread/shellCommand',{threadId:thread.id,command,timeoutMs:60000});setModal(current=>current==='terminal'?null:current);}catch(e){notify(e.message,true);}finally{commandPending.current=false;setCommandBusy(false);}}}><label>Shell 命令<textarea className="code-input" value={command} onChange={e=>setCommand(e.target.value)} placeholder="git status --short" rows={3} required/></label><button className="primary full" disabled={commandBusy||!command.trim()||status!=="connected"}>{commandBusy?<LoaderCircle size={15} className="spin"/>:<Terminal size={15}/>} {commandBusy?"执行中…":"执行命令"}</button></form></Modal>}
   </div>{dialogs.element}{welcomeVisible && <WorkspaceWelcome user={user} ready={status==='connected'&&!listsLoading&&!welcomeError} error={welcomeError} onExited={enterWorkspace} onContinue={enterWorkspace} onRetry={()=>location.reload()}/>}</>;
 }

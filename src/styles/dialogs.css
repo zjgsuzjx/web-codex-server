@@ -467,6 +467,13 @@
 .modal.wide {
   width: 860px;
 }
+/* Settings stay still while changing tabs or opening fixed-position menus. */
+.modal-backdrop:has(>.settings-dialog) {
+  backdrop-filter: none;
+}
+.modal.settings-dialog {
+  animation: fade-in .12s ease-out;
+}
 .modal>header {
   display: flex;
   align-items: flex-start;
