@@ -80,7 +80,6 @@ export default function WorkspaceToolbar({ theme, customSkin, status, latency, h
     <div className="workspace-tool-group" role="group" aria-label="工作区操作">
       <span className="workspace-terminal-tool"><ToolButton label="网页终端" description={hasProject ? '在当前项目中打开终端' : '请先选择项目'} icon={Terminal} disabled={!hasProject} onClick={onTerminal}/></span>
       <ToolButton label={editor ? '收起代码面板' : '打开代码面板'} icon={Code2} buttonRef={editorToggle} aria-pressed={editor} aria-expanded={editor} aria-controls="workspace-editor" onClick={onEditor}><span className="workspace-code-label">代码</span></ToolButton>
-      <span className="workspace-tool-divider" aria-hidden="true"/>
       <ToolButton label="设置" description={settingsDisabled ? '正在保存配置，请稍候' : '模型、账号与工作区偏好'} icon={Settings} disabled={settingsDisabled} onClick={onSettings}/>
       <MoreTools theme={theme} customSkin={customSkin} onAppearance={onAppearance} onTheme={onTheme} onTerminal={onTerminal} hasProject={hasProject}/>
     </div>
