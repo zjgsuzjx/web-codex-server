@@ -181,6 +181,9 @@
   animation: fade-out var(--dialog-duration) ease-in forwards;
   pointer-events: none;
 }
+.modal-backdrop.is-closing .modal {
+  animation: dialog-out var(--dialog-duration) ease-in forwards;
+}
 .user-avatar>img {
   display: block;
   width: 100%;
@@ -447,7 +450,7 @@
   justify-content: center;
   padding: 24px;
   animation: fade-in var(--dialog-duration) ease-out;
-  backdrop-filter: none;
+  backdrop-filter: blur(4px);
 }
 .modal {
   width: 480px;
@@ -459,7 +462,7 @@
   border-radius: var(--ui-radius-dialog);
   box-shadow: var(--ui-shadow-dialog);
   outline: none;
-  animation: none;
+  animation: dialog-in .22s var(--motion-ease);
 }
 .modal.wide {
   width: 860px;
@@ -504,7 +507,7 @@
 .modal.action-dialog {
   width: 480px;
   border-radius: var(--ui-radius-dialog);
-  box-shadow: var(--ui-shadow-dialog);
+  box-shadow: 0 25px 100px color-mix(in srgb,var(--accent) 25.1%,transparent);
 }
 .action-dialog>header {
   padding: 24px 24px 20px;
@@ -584,6 +587,7 @@
   overflow: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+  animation: content-in .22s var(--motion-ease);
 }
 .settings-content label {
   font-size: 12px;

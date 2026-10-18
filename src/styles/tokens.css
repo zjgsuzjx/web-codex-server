@@ -57,7 +57,7 @@
   --ui-space-6: 24px;
   --ui-shadow-sm: 0 1px 3px var(--shadow);
   --ui-shadow-popover: 0 8px 24px var(--shadow), 0 1px 3px var(--shadow);
-  --ui-shadow-dialog: 0 16px 48px color-mix(in srgb, var(--text) 16%, transparent);
+  --ui-shadow-dialog: 0 24px 80px color-mix(in srgb, var(--text) 16%, transparent);
   --ui-duration: .15s;
   --motion-ease: cubic-bezier(.22, 1, .36, 1);
   --scroll-thumb: color-mix(in srgb, var(--muted) 30%, transparent);
