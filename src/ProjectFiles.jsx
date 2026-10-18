@@ -38,7 +38,7 @@ function FileBreadcrumbs({ project, path }) {
   </nav>;
 }
 
-export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onClose, onReload, onSave, onEditorSave, onCodeChange }) {
+export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onCloseTabs, onReload, onSave, onEditorSave, onCodeChange }) {
   const [showMeta, setShowMeta] = useState(() => localStorage.getItem('explorer-show-meta') === 'true');
   const [selectionCount, setSelectionCount] = useState(0);
   const [clearSelectionRequest, setClearSelectionRequest] = useState(0);
@@ -70,7 +70,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
     </aside>
     <ExplorerDivider/>
     <div className="editor-content">
-      <div className="editor-tabbar"><EditorTabs ref={editorTabs} tabs={tabs} selectedFile={selectedFile} onSelect={selectFile} onClose={onClose}/>
+      <div className="editor-tabbar"><EditorTabs ref={editorTabs} tabs={tabs} selectedFile={selectedFile} onSelect={selectFile} onCloseTabs={onCloseTabs} notify={notify}/>
       {tab && <div className="editor-file-actions">
         <IconButton title="添加到对话上下文" onClick={() => onFileContext(tab.path)}><MessageSquare size={15}/></IconButton>
         <Tooltip title="下载文件"><a aria-label="下载文件" className="icon-button" download href={`/api/projects/${project.id}/download?path=${encodeURIComponent(tab.path)}`}><Download size={15}/></a></Tooltip>
