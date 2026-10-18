@@ -20,23 +20,35 @@ export const ExplorerDivider = memo(function ExplorerDivider() {
   return <div ref={ref} className="explorer-divider" role="separator" tabIndex={0} aria-label="调整资源管理器宽度" aria-orientation="vertical" aria-valuemin={minimum} aria-valuemax={maximum} aria-valuenow={current} onKeyDown={e => { const value = e.key === 'Home' ? minimum : e.key === 'End' ? maximum : e.key === 'ArrowLeft' ? current - 10 : e.key === 'ArrowRight' ? current + 10 : null; if (value != null) { e.preventDefault(); change(value); } }} onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); e.currentTarget.dataset.start = `${e.clientX},${current}`; e.currentTarget.classList.add('dragging'); }} onPointerMove={e => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) return; const [x, start] = e.currentTarget.dataset.start.split(',').map(Number); change(start + e.clientX - x); }} onLostPointerCapture={e => e.currentTarget.classList.remove('dragging')} onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}><i/></div>;
 });
 
-export default memo(function FileTree({ entries, showMeta = false, selected, onOpen, onAction, onContext, onRefresh, onDownload, onSelectionCountChange, project, api, Dialog, onDeleted, beforeDelete, notify }) {
+export default memo(function FileTree({ entries, showMeta = false, selected, selectionRequest, onOpen, onAction, onContext, onRefresh, onDownload, onSelectionCountChange, clearSelectionRequest, project, api, Dialog, onDeleted, beforeDelete, notify }) {
   const [expanded, setExpanded] = useState(new Set()), [selection, setSelection] = useState(new Set()), [extra, setExtra] = useState([]), [loaded, setLoaded] = useState(new Set());
   const [busy, setBusy] = useState(false), [detail, setDetail] = useState(null), [error, setError] = useState(''), [menu, setMenu] = useState(null);
   const [treeFocused, setTreeFocused] = useState(false);
+  const [activePath, setActivePath] = useState(selected);
   const pending = useRef(false), projectRef = useRef(project.id), tree = useRef(), anchor = useRef(null);
   projectRef.current = project.id;
   useEffect(() => { onSelectionCountChange?.(selection.size); }, [selection.size, onSelectionCountChange]);
   useEffect(() => () => onSelectionCountChange?.(0), [onSelectionCountChange]);
   function clearSelection(blur = false) {
-    setSelection(new Set()); setTreeFocused(false); anchor.current = null;
+    setSelection(new Set()); setActivePath(null); setTreeFocused(false); anchor.current = null;
     if (blur === true && tree.current?.contains(document.activeElement)) document.activeElement.blur();
   }
+  function selectEntry(path) {
+    setActivePath(path);
+    setSelection(new Set(path && !window.matchMedia('(max-width:800px)').matches ? [path] : []));
+    anchor.current = path;
+  }
+  useEffect(() => {
+    // A file finishing its load must not take selection back from a folder.
+    if (!tree.current?.contains(document.activeElement)) selectEntry(selected);
+  }, [selected]);
+  useEffect(() => { if (selectionRequest) selectEntry(selectionRequest.path); }, [selectionRequest]);
+  useEffect(() => { clearSelection(); }, [clearSelectionRequest]);
   useEffect(() => {
     if (!selection.size && !treeFocused) return;
     const outside = event => {
       const target = event.target, explorer = tree.current?.closest('.file-explorer');
-      if (tree.current?.contains(target) || explorer?.contains(target) && target.closest('.explorer-actions,.file-selection')) return;
+      if (tree.current?.contains(target) || explorer?.contains(target) && target.closest('.explorer-actions,.file-selection,.explorer-selection-count')) return;
       // Portaled file actions and confirmations still operate on the selected group.
       if (menu && target.closest('.context-menu') || target.closest('.modal-backdrop')) return;
       clearSelection(true);
@@ -85,11 +97,11 @@ export default memo(function FileTree({ entries, showMeta = false, selected, onO
     if (event.ctrlKey || event.metaKey) {
       setSelection(prev => selectPaths(visiblePaths, prev, entry.path, { toggle: !event.shiftKey, range: event.shiftKey, anchor: anchor.current, additive: true }));
       if (!event.shiftKey) anchor.current = entry.path;
+      if (!event.shiftKey && selection.has(entry.path) && activePath === entry.path) setActivePath(null);
       return;
     }
     if (event.shiftKey) { setSelection(prev => selectPaths(visiblePaths, prev, entry.path, { range: true, anchor: anchor.current })); return; }
-    setSelection(new Set(window.matchMedia('(max-width:800px)').matches ? [] : [entry.path]));
-    anchor.current = entry.path;
+    selectEntry(entry.path);
     if (entry.type === 'file') onOpen(entry.path); else void toggle(entry);
   }
   function closeMenu(restoreFocus) {
@@ -99,7 +111,7 @@ export default memo(function FileTree({ entries, showMeta = false, selected, onO
   function openMenu(entry, point, focus) {
     if (entry) setTreeFocused(true); else clearSelection();
     const paths = contextPaths(selection, entry?.path);
-    if (entry && !selection.has(entry.path)) { setSelection(new Set(paths)); anchor.current = entry.path; }
+    if (entry && !selection.has(entry.path)) { setSelection(new Set(paths)); setActivePath(entry.path); anchor.current = entry.path; }
     setMenu({ x: point.x, y: point.y, entry, paths, focus, label: '文件操作菜单', heading: paths.length > 1 ? `已选 ${paths.length} 项` : entry?.name || '项目文件' });
   }
   function contextAt(point) {
@@ -163,6 +175,7 @@ export default memo(function FileTree({ entries, showMeta = false, selected, onO
       const next = visible[Math.max(0, Math.min(visible.length - 1, visiblePaths.indexOf(entry.path) + (event.key === 'ArrowDown' ? 1 : -1)))]?.entry;
       if (next) {
         if (event.shiftKey) setSelection(prev => selectPaths(visiblePaths, prev, next.path, { range: true, anchor: anchor.current || entry.path, additive: modifier }));
+        else if (!modifier) selectEntry(next.path);
         [...tree.current.querySelectorAll('[data-file-path]')].find(row => row.dataset.filePath === next.path)?.querySelector('.file-entry').focus();
       }
     }
@@ -192,9 +205,9 @@ export default memo(function FileTree({ entries, showMeta = false, selected, onO
   return <>
     {selection.size > 0 && <div className="file-selection" data-count={selection.size}><div><span>已选 {selection.size} 项</span><button aria-label="取消文件选择" onClick={clearSelection}><X size={12}/></button></div><div><button disabled={busy} onClick={() => inspect()}>{busy ? <LoaderCircle size={12} className="spin"/> : <HardDrive size={12}/>}查看大小</button><button disabled={busy} onClick={() => download([...selection])}><Download size={12}/>下载</button><button className="danger-text" disabled={busy} onClick={() => inspect(true)}><Trash2 size={12}/>删除</button></div></div>}
     <div ref={tree} className={`file-tree ${selection.size ? 'has-selection' : ''}`} tabIndex={0} aria-label="项目文件" onKeyDown={keydown} onFocusCapture={event => { if (event.target.closest('[data-file-path]')) setTreeFocused(true); }} onClick={event => { if (event.target.closest('[data-file-path]')) return; const rect = tree.current.getBoundingClientRect(); if (event.clientX < rect.left + tree.current.clientWidth && event.clientY < rect.top + tree.current.clientHeight) clearSelection(true); }} {...longPress} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); contextAt({ x: event.clientX, y: event.clientY, target: event.target }); }}>
-      {visible.map(({ entry, depth }) => <div key={entry.path} data-file-path={entry.path} className={`file-row ${selection.has(entry.path) || treeFocused && !selection.size && selected === entry.path ? 'selected' : ''} ${selection.has(entry.path) ? 'multi-selected' : ''}`} style={{ paddingLeft: 8 + depth * 16 }}>
+      {visible.map(({ entry, depth }) => <div key={entry.path} data-file-path={entry.path} className={`file-row ${activePath === entry.path && (!selection.size || selection.has(entry.path)) ? 'selected' : ''} ${selection.has(entry.path) ? 'multi-selected' : ''}`} style={{ paddingLeft: 8 + depth * 16 }}>
         <span className="file-guides" aria-hidden="true">{Array.from({ length: depth }, (_, index) => <i key={index}/>)}</span>
-        <button type="button" className="file-entry" aria-expanded={entry.type === 'directory' ? expanded.has(entry.path) : undefined} title={entry.path} onClick={event => activate(event, entry)}>{entry.type === 'directory' ? <>{expanded.has(entry.path) ? <ChevronDown size={12}/> : <ChevronRight size={12}/>}<Folder size={13}/></> : <><span className="file-spacer"/><File size={13}/></>}<span>{entry.name}</span></button>
+        <button type="button" className="file-entry" aria-current={selected === entry.path ? 'true' : undefined} aria-expanded={entry.type === 'directory' ? expanded.has(entry.path) : undefined} title={entry.path} onClick={event => activate(event, entry)}>{entry.type === 'directory' ? <>{expanded.has(entry.path) ? <ChevronDown size={12}/> : <ChevronRight size={12}/>}<Folder size={13}/></> : <><span className="file-spacer"/><File size={13}/></>}<span>{entry.name}</span></button>
         <input className="file-select" type="checkbox" aria-label={`选择 ${entry.name}`} checked={selection.has(entry.path)} onChange={event => { setTreeFocused(true); anchor.current = entry.path; setSelection(prev => { const next = new Set(prev); event.target.checked ? next.add(entry.path) : next.delete(entry.path); return next; }); }}/>
         <button type="button" className="file-more" data-no-long-press aria-label={`${entry.name} 操作`} aria-haspopup="menu" aria-expanded={menu?.entry?.path === entry.path} onClick={event => { const rect = event.currentTarget.getBoundingClientRect(); openMenu(entry, { x: rect.right, y: rect.bottom }, event.currentTarget); }}><MoreHorizontal size={14}/></button>
       </div>)}

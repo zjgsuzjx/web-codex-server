@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { Archive, Check, ChevronRight, Code2, Download, File, FolderOpen, FolderPlus, MessageSquare, MoreHorizontal, Plus, RefreshCw, Save, Upload, X } from 'lucide-react';
 import FileTree, { ExplorerDivider } from './FileExplorer';
 import FileImage from './FileImage';
@@ -40,10 +40,13 @@ function FileBreadcrumbs({ project, path }) {
 export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onClose, onReload, onSave, onEditorSave, onCodeChange }) {
   const [showMeta, setShowMeta] = useState(() => localStorage.getItem('explorer-show-meta') === 'true');
   const [selectionCount, setSelectionCount] = useState(0);
+  const [clearSelectionRequest, setClearSelectionRequest] = useState(0);
+  const [selectionRequest, setSelectionRequest] = useState(null);
+  const selectFile = useCallback(path => { setSelectionRequest({ path }); onSelect(path); }, [onSelect]);
   const dirty = !!tab && tab.kind !== 'image' && tab.content !== tab.original;
   return <div className="editor-body">
     <aside className="file-explorer">
-      <div className={`explorer-heading ${selectionCount ? 'has-selection' : ''}`}><span className="explorer-heading-label"><span className="explorer-heading-name">资源管理器</span><span className="explorer-selection-count" role="status" aria-live="polite">{selectionCount ? `已选 ${selectionCount} 项` : ''}</span></span><div className="explorer-actions">
+      <div className={`explorer-heading ${selectionCount > 1 ? 'has-selection' : ''}`}><div className="explorer-heading-label"><span className="explorer-heading-name">资源管理器</span><div className="explorer-selection-count"><button type="button" aria-label="取消文件选择" onClick={() => setClearSelectionRequest(value => value + 1)}><X size={12}/></button><span role="status" aria-live="polite">{selectionCount > 1 ? `已选 ${selectionCount} 项` : ''}</span></div></div><div className="explorer-actions">
         <ExplorerMenu title="上传" icon={Upload} disabled={uploadDisabled}>
           <button type="button" onClick={onUploadFiles}><File size={15}/>上传文件</button>
           <button type="button" onClick={onUploadFolder}><FolderOpen size={15}/>上传文件夹</button>
@@ -58,7 +61,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
           <button type="button" role="switch" aria-checked={showMeta} onClick={() => { const next = !showMeta; setShowMeta(next); localStorage.setItem('explorer-show-meta', String(next)); }}><span className="explorer-menu-check">{showMeta && <Check size={14}/>}</span>显示 .meta 文件</button>
         </ExplorerMenu>
       </div></div>
-      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={onOpen} selected={selectedFile} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
+      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={onOpen} selected={selectedFile} selectionRequest={selectionRequest} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} clearSelectionRequest={clearSelectionRequest} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
         {!filesLoading && !files.length && <div className="files-empty"><FolderOpen size={25}/><p>项目还是空的</p><button onClick={onUploadFiles}>上传你的第一个文件</button></div>}
       </> : <p className="files-empty">先选择一个项目</p>}
     </aside>
@@ -67,7 +70,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
       <div className="editor-tabbar"><div className="editor-tabs" role="group" aria-label="打开的文件">{tabs.map(file => {
         const changed = file.kind !== 'image' && file.content !== file.original;
         return <div key={file.path} className={`editor-tab ${file.path === selectedFile ? 'active' : ''} ${changed ? 'is-dirty' : ''}`}>
-          <button type="button" aria-pressed={file.path === selectedFile} title={file.path} onClick={() => onSelect(file.path)}><File size={14}/><span>{file.path.split('/').pop()}</span></button>
+          <button type="button" aria-pressed={file.path === selectedFile} title={file.path} onClick={() => selectFile(file.path)}><File size={14}/><span>{file.path.split('/').pop()}</span></button>
           <IconButton title={changed ? '关闭文件（有未保存的修改）' : '关闭文件'} className="editor-tab-close" onClick={() => onClose(file.path)}><X size={12}/></IconButton>
         </div>;
       })}</div>
