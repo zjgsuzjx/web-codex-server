@@ -2,6 +2,9 @@ import Editor, { loader } from '@monaco-editor/react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { appearanceColors } from './appearance-runtime';
 import LoadingPlaceholder from './LoadingPlaceholder';
+import ContextMenu from './ContextMenu';
+import useLongPress from './useLongPress';
+import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, TextSelect, Save } from 'lucide-react';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/monaco.contribution';
 import { editorLanguage } from './editor-language';
@@ -19,15 +22,56 @@ loader.config({ monaco });
 for (const defaults of [monaco.languages.typescript.javascriptDefaults, monaco.languages.typescript.typescriptDefaults]) defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: true, noSuggestionDiagnostics: true });
 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: false });
 for (const defaults of [monaco.languages.css.cssDefaults, monaco.languages.css.scssDefaults, monaco.languages.css.lessDefaults]) defaults.setOptions({ validate: false });
-export default memo(function CodeEditor({ file, content, dirty = false, onChange, onSave, readonly = false, theme = 'light' }) {
+export default memo(function CodeEditor({ file, content, dirty = false, onChange, onSave, notify, readonly = false, theme = 'light' }) {
   const saveRef=useRef(onSave);saveRef.current=onSave;
+  const editorRef = useRef(), [menu, setMenu] = useState(null);
   const subscriptions = useRef([]);
   const [status, setStatus] = useState({ line: 1, column: 1, tabSize: 2, insertSpaces: true, language: '' });
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => { const media = window.matchMedia('(prefers-reduced-motion: reduce)'), update = () => setReducedMotion(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
   useEffect(() => () => subscriptions.current.forEach(subscription => subscription.dispose()), []);
+  useEffect(() => { setMenu(null); }, [file]);
+  function openMenu(point) {
+    const editor = editorRef.current, model = editor?.getModel();
+    if (!model) return;
+    const position = !point.preservePosition && editor.getTargetAtClientPoint(point.x, point.y)?.position;
+    if (position && !editor.getSelections().some(selection => selection.containsPosition(position))) editor.setPosition(position);
+    const selections = editor.getSelections(), text = selections.map(selection => model.getValueInRange(selection)).join('\n');
+    setMenu({ x: point.x, y: point.y, label: '代码编辑菜单', model, selections, text, version: model.getVersionId() });
+  }
+  const longPress = useLongPress(openMenu, { allowInputs: true });
+  function closeMenu(focus) { if (focus) editorRef.current?.focus(); setMenu(null); }
+  async function clipboard(action) {
+    const snapshot = menu;
+    try {
+      const text = action === 'paste' ? await navigator.clipboard.readText() : snapshot.text;
+      if (action === 'paste' && !text) { notify?.('剪贴板中没有可粘贴的文本'); return; }
+      if (action !== 'paste') await navigator.clipboard.writeText(text);
+      if (action !== 'copy') {
+        const editor = editorRef.current, model = editor?.getModel();
+        if (model !== snapshot.model || model.isDisposed() || model.getVersionId() !== snapshot.version) throw new Error('文件已发生变化，请重新打开菜单后操作');
+        editor.pushUndoStop();
+        editor.executeEdits('context-menu', snapshot.selections.map(range => ({ range, text: action === 'cut' ? '' : text, forceMoveMarkers: true })));
+        editor.pushUndoStop(); editor.focus();
+      }
+    } catch (error) { notify?.(error.message?.startsWith('文件已') ? error.message : `无法访问剪贴板，请使用 ${action === 'paste' ? 'Ctrl+V / ⌘V' : action === 'cut' ? 'Ctrl+X / ⌘X' : 'Ctrl+C / ⌘C'} 或检查浏览器权限`, true); }
+  }
+  function menuItems() {
+    const editor = editorRef.current, mac = /Mac|iPhone|iPad/.test(navigator.platform), modifier = mac ? '⌘' : 'Ctrl+';
+    return [
+      { label: '撤销', icon: Undo2, shortcut: `${modifier}Z`, disabled: readonly, action: () => editor.trigger('context-menu', 'undo', null) },
+      { label: '重做', icon: Redo2, shortcut: mac ? '⇧⌘Z' : 'Ctrl+Y', disabled: readonly, action: () => editor.trigger('context-menu', 'redo', null) },
+      { separator: true },
+      { label: '剪切', icon: Scissors, shortcut: `${modifier}X`, disabled: readonly || !menu.text, action: () => void clipboard('cut') },
+      { label: '复制', icon: Copy, shortcut: `${modifier}C`, disabled: !menu.text, action: () => void clipboard('copy') },
+      { label: '粘贴', icon: ClipboardPaste, shortcut: `${modifier}V`, disabled: readonly, action: () => void clipboard('paste') },
+      { separator: true },
+      { label: '全选', icon: TextSelect, shortcut: `${modifier}A`, action: () => { editor.setSelection(editor.getModel().getFullModelRange()); editor.focus(); } },
+      { label: '保存', icon: Save, shortcut: `${modifier}S`, disabled: readonly || !dirty, action: () => saveRef.current?.() },
+    ];
+  }
   // Cursor/status updates must not reapply all Monaco options on every keystroke.
-  const options = useMemo(() => ({ renderValidationDecorations: 'off', fontSize: 13.5, lineHeight: 22, fontFamily: '"JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, monospace', lineNumbersMinChars: 3, minimap: { enabled: false }, padding: { top: 8, bottom: 8 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', glyphMargin: false, renderLineHighlight: 'all', bracketPairColorization: { enabled: false }, guides: { indentation: true, bracketPairs: false }, overviewRulerLanes: 0, hideCursorInOverviewRuler: true, smoothScrolling: !reducedMotion, scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }), [readonly, reducedMotion]);
+  const options = useMemo(() => ({ contextmenu: false, renderValidationDecorations: 'off', fontSize: 13.5, lineHeight: 22, fontFamily: '"JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, monospace', lineNumbersMinChars: 3, minimap: { enabled: false }, padding: { top: 8, bottom: 8 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', glyphMargin: false, renderLineHighlight: 'all', bracketPairColorization: { enabled: false }, guides: { indentation: true, bracketPairs: false }, overviewRulerLanes: 0, hideCursorInOverviewRuler: true, smoothScrolling: !reducedMotion, scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }), [readonly, reducedMotion]);
   const updateTheme = () => {
     const c = appearanceColors();
     const token = name => c[`code-${name}`].slice(1,7);
@@ -49,7 +93,13 @@ export default memo(function CodeEditor({ file, content, dirty = false, onChange
     monaco.editor.setTheme('starvalley-skin');
   };
   useEffect(() => { updateTheme(); window.addEventListener('appearancechange', updateTheme); return () => window.removeEventListener('appearancechange', updateTheme); }, [theme]);
-  return <div className="code-editor"><div className="code-editor-surface"><Editor path={file} value={content} language={editorLanguage(file, monaco.languages.getLanguages())} theme="starvalley-skin" onChange={onChange} loading={<LoadingPlaceholder label="正在准备编辑器…" variant="code" rows={9}/>} onMount={editor => {
+  return <div className="code-editor"><div className="code-editor-surface" {...longPress} onContextMenuCapture={event => { event.preventDefault(); event.stopPropagation(); openMenu({ x: event.clientX, y: event.clientY }); }} onKeyDownCapture={event => {
+    if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+    event.preventDefault(); event.stopPropagation();
+    const editor = editorRef.current, rect = editor?.getDomNode().getBoundingClientRect(), position = editor?.getScrolledVisiblePosition(editor.getPosition());
+    if (rect) openMenu({ x: rect.x + (position?.left || 40), y: rect.y + (position?.top || 20) + 22, preservePosition: true });
+  }}><Editor path={file} value={content} language={editorLanguage(file, monaco.languages.getLanguages())} theme="starvalley-skin" onChange={onChange} loading={<LoadingPlaceholder label="正在准备编辑器…" variant="code" rows={9}/>} onMount={editor => {
+    editorRef.current = editor;
     updateTheme(); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>saveRef.current?.());
     const update = () => {
       const model = editor.getModel(), position = editor.getPosition(), options = model?.getOptions(), language = monaco.languages.getLanguages().find(item => item.id === model?.getLanguageId());
@@ -67,5 +117,6 @@ export default memo(function CodeEditor({ file, content, dirty = false, onChange
     configureModel();
   }} options={options} /></div>
     <div className="editor-status"><span className={`editor-save-status ${dirty ? 'is-dirty' : ''}`}><i aria-hidden="true"/>{dirty ? '未保存' : '已保存'}</span><div className="editor-position"><span>行 {status.line}，列 {status.column}</span><span>{status.insertSpaces ? '空格' : '制表符'}: {status.tabSize}</span><span>UTF-8</span><span>{status.language}</span></div></div>
+    {menu && <ContextMenu menu={menu} items={menuItems()} onClose={closeMenu}/>}
   </div>;
 });

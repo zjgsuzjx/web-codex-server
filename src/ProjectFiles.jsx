@@ -37,12 +37,13 @@ function FileBreadcrumbs({ project, path }) {
   </nav>;
 }
 
-export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDeleted, beforeDelete, onSelect, onClose, onReload, onSave, onEditorSave, onCodeChange }) {
+export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onClose, onReload, onSave, onEditorSave, onCodeChange }) {
   const [showMeta, setShowMeta] = useState(() => localStorage.getItem('explorer-show-meta') === 'true');
+  const [selectionCount, setSelectionCount] = useState(0);
   const dirty = !!tab && tab.kind !== 'image' && tab.content !== tab.original;
   return <div className="editor-body">
     <aside className="file-explorer">
-      <div className="explorer-heading"><span>资源管理器</span><div className="explorer-actions">
+      <div className={`explorer-heading ${selectionCount ? 'has-selection' : ''}`}><span className="explorer-heading-label"><span className="explorer-heading-name">资源管理器</span><span className="explorer-selection-count" role="status" aria-live="polite">{selectionCount ? `已选 ${selectionCount} 项` : ''}</span></span><div className="explorer-actions">
         <ExplorerMenu title="上传" icon={Upload} disabled={uploadDisabled}>
           <button type="button" onClick={onUploadFiles}><File size={15}/>上传文件</button>
           <button type="button" onClick={onUploadFolder}><FolderOpen size={15}/>上传文件夹</button>
@@ -57,7 +58,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
           <button type="button" role="switch" aria-checked={showMeta} onClick={() => { const next = !showMeta; setShowMeta(next); localStorage.setItem('explorer-show-meta', String(next)); }}><span className="explorer-menu-check">{showMeta && <Check size={14}/>}</span>显示 .meta 文件</button>
         </ExplorerMenu>
       </div></div>
-      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={onOpen} selected={selectedFile} onAction={onAction} onContext={onContext} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
+      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={onOpen} selected={selectedFile} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
         {!filesLoading && !files.length && <div className="files-empty"><FolderOpen size={25}/><p>项目还是空的</p><button onClick={onUploadFiles}>上传你的第一个文件</button></div>}
       </> : <p className="files-empty">先选择一个项目</p>}
     </aside>
@@ -78,7 +79,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
       </div>}</div>
       {fileBusy ? <LoadingPlaceholder label="正在读取文件内容…" variant="code" rows={9}/> : tab ? <>
         <FileBreadcrumbs project={project} path={tab.path}/>
-        {tab.kind === 'image' ? <FileImage key={`${project.id}/${tab.path}/${tab.modified}`} file={tab}/> : <div className="monaco-container"><Suspense fallback={<LoadingPlaceholder label="正在加载编辑器…" variant="code" rows={9}/>}><CodeEditor file={`${project.id}/${tab.path}`} content={tab.content} dirty={dirty} onChange={onCodeChange} onSave={onEditorSave} theme={theme}/></Suspense></div>}
+        {tab.kind === 'image' ? <FileImage key={`${project.id}/${tab.path}/${tab.modified}`} file={tab}/> : <div className="monaco-container"><Suspense fallback={<LoadingPlaceholder label="正在加载编辑器…" variant="code" rows={9}/>}><CodeEditor file={`${project.id}/${tab.path}`} content={tab.content} dirty={dirty} onChange={onCodeChange} onSave={onEditorSave} notify={notify} theme={theme}/></Suspense></div>}
       </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
     </div>
   </div>;

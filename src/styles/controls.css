@@ -1,4 +1,77 @@
 /* controls: shared semantic colors and control geometry live in tokens.css. */
+.context-menu {
+  position: fixed;
+  z-index: 80;
+  width: 232px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--ui-shadow-popover);
+  scrollbar-width: thin;
+  -webkit-touch-callout: none;
+}
+.context-menu-heading {
+  overflow: hidden;
+  padding: 7px 9px;
+  color: var(--subtle);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.context-menu>button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 9px;
+  border-radius: var(--ui-radius-sm);
+  font-size: 12px;
+  text-align: left;
+  transition: background .12s;
+}
+.context-menu>button>span {
+  flex: 1;
+}
+.context-menu>button>svg {
+  color: var(--muted);
+}
+.context-menu>button.danger-text>svg {
+  color: inherit;
+}
+.context-menu>button:hover:not(:disabled),.context-menu>button:focus-visible {
+  background: var(--ui-hover);
+}
+.context-menu>button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.context-menu kbd {
+  color: var(--subtle);
+  font: inherit;
+  font-size: 10px;
+}
+.context-menu hr {
+  height: 1px;
+  margin: 4px;
+  border: 0;
+  background: var(--line);
+}
+@media (pointer:coarse) {
+  .context-menu>button {
+    min-height: 38px;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .context-menu>button {
+    transition: none;
+  }
+}
 .row-menu {
   position: relative;
   flex-shrink: 0;
