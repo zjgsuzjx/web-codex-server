@@ -388,6 +388,25 @@
   box-shadow: none;
   animation: content-in .2s var(--motion-ease);
 }
+.user-input-dialog {
+  width: 600px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.user-input-dialog>header {
+  flex-shrink: 0;
+}
+.user-input-dialog .user-input-request {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  animation: none;
+}
 .approval-notice {
   display: flex;
   align-items: center;
