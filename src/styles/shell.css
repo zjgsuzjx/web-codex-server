@@ -73,26 +73,6 @@
   padding: 0 12px;
   line-height: 1.6;
 }
-.user-profile>div:nth-child(2) {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  flex: 1;
-  overflow: hidden;
-}
-.user-profile strong {
-  font-size: 12px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.user-profile span {
-  font-size: 9px;
-  color: var(--subtle);
-}
-.user-profile>svg {
-  color: var(--subtle);
-}
 .main {
   flex: 1;
   min-width: 0;
@@ -157,12 +137,6 @@
 .thread-row>button>span {
   flex: 1;
   min-width: 0;
-}
-.user-profile>.user-avatar {
-  width: 31px;
-  height: 31px;
-  font-size: 12px;
-  color: var(--accent);
 }
 .workspace {
   height: 100dvh;
@@ -319,22 +293,117 @@
 .thread-row.selected {
   background: var(--ui-selected);
 }
-.sidebar-bottom {
+.sidebar-user-wrap {
   border-top: 1px solid var(--line);
   margin-top: 12px;
-  padding-top: 10px;
+  padding-top: 8px;
 }
-.user-profile {
+.sidebar-user {
+  --sidebar-user-surface: var(--side);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--ui-radius-lg);
+  background: var(--sidebar-user-surface);
+  transition: background .15s ease;
+}
+.sidebar-user:hover {
+  --sidebar-user-surface: color-mix(in srgb,var(--accent) 6%,var(--side));
+}
+.sidebar-user__profile {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-radius: var(--ui-radius-sm);
   text-align: left;
-  padding: 8px;
-  border-radius: var(--ui-radius);
 }
-.user-profile:hover {
+.sidebar-user__avatar {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+.sidebar-user__avatar>.user-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  font-size: 12px;
+}
+.sidebar-user__status {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--sidebar-user-surface);
+  background: var(--danger);
+  transition: border-color .15s ease,background .15s ease;
+}
+.sidebar-user__status[data-status=connected] {
+  background: var(--success);
+}
+.sidebar-user__status[data-status=connecting],.sidebar-user__status[data-status=reconnecting] {
+  background: var(--warning);
+}
+.sidebar-user__info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-user__name {
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-user__role {
+  max-width: 100%;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--muted);
   background: var(--ui-hover);
+}
+.sidebar-user__role[data-role=superadmin] {
+  color: var(--accent);
+  background: color-mix(in srgb,var(--accent) 12%,transparent);
+}
+.sidebar-user__role[data-role=admin] {
+  color: var(--success);
+  background: color-mix(in srgb,var(--success) 12%,transparent);
+}
+.sidebar-user .sidebar-user__gear {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius);
+  background: var(--bg);
+  color: var(--text);
+}
+.sidebar-user .sidebar-user__gear:hover:not(:disabled) {
+  background: var(--ui-hover);
+  border-color: var(--ui-border-hover);
+}
+.sidebar-user__gear svg {
+  transition: transform .3s ease;
+}
+.sidebar-user__gear:hover:not(:disabled) svg {
+  transform: rotate(45deg);
 }
 .topbar {
   height: 64px;
@@ -419,11 +488,28 @@
   }
 }
 @media (prefers-reduced-motion:reduce) {
+  .sidebar-user,.sidebar-user__status,.sidebar-user__gear svg {
+    transition: none;
+  }
+  .sidebar-user__gear:hover:not(:disabled) svg {
+    transform: none;
+  }
   .sidebar,.sidebar-open .sidebar {
     transition-delay: 0s;
   }
 }
 @media (forced-colors:active) {
+  .sidebar-user__status {
+    background: CanvasText;
+    border-color: Canvas;
+    forced-color-adjust: none;
+  }
+  .sidebar-user__status[data-status=connected] {
+    background: Highlight;
+  }
+  .sidebar-user__role {
+    border: 1px solid CanvasText;
+  }
   .thread-activity {
     color: Highlight;
   }
