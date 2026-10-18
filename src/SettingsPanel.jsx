@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Settings, Palette, KeyRound, Code2, Sparkles, ShieldCheck, RefreshCw, LogOut, ChevronRight, LoaderCircle, Check } from 'lucide-react';
+import { Settings, Palette, KeyRound, Code2, Sparkles, ShieldCheck, RefreshCw, LogOut, ChevronRight, LoaderCircle, Check, Monitor } from 'lucide-react';
+import { BrowserGraphicsCheck } from './BrowserGraphics';
 import Modal from './Modal';
 import IconButton from './IconButton';
 import Select from './Select';
@@ -14,6 +15,7 @@ import LoadingPlaceholder from './LoadingPlaceholder';
 const settingsPages = [
   { id:'general', icon:Settings, name:'通用', title:'模型与执行', description:'选择适合当前任务的模型与工作方式。' },
   { id:'appearance', icon:Palette, name:'壁纸与外观' },
+  { id:'browser', icon:Monitor, name:'浏览器', title:'浏览器与性能', description:'检查当前浏览器的图形渲染与加速设置。' },
   { id:'account', icon:KeyRound, name:'Codex 账号', title:'Codex 账号', description:'管理工作区使用的账号与连接方式。' },
   { id:'advanced', icon:Code2, name:'高级配置', title:'高级配置', description:'精细调整你的 Codex 工作环境。' },
   { id:'tools', icon:Sparkles, name:'工具与技能', title:'工具与技能', description:'查看和管理工作区可用的能力。' },
@@ -92,6 +94,7 @@ export default function SettingsPanel({
           setResult(null);
         }} aria-current={tab === t.id ? "page" : undefined}><t.icon size={16} />{t.name}</button>)}</nav><div className="settings-content" key={tab}>{tab !== "appearance" && <SettingsHeading page={settingsPages.find(page => page.id === tab)} />}
     {tab === 'appearance' && <Appearance api={api} socket={socket} onUpdate={onSkins} onReset={onResetAppearance} notify={notify} />}
+    {tab === 'browser' && <BrowserGraphicsCheck/>}
     {tab === 'general' && <><ModelControls models={models} value={draft} onChange={applySettings} disabled={busy} /><p className="field-hint">执行审批可在聊天输入框旁直接选择。</p><label>对话模式<Select value={draft.mode} disabled={busy} onChange={e => applySettings({
               ...draft,
               mode: e.target.value
