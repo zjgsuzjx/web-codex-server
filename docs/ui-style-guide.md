@@ -32,4 +32,10 @@ Monaco and xterm cannot consume CSS expressions such as `color-mix()`. Read thei
 
 ## Visual verification
 
+Project code keeps file IO, uploads, save/conflict checks, and selection actions in the existing workspace callbacks. `ProjectFiles` owns the presentation and the local `.meta` visibility preference; `CodeEditor` owns cursor/indent/language display so cursor movement does not rerender the workspace. The status, save button, and dirty tab all derive from the same content/original comparison. Show actual model indentation rather than forcing a different editing behavior.
+
+The reference class mapping is `.cp-header` → `.editor-title`, `.cp-explorer` → `.file-explorer`, `.cp-ex-head` → `.explorer-heading`, `.cp-row` → `.file-row`, `.cp-tabs` → `.editor-tabbar`/`.editor-tabs`, `.cp-crumbs` → `.file-toolbar`, `.cp-save` → `.save-file`, and `.cp-status` → `.editor-status`. Use 46/38/30/26px bars, 30px tree rows, 16px depth steps, and theme-derived editor syntax variables. Monaco gets resolved hex colors through `appearanceColors`; do not add CodeMirror or fixed light-only palettes.
+
+Desktop explorer width defaults to 268px and uses the existing persisted drag/keyboard separator with 200–480px bounds, limited by available editor space. Phones retain the narrower responsive bounds. Header menus must stay above the editor and within the panel. Keep new-file creation in More, all three upload routes in Upload, and the complete existing file row actions and multiselect controls. The empty state advertises Ctrl+S only; there is no project-wide Ctrl+P file picker.
+
 Check default light and dark modes and a saved wallpaper preset. Review desktop, 390px, and 320px layouts, including long labels, dropdown edges, modal scrolling, and composer controls. Exercise hover, focus, selected, disabled, and busy states. Preserve reduced-motion and forced-colors rules; distinguish source inspection from testing those system settings in a browser. Use synthetic accounts and data for interactive checks that change settings or files.

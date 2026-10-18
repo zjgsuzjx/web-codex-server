@@ -11,5 +11,7 @@ export function appearanceColors() {
     context.fillRect(0, 0, 1, 1);
     return '#' + [...context.getImageData(0, 0, 1, 1).data].map(value => value.toString(16).padStart(2, '0')).join('');
   };
-  return { background: read('editor', '#ffffff'), foreground: read('text', '#182230'), accent: read('accent', '#3b6cf6'), muted: read('muted', '#64748b'), line: read('line', '#e5e9f0'), selection: read('ui-selected', '#dbe7ff'), highlight: read('hover', '#f1f5f9') };
+  const colors = { background: read('editor', '#ffffff'), foreground: read('text', '#182230'), accent: read('accent', '#3b6cf6'), muted: read('muted', '#64748b'), line: read('line', '#e5e9f0'), selection: read('ui-selected', '#dbe7ff'), highlight: read('hover', '#f1f5f9') };
+  for (const name of ['foreground','keyword','type','string','number','comment','line-number','line-number-active','current-line','indent','indent-active','selection']) colors[`code-${name}`] = read(`editor-${name}`, colors.foreground);
+  return colors;
 }

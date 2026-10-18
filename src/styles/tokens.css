@@ -21,6 +21,18 @@
   --success: #16803d;
   --warning: #94620b;
   --editor: var(--bg);
+  --editor-foreground: color-mix(in srgb,var(--text) 85%,var(--muted));
+  --editor-keyword: color-mix(in srgb,var(--accent) 85%,var(--text));
+  --editor-type: color-mix(in srgb,var(--success) 65%,var(--accent));
+  --editor-string: color-mix(in srgb,var(--warning) 80%,var(--danger));
+  --editor-number: color-mix(in srgb,var(--warning) 55%,var(--danger));
+  --editor-comment: var(--subtle);
+  --editor-line-number: color-mix(in srgb,var(--muted) 60%,var(--editor));
+  --editor-line-number-active: color-mix(in srgb,var(--muted) 65%,var(--text));
+  --editor-current-line: color-mix(in srgb,var(--text) 4%,var(--editor));
+  --editor-indent: color-mix(in srgb,var(--line) 75%,var(--editor));
+  --editor-indent-active: color-mix(in srgb,var(--text) 18%,var(--editor));
+  --editor-selection: color-mix(in srgb,var(--accent) 20%,transparent);
   --hover: color-mix(in srgb, var(--text) 6%, transparent);
   --shadow: #18223014;
 
