@@ -203,7 +203,6 @@
   min-height: 0;
   overflow: auto;
   padding: 4px 6px;
-  scrollbar-width: thin;
   -webkit-touch-callout: none;
 }
 .code-editor-surface {
@@ -341,22 +340,65 @@
   border-bottom: 1px solid var(--line);
   background: var(--side);
 }
-.editor-tabs {
-  display: flex;
-  align-items: stretch;
+.editor-tabs-viewport {
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+}
+.editor-tabs-viewport::before,.editor-tabs-viewport::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  opacity: 0;
+  pointer-events: none;
+}
+.editor-tabs-viewport::before {
+  left: 0;
+  background: linear-gradient(to right,var(--side),transparent);
+}
+.editor-tabs-viewport::after {
+  right: 0;
+  background: linear-gradient(to left,var(--side),transparent);
+}
+.editor-tabs-viewport.has-left-overflow::before,.editor-tabs-viewport.has-right-overflow::after {
+  opacity: 1;
+}
+.editor-tabs {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.editor-tabs-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 3px;
+  min-width: 42px;
+  height: 26px;
+  padding: 0 7px;
+  margin-left: 5px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.editor-tabs-picker:is(:hover,[aria-expanded=true]) {
+  background: var(--ui-hover);
 }
 .editor-tab {
   display: flex;
   align-items: center;
   flex: none;
   gap: 6px;
-  max-width: 240px;
+  max-width: min(240px,100%);
   padding: 0 5px 0 12px;
   border-top: 2px solid transparent;
   border-right: 1px solid var(--line);
@@ -451,7 +493,6 @@
   color: var(--subtle);
   overflow-x: auto;
   white-space: nowrap;
-  scrollbar-width: none;
 }
 .file-parents {
   flex: 0 1 auto;
@@ -524,7 +565,6 @@
   gap: 16px;
   min-width: 0;
   overflow: auto;
-  scrollbar-width: none;
   font-variant-numeric: tabular-nums;
 }
 .editor-position>span {
@@ -626,6 +666,22 @@
   }
   .editor-position {
     gap: 10px;
+  }
+}
+@container code (max-width:260px) {
+  .editor-tabbar:has(.editor-file-actions) {
+    height: 68px;
+    flex-wrap: wrap;
+    align-content: flex-start;
+  }
+  .editor-tabs-viewport {
+    height: 37px;
+  }
+  .editor-file-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    height: 30px;
+    border-top: 1px solid var(--line);
   }
 }
 @media (min-width:1600px) {

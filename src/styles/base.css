@@ -81,30 +81,12 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]),textarea,[contente
   caret-color: var(--text);
 }
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
+  scrollbar-width: none;
 }
 *::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-*::-webkit-scrollbar-track {
-  background: transparent;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--scroll-thumb);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  border-radius: 999px;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scroll-hover);
-}
-*::-webkit-scrollbar-thumb:active {
-  background-color: var(--scroll-active);
-}
-*::-webkit-scrollbar-corner {
-  background: transparent;
+  display: none;
+  width: 0;
+  height: 0;
 }
 .icon-button,.new-chat,.project-item,.thread-row,.settings-nav>button,.primary,.secondary {
   transition: background .16s,color .16s,border-color .16s,box-shadow .16s,transform .16s var(--motion-ease);
@@ -245,10 +227,5 @@ svg.lucide {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
-  }
-}
-@media (forced-colors:active) {
-  * {
-    scrollbar-color: auto;
   }
 }
