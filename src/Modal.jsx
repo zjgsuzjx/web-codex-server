@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 const layers = [], originalInert = new Map();
-export const DIALOG_CLOSE_MS = 140;
+export const DIALOG_CLOSE_MS = 180;
 function syncLayers() {
   const top = layers.at(-1);
   for (const element of document.body.children) {

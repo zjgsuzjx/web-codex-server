@@ -12,6 +12,13 @@ export default function Select({ value, onChange, children, disabled, id, classN
 
   function show() {
     if (disabled || trigger.current.matches(':disabled') || !enabled.length) return;
+    // Finish entrance movement before measuring a fixed-position dropdown.
+    // A transformed ancestor would otherwise become its containing block.
+    for (let element = root.current.parentElement; element; element = element.parentElement) {
+      for (const animation of element.getAnimations()) {
+        if (['dialog-in', 'content-in'].includes(animation.animationName)) animation.finish();
+      }
+    }
     const rect = trigger.current.getBoundingClientRect(), width = Math.min(Math.max(rect.width, 220), innerWidth - 24);
     const below = innerHeight - rect.bottom - 16, above = rect.top - 16, preferred = Math.min(288, options.length * 40 + 12), upwards = below < preferred && above > below;
     setPosition({ position: 'fixed', width, left: Math.max(12, Math.min(rect.left, innerWidth - width - 12)), maxHeight: Math.max(80, Math.min(288, upwards ? above : below)), ...(upwards ? { bottom: innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }) });
