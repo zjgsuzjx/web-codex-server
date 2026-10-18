@@ -16,7 +16,7 @@ import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomic
 import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInputs } from './attachments.js';
 import { stageZip, publishZip } from './archives.js';
 import { imageResult, readMedia, mediaLocation } from './chat-media.js';
-import { attachmentHeader, downloadFile } from './downloads.js';
+import { attachmentHeader, downloadFile, downloadSelected } from './downloads.js';
 import { createTurnChanges } from './turn-changes.js';
 import { createTurnActivity } from './turn-activity.js';
 import { changesSummary, historicalChanges } from '../shared/file-changes.js';
@@ -338,6 +338,10 @@ export async function createApp(options = {}) {
       }
       await archive.finalize();
     }
+  });
+  app.post('/api/projects/:id/download', async (req, res) => {
+    const p = store.project(req.user, req.params.id), paths = selectedPaths(req.body.paths);
+    await downloadSelected(res, root(req.user, p), paths, `${p.name}-selected.zip`);
   });
   app.get('/api/threads/:id/download', async (req, res) => {
     const thread = store.thread(req.user, req.params.id);
