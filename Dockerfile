@@ -4,6 +4,7 @@ COPY package*.json ./
 RUN npm ci --no-audit --no-fund && npm cache clean --force
 COPY index.html vite.config.js ./
 COPY src ./src
+COPY public ./public
 COPY shared ./shared
 RUN node --max-old-space-size=1536 --max-semi-space-size=8 --expose-gc node_modules/vite/bin/vite.js build && npm prune --omit=dev
 
