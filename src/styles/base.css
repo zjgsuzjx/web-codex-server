@@ -70,11 +70,6 @@ kbd {
 .danger-text {
   color: var(--danger) !important;
 }
-.logo.small {
-  width: 29px;
-  height: 29px;
-  border-radius: var(--ui-radius);
-}
 .form-error {
   color: var(--danger);
   font-size: 12px;
@@ -224,18 +219,6 @@ label {
 }
 .text-button:hover {
   background: var(--ui-hover);
-}
-.logo {
-  width: 45px;
-  height: 45px;
-  border: 1px solid color-mix(in srgb,var(--accent) 12%,transparent);
-  border-radius: var(--ui-radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-  background: var(--ui-selected);
-  box-shadow: none;
 }
 :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file])) {
   min-height: var(--ui-field-height);
