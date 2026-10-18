@@ -8,7 +8,7 @@ export default function ContextMenu({ menu, items, onClose }) {
   useLayoutEffect(() => {
     const node = root.current, rect = node.getBoundingClientRect();
     setPosition({ left: Math.max(8, Math.min(menu.x, innerWidth - rect.width - 8)), top: Math.max(8, Math.min(menu.y, innerHeight - rect.height - 8)) });
-    const outside = event => { if (!node.contains(event.target)) close.current(false); };
+    const outside = event => { if (!node.contains(event.target) && !menu.trigger?.contains(event.target)) close.current(false); };
     const escape = event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close.current(true); }
     };

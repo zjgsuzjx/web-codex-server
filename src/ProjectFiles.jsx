@@ -5,6 +5,7 @@ import FileImage from './FileImage';
 import IconButton from './IconButton';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import Tooltip from './Tooltip';
+import EditorTabs from './EditorTabs';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
@@ -42,6 +43,8 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
   const [selectionCount, setSelectionCount] = useState(0);
   const [clearSelectionRequest, setClearSelectionRequest] = useState(0);
   const [selectionRequest, setSelectionRequest] = useState(null);
+  const editorTabs = useRef();
+  const openFile = useCallback(path => { onOpen(path); editorTabs.current?.reveal(path); }, [onOpen]);
   const selectFile = useCallback(path => { setSelectionRequest({ path }); onSelect(path); }, [onSelect]);
   const dirty = !!tab && tab.kind !== 'image' && tab.content !== tab.original;
   return <div className="editor-body">
@@ -61,19 +64,13 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
           <button type="button" role="switch" aria-checked={showMeta} onClick={() => { const next = !showMeta; setShowMeta(next); localStorage.setItem('explorer-show-meta', String(next)); }}><span className="explorer-menu-check">{showMeta && <Check size={14}/>}</span>显示 .meta 文件</button>
         </ExplorerMenu>
       </div></div>
-      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={onOpen} selected={selectedFile} selectionRequest={selectionRequest} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} clearSelectionRequest={clearSelectionRequest} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
+      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={openFile} selected={selectedFile} selectionRequest={selectionRequest} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} clearSelectionRequest={clearSelectionRequest} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
         {!filesLoading && !files.length && <div className="files-empty"><FolderOpen size={25}/><p>项目还是空的</p><button onClick={onUploadFiles}>上传你的第一个文件</button></div>}
       </> : <p className="files-empty">先选择一个项目</p>}
     </aside>
     <ExplorerDivider/>
     <div className="editor-content">
-      <div className="editor-tabbar"><div className="editor-tabs" role="group" aria-label="打开的文件">{tabs.map(file => {
-        const changed = file.kind !== 'image' && file.content !== file.original;
-        return <div key={file.path} className={`editor-tab ${file.path === selectedFile ? 'active' : ''} ${changed ? 'is-dirty' : ''}`}>
-          <button type="button" aria-pressed={file.path === selectedFile} title={file.path} onClick={() => selectFile(file.path)}><File size={14}/><span>{file.path.split('/').pop()}</span></button>
-          <IconButton title={changed ? '关闭文件（有未保存的修改）' : '关闭文件'} className="editor-tab-close" onClick={() => onClose(file.path)}><X size={12}/></IconButton>
-        </div>;
-      })}</div>
+      <div className="editor-tabbar"><EditorTabs ref={editorTabs} tabs={tabs} selectedFile={selectedFile} onSelect={selectFile} onClose={onClose}/>
       {tab && <div className="editor-file-actions">
         <IconButton title="添加到对话上下文" onClick={() => onFileContext(tab.path)}><MessageSquare size={15}/></IconButton>
         <Tooltip title="下载文件"><a aria-label="下载文件" className="icon-button" download href={`/api/projects/${project.id}/download?path=${encodeURIComponent(tab.path)}`}><Download size={15}/></a></Tooltip>
