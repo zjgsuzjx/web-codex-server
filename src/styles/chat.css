@@ -47,11 +47,6 @@
   padding: 0 28px;
   margin: clamp(40px,11vh,120px) auto 40px;
 }
-.welcome-symbol .logo {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--ui-radius-lg);
-}
 .welcome-symbol {
   display: flex;
   justify-content: center;

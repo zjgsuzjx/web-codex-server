@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Check, LoaderCircle, RefreshCw, Sparkles } from 'lucide-react';
 import UserAvatar from './UserAvatar';
+import { BrandMark } from './components/BrandMark';
 
 export default function WorkspaceWelcome({ user, ready = false, error, onContinue, onRetry, onExited }) {
   const [minimum, setMinimum] = useState(false), [slow, setSlow] = useState(false), [leaving, setLeaving] = useState(false);
@@ -16,7 +17,7 @@ export default function WorkspaceWelcome({ user, ready = false, error, onContinu
     return () => clearTimeout(timer);
   }, [leaving, onExited]);
   return <section className={`workspace-welcome ${leaving ? 'is-leaving' : ''}`} aria-label="进入工作区">
-    <div className="entry-brand"><Sparkles size={16}/> STARVALLEY <b>WORKSPACE</b></div>
+    <div className="entry-brand"><BrandMark size={24} className="brand-mark"/> STARVALLEY <b>WORKSPACE</b></div>
     <div className="entry-content">
       <div className={`entry-portrait ${ready ? 'is-ready' : ''}`}><UserAvatar user={user}/><span className="entry-badge" aria-hidden="true">{ready ? <Check size={16}/> : <Sparkles size={16}/>}</span></div>
       <p className="entry-kicker">YOUR SPACE, YOUR NEXT IDEA</p>

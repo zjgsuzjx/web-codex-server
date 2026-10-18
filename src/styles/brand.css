@@ -1,81 +1,20 @@
-/* Two solid layers: a rounded tile and a contrasting pair of sparks. */
-.logo {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 45px;
-  height: 45px;
-  border-radius: var(--ui-radius-lg);
-  background: var(--accent);
-  color: var(--accent-ink);
-  isolation: isolate;
-}
-.logo.small {
-  width: 29px;
-  height: 29px;
-  border-radius: var(--ui-radius);
-}
-.logo>svg {
+.brand-mark {
   display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+  flex: none;
 }
-.logo__spark-main,.logo__spark-small {
-  transform-box: fill-box;
-  transform-origin: center;
+.brand-twinkle {
+  animation: brand-twinkle 3.6s ease-in-out infinite;
 }
-.logo.is-animated .logo__spark-main {
-  transition: transform .65s cubic-bezier(.34,1.56,.64,1);
+@keyframes brand-twinkle {
+  50% { opacity: .25; }
 }
-.logo.is-animated .logo__spark-small {
-  animation: logo-twinkle 3.6s ease-in-out infinite;
+.brand-dew {
+  animation: brand-dew 4.2s ease-in-out infinite;
 }
-.logo.is-animated::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border: 1px solid var(--accent);
-  border-radius: inherit;
-  pointer-events: none;
-  animation: logo-halo 3s ease-out infinite;
-}
-[inert] .logo.is-animated .logo__spark-small,[inert] .logo.is-animated::after {
-  animation-play-state: paused;
-}
-@keyframes logo-twinkle {
-  0%,100% { opacity: .65; transform: scale(.9); }
-  50% { opacity: 1; transform: scale(1.05); }
-}
-@keyframes logo-halo {
-  0% { opacity: 0; transform: scale(1); }
-  10% { opacity: .22; }
-  65%,100% { opacity: 0; transform: scale(1.45); }
-}
-@media (hover:hover) and (pointer:fine) {
-  .logo.is-animated:hover .logo__spark-main {
-    transform: rotate(90deg);
-  }
+@keyframes brand-dew {
+  0%,68%,100% { transform: translateY(0); opacity: 1; }
+  84% { transform: translateY(1.6px); opacity: .55; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .logo.is-animated .logo__spark-main,.logo.is-animated:hover .logo__spark-main,.logo.is-animated .logo__spark-small {
-    animation: none;
-    transition: none;
-    transform: none;
-  }
-  .logo.is-animated::after {
-    display: none;
-  }
-}
-@media (forced-colors:active) {
-  .logo {
-    background: CanvasText;
-    color: Canvas;
-    forced-color-adjust: none;
-  }
-  .logo.is-animated::after {
-    display: none;
-  }
+  .brand-twinkle,.brand-dew { animation: none; }
 }
