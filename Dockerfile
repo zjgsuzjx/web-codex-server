@@ -25,6 +25,7 @@ COPY src/connection-state.js ./src/connection-state.js
 COPY src/link-info.js ./src/link-info.js
 COPY src/editor-language.js ./src/editor-language.js
 COPY src/file-selection.js ./src/file-selection.js
+COPY src/editor-tabs.js ./src/editor-tabs.js
 COPY src/socket.js ./src/socket.js
 COPY scripts/smoke.mjs ./scripts/smoke.mjs
 COPY scripts/role-smoke.mjs ./scripts/role-smoke.mjs
