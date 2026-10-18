@@ -1,6 +1,7 @@
 /* Application stylesheet entry. Keep foundations before feature modules. */
 @import './styles/tokens.css';
 @import './styles/base.css';
+@import './styles/brand.css';
 @import './styles/shell.css';
 @import './styles/chat.css';
 @import './styles/output.css';
