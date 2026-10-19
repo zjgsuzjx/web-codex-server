@@ -5,6 +5,24 @@ import path from 'node:path';
 import os from 'node:os';
 import { zipSync } from 'fflate';
 import { stageZip, publishZip, uploadPlan } from '../server/archives.js';
+import { fileEntryLimit } from '../shared/file-limits.js';
+
+test('ZIP entry counts support an unlimited role policy without disabling path or byte checks',async()=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sv-zip-count-')),filename=path.join(dir,'input.zip');
+  async function stage(limits,data=zipSync({'a/':new Uint8Array(),'b/':new Uint8Array(),'c/':new Uint8Array()})) {
+    await fs.writeFile(filename,data);const staging=await fs.mkdtemp(path.join(dir,'stage-'));
+    return stageZip(filename,staging,{maxFile:10,maxBytes:20,...limits});
+  }
+  try {
+    await assert.rejects(stage({maxEntries:2}),e=>e.status===413&&/2 项/.test(e.message));
+    assert.equal((await stage({maxEntries:fileEntryLimit({role:'superadmin'})})).entries.length,3);
+    await assert.rejects(stage({maxEntries:null},zipSync({'../escape':new Uint8Array()})),e=>e.status===400);
+    await assert.rejects(stage({maxEntries:null},zipSync({'big':new Uint8Array(11)})),/上限/);
+    const duplicate=Buffer.from(zipSync({'a/':new Uint8Array(),'b/':new Uint8Array()}));
+    for(let at=0;(at=duplicate.indexOf('b/',at))!==-1;at+=2)duplicate.write('a/',at);
+    await assert.rejects(stage({maxEntries:null},duplicate),e=>e.status===400&&/重复路径/.test(e.message)&&!/数量/.test(e.message));
+  }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
 
 test('ZIP validation rejects traversal, links, CRC corruption, quota excess and conflicts before publishing',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sv-zip-')),root=path.join(dir,'root');await fs.mkdir(root);

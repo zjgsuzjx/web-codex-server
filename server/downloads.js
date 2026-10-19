@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import archiver from 'archiver';
 import { fail, openSafe, safePath, walk } from './files.js';
+import { USER_FILE_ENTRY_LIMIT, fileEntryLimitMessage } from '../shared/file-limits.js';
 
 export function attachmentHeader(name) {
   const safe = name.replace(/[\r\n"\\]/g, '_');
@@ -22,7 +23,7 @@ export async function downloadFile(res, root, rel) {
   } finally { await handle.close().catch(() => {}); }
 }
 
-export async function downloadSelected(res, root, paths, filename) {
+export async function downloadSelected(res, root, paths, filename, { maxEntries = USER_FILE_ENTRY_LIMIT } = {}) {
   // Validate and inventory every selected root before sending ZIP headers.
   const entries = [];
   for (const rel of paths) {
@@ -30,10 +31,12 @@ export async function downloadSelected(res, root, paths, filename) {
     if (stat.isFile()) entries.push({ path: rel, type: 'file' });
     else if (stat.isDirectory()) {
       entries.push({ path: rel, type: 'directory' });
-      const children = await walk(root, Math.max(0, 20000 - entries.length), rel);
-      entries.push(...children.map(entry => ({ ...entry, path: `${rel}/${entry.path}` })));
+      let children;
+      try { children = await walk(root, maxEntries == null ? null : Math.max(0, maxEntries - entries.length), rel); }
+      catch (error) { if (error.status === 413 && maxEntries != null) fail(413,fileEntryLimitMessage(maxEntries)); throw error; }
+      for (const entry of children) entries.push({ ...entry, path: `${rel}/${entry.path}` });
     } else fail(400, '只能下载普通文件或文件夹');
-    if (entries.length > 20000) fail(413, '文件数量超过上限');
+    if (maxEntries != null && entries.length > maxEntries) fail(413, fileEntryLimitMessage(maxEntries));
   }
   res.setHeader('Content-Disposition', attachmentHeader(filename));
   res.type('application/zip');

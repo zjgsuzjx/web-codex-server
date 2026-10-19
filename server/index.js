@@ -21,6 +21,7 @@ import { createTurnChanges } from './turn-changes.js';
 import { createTurnActivity } from './turn-activity.js';
 import { changesSummary, historicalChanges } from '../shared/file-changes.js';
 import { storageLimit, topPaths } from '../shared/storage.js';
+import { fileEntryLimit, fileEntryLimitMessage } from '../shared/file-limits.js';
 import { measure, createCleanup } from './storage.js';
 import { fileImageMime, serveFileImage } from './file-images.js';
 import { validateAvatar } from './avatar.js';
@@ -174,7 +175,7 @@ export async function createApp(options = {}) {
   cleanup = createCleanup({ codex, resources, mutation, currentUser: id => store.user(id), remove: deleteEntries, async inventory(u) {
     const entries = [];
     for (const p of store.all('SELECT id,name FROM projects WHERE user_id=?', u.id)) {
-      const tree = await walk(root(u, p), 20000, '', { pruneNames });
+      const tree = await walk(root(u, p), fileEntryLimit(u), '', { pruneNames });
       // Include root items and nested cache/build directories or large files.
       const candidates = tree.filter(e => !e.path.includes('/') || e.type === 'directory' && /^(node_modules|\.cache|dist|build|\.next|\.nuxt|coverage|__pycache__|\.venv|venv|tmp|temp|logs)$/i.test(e.name) || e.type === 'file' && e.size >= 10 * MB);
       for (const e of candidates.slice(0, Math.max(0, 600 - entries.length))) {
@@ -272,7 +273,7 @@ export async function createApp(options = {}) {
     store.run('INSERT INTO projects(id,user_id,name,created) VALUES(?,?,?,?)', p.id, req.user.id, p.name, p.created); store.audit(req.user.id, 'project/create'); res.status(201).json(p);
   });
   app.patch('/api/projects/:id', (req, res) => { store.project(req.user, req.params.id); const name = req.body.name?.trim(); if (!name || name.length > 80) fail(400, '项目名称无效'); store.run('UPDATE projects SET name=? WHERE id=? AND user_id=?', name, req.params.id, req.user.id); res.json({ ok: true }); });
-  app.get('/api/projects/:id/files', async (req, res) => { const p = store.project(req.user, req.params.id); const start = relativePath(req.query.path || ''); const entries = await walk(root(req.user, p), 20000, start, { pruneNames }); res.json(entries.map(e => ({ ...e, path: start ? `${start}/${e.path}` : e.path, lazy: e.type === 'directory' && pruneNames.has(e.name) }))); });
+  app.get('/api/projects/:id/files', async (req, res) => { const p = store.project(req.user, req.params.id); const start = relativePath(req.query.path || ''); const entries = await walk(root(req.user, p), fileEntryLimit(req.user), start, { pruneNames }); res.json(entries.map(e => ({ ...e, path: start ? `${start}/${e.path}` : e.path, lazy: e.type === 'directory' && pruneNames.has(e.name) }))); });
   app.post('/api/projects/:id/size', async (req, res) => {
     const p = store.project(req.user, req.params.id), paths = selectedPaths(req.body.paths), entries = [];
     for (const rel of paths) { await safePath(root(req.user, p), rel); entries.push({ path: rel, ...await measure(root(req.user, p), rel, true) }); }
@@ -323,11 +324,11 @@ export async function createApp(options = {}) {
   app.get('/api/projects/:id/download', async (req, res) => {
     const p = store.project(req.user, req.params.id), rel = relativePath(req.query.path || ''); const projectRoot = root(req.user, p), target = await safePath(projectRoot, rel), st = await fs.lstat(target);
     if (st.isFile()) return downloadFile(res, projectRoot, rel);
+    const entries = await walk(projectRoot,fileEntryLimit(req.user),rel);
     const filename = (rel ? path.basename(rel) : p.name).replace(/[\r\n"\\]/g, '_');
     res.setHeader('Content-Disposition', attachmentHeader(filename + '.zip'));
     {
       res.type('application/zip'); const archive = archiver('zip', { zlib: { level: 3 } }); archive.on('error', () => res.destroy()); res.on('close', () => archive.abort()); archive.pipe(res);
-      const entries = await walk(projectRoot,20000,rel);
       for (const entry of entries) {
         const fullRel = entry.source || (rel ? `${rel}/${entry.path}` : entry.path);
         if (entry.type === 'directory') archive.append('', { name: `${entry.path}/` });
@@ -341,7 +342,7 @@ export async function createApp(options = {}) {
   });
   app.post('/api/projects/:id/download', async (req, res) => {
     const p = store.project(req.user, req.params.id), paths = selectedPaths(req.body.paths);
-    await downloadSelected(res, root(req.user, p), paths, `${p.name}-selected.zip`);
+    await downloadSelected(res, root(req.user, p), paths, `${p.name}-selected.zip`, {maxEntries:fileEntryLimit(req.user)});
   });
   app.get('/api/threads/:id/download', async (req, res) => {
     const thread = store.thread(req.user, req.params.id);
@@ -540,7 +541,9 @@ export async function createApp(options = {}) {
     if (method === 'terminal/stop') { ws.terminal?.close(); ws.terminal = null; return { ok: true }; }
     if (method === 'upload/check') {
       const p = store.project(u, params.projectId);
-      if (!Array.isArray(params.paths) || !params.paths.length || params.paths.length > 20000) fail(400, '上传文件列表无效');
+      if (!Array.isArray(params.paths) || !params.paths.length) fail(400, '上传文件列表无效');
+      const limit = fileEntryLimit(u);
+      if (limit != null && params.paths.length > limit) fail(413, fileEntryLimitMessage(limit));
       const entries = params.paths.map(value => ({path:relativePath(value,false),size:0}));
       const { conflicts } = await uploadPlan(root(u,p),entries);
       return {conflicts:conflicts.slice(0,100),conflictCount:conflicts.length};
@@ -579,7 +582,7 @@ export async function createApp(options = {}) {
           const reserved = [...uploads.values()].filter(x => x.uid === u.id && x.id !== item.id && !x.avatar).reduce((sum,x)=>sum+x.size,0);
           const limit = storageLimit(u, config.quota);
           let lastProgress = 0;
-          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit ?? Infinity,onProgress:(done,total)=>{
+          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit ?? Infinity,maxEntries:fileEntryLimit(u),onProgress:(done,total)=>{
             if (done === total || Date.now() - lastProgress > 80) { lastProgress = Date.now(); send(ws, {type:'upload/progress',uploadId:item.id,phase:'extracting',done,total}); }
           }});
           const result = await publishZip(root(u, item.project), staging, entries, {policy:params.conflictPolicy || 'ask',beforePublish:async plan=>{

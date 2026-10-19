@@ -6,9 +6,10 @@ import { Transform } from 'node:stream';
 import { crc32 } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 import { fail, relativePath, safePath, makeParents, anchored } from './files.js';
+import { USER_FILE_ENTRY_LIMIT, fileEntryLimitMessage } from '../shared/file-limits.js';
 
 // Extract into a private spool first. Validate the entire archive before publishing.
-export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntries = 20000, onProgress }) {
+export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntries = USER_FILE_ENTRY_LIMIT, onProgress }) {
   const zip = await new Promise((resolve, reject) => yauzl.open(filename, { lazyEntries: true, autoClose: false, strictFileNames: true }, (e, z) => e ? reject(e) : resolve(z))).catch(() => fail(400, 'ZIP 无效或已损坏'));
   const entries = [], names = new Set(); let total = 0, actual = 0;
   try {
@@ -20,7 +21,8 @@ export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntrie
           const mode = (entry.externalFileAttributes >>> 16) & 0xf000;
           if (mode && mode !== 0x8000 && mode !== 0x4000) fail(400, '压缩包不能包含链接或特殊文件');
           if (entry.generalPurposeBitFlag & 1) fail(400, '不支持加密 ZIP');
-          if (names.has(rel) || names.size >= maxEntries) fail(413, '压缩包路径重复或文件数量超过上限');
+          if (names.has(rel)) fail(400, `压缩包中包含重复路径：${rel}`);
+          if (maxEntries != null && names.size >= maxEntries) fail(413, fileEntryLimitMessage(maxEntries));
           names.add(rel);
           if (entry.uncompressedSize > maxFile || (total += entry.uncompressedSize) > maxBytes) fail(413, '解压后文件大小超过存储配额或单文件上限');
           await makeParents(staging, `${rel}${directory ? '/placeholder' : ''}`);

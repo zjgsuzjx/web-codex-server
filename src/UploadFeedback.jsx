@@ -3,10 +3,10 @@ import { formatBytes } from '../shared/usage';
 import Modal from './Modal';
 import IconButton from './IconButton';
 
-const labels = {scanning:'正在读取文件夹',compressing:'正在压缩文件夹',uploading:'正在上传',extracting:'正在解压并检查文件',finishing:'正在保存文件',conflict:'等待处理重名文件',complete:'上传完成'};
+const labels = {scanning:'正在读取文件夹',checking:'正在检查目标文件',compressing:'正在压缩文件夹',uploading:'正在上传',extracting:'正在解压并检查文件',finishing:'正在保存文件',conflict:'等待处理重名文件',complete:'上传完成'};
 export function UploadProgress({ progress, onCancel, inline = false }) {
   const stage = progress.phase || 'uploading';
-  const extracting = stage === 'extracting', waiting = stage === 'conflict' || stage === 'scanning';
+  const extracting = stage === 'extracting', waiting = ['conflict','scanning','checking'].includes(stage);
   const total = extracting ? progress.stageTotal : progress.total, done = extracting ? progress.stageDone : progress.done;
   const percent = waiting || extracting && !total ? null : Math.round(Math.max(0,Math.min(100,progress.percent ?? (total ? done / total * 100 : stage === 'complete' || stage === 'finishing' ? 100 : 0))));
   const Icon = stage === 'compressing' || extracting ? Archive : Upload;
