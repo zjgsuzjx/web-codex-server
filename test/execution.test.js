@@ -39,7 +39,9 @@ test('ownership repair mounts only that user and cannot enter the host',async()=
   manager.docker={async createContainer(value){spec=value;return {async start(){},async wait(){return {StatusCode:0};},async remove(){}};}};
   await manager.prepareHome(user('admin'),true);
   assert.equal(spec.HostConfig.NetworkMode,'none');assert.ok(!spec.HostConfig.Privileged);assert.ok(!spec.HostConfig.PidMode);
-  assert.ok(spec.HostConfig.Binds.every(x=>x.startsWith('/srv/app/data/users/alice/')));assert.deepEqual(spec.HostConfig.CapAdd,['CHOWN','DAC_OVERRIDE']);
+  assert.ok(spec.HostConfig.Binds.every(x=>x.startsWith('/srv/app/data/users/alice/')));assert.deepEqual(spec.HostConfig.CapAdd,['CHOWN','DAC_OVERRIDE','FOWNER']);
+  assert.deepEqual(spec.HostConfig.CapDrop,['ALL']);assert.deepEqual(spec.HostConfig.SecurityOpt,['no-new-privileges:true']);
+  assert.ok(spec.HostConfig.ReadonlyRootfs);assert.equal(spec.HostConfig.Memory,32*1024*1024);
   assert.ok(spec.Cmd.includes('--no-dereference'));assert.ok(spec.Cmd.includes('/own-projects'));
 });
 test('legacy migration upgrades only the original administrator and never repeats',async()=>{
