@@ -195,7 +195,10 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       const turn={id:'image-turn',status:'completed',items:[image]};instance.codex.threads.get(tr.id).turns.push(turn);
       const events=await socket(base,a);sockets.push(events);await events.wait('ready');
       instance.codex.emit(a.id,{method:'item/completed',params:{threadId:tr.id,turnId:turn.id,item:image}});
-      const event=(await events.wait('codex/event')).event.params.item;assert.ok(!('result' in event));assert.match(event.imageUrl,/\/images\/generated$/);
+      // Background title updates can arrive on this connection before the image event.
+      let message;
+      do { message=(await events.wait('codex/event')).event; } while(message.method!=='item/completed'||message.params?.threadId!==tr.id||message.params?.item?.id!==image.id);
+      const event=message.params.item;assert.ok(!('result' in event));assert.match(event.imageUrl,/\/images\/generated$/);
       const history=(await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.turns[0].items[0];assert.equal(history.imageUrl,event.imageUrl);assert.ok(!('result' in history));
       const url=base+history.imageUrl;
       const response=await fetch(url,{headers:{Cookie:a.cookie}});assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/png');assert.deepEqual(Buffer.from(await response.arrayBuffer()),png);
