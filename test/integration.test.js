@@ -76,6 +76,32 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
     await t.test('unfinished and conflicting uploads do not overwrite existing files',async()=>{const task=await s2.call('upload/begin',{projectId:p.id,path:'src/hello.txt',size:2});await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}));await s2.chunk(Buffer.from('XX'));await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}),e=>e.code==='UPLOAD_CONFLICT'&&e.conflicts[0].path==='src/hello.txt');assert.equal((await request(`/projects/${p.id}/file?path=src/hello.txt`,'GET',null,a)).data.content,'hello world');const skipped=await s2.call('upload/finish',{uploadId:task.uploadId,conflictPolicy:'skip'});assert.equal(skipped.skipped,1);assert.equal(skipped.uploaded,0);});
     await t.test('editor uses optimistic concurrency and supports rename and deletion',async()=>{const file=(await request(`/projects/${p.id}/file?path=src/hello.txt`,'GET',null,a)).data;const saved=await request(`/projects/${p.id}/file`,'PUT',{path:'src/hello.txt',content:'modified',etag:file.etag},a);assert.equal(saved.status,200);assert.equal((await request(`/projects/${p.id}/file`,'PUT',{path:'src/hello.txt',content:'stale',etag:file.etag},a)).status,409);assert.equal((await request(`/projects/${p.id}/file`,'PATCH',{from:'src/hello.txt',to:'src/new.txt'},a)).status,200);assert.equal((await request(`/projects/${p.id}/file`,'DELETE',{path:'src/new.txt'},a)).status,200);});
     await t.test('directory download produces a zip; unauthorized user cannot download',async()=>{const r=await fetch(base+`/api/projects/${p.id}/download`,{headers:{Cookie:a.cookie,Origin:base}});assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'application/zip');const buf=Buffer.from(await r.arrayBuffer());assert.equal(buf.subarray(0,2).toString(),'PK');assert.ok(buf.includes(Buffer.from('resumed.txt')));assert.equal((await request(`/projects/${p.id}/download`,'GET',null,b)).status,404);});
+    await t.test('file inventories and upload preflight enforce persisted role limits',async t=>{
+      const own=(await request('/projects','POST',{name:'Count limits'},b)).data;
+      const roots=new Set([path.resolve(dir,'users',a.username,'projects',p.id),path.resolve(dir,'users',b.username,'projects',own.id)]);
+      const originalReaddir=fs.readdir.bind(fs),originalLstat=fs.lstat.bind(fs);
+      let count=20001;
+      const fakeStat={isFile:()=>true,isDirectory:()=>false,isSymbolicLink:()=>false,size:0,mtimeMs:1};
+      t.mock.method(fs,'readdir',async(target,...args)=>{
+        const resolved=String(target).startsWith('/proc/self/fd/')?await fs.realpath(target):path.resolve(String(target));
+        if(!roots.has(resolved))return originalReaddir(target,...args);
+        return Array.from({length:count},(_,i)=>({name:`count-fixture-${i}`,isSymbolicLink:()=>false,isDirectory:()=>false}));
+      });
+      t.mock.method(fs,'lstat',async(target,...args)=>String(target).includes('count-fixture-')?fakeStat:originalLstat(target,...args));
+      assert.equal((await request(`/projects/${own.id}/files`,'GET',null,b)).data.length,20001);
+      count=100001;
+      assert.equal((await request(`/projects/${p.id}/files`,'GET',null,a)).data.length,100001);
+      const limited=await request(`/projects/${own.id}/files`,'GET',null,b);assert.equal(limited.status,413);assert.match(limited.data.error,/100,000/);
+      const member=await socket(base,b);sockets.push(member);
+      const paths=['../escape',...Array(100000).fill('x')];
+      // The superadmin passes the count check and still fails path validation.
+      await assert.rejects(s2.call('upload/check',{projectId:p.id,paths}),e=>e.status===400&&/路径无效/.test(e.message));
+      await assert.rejects(member.call('upload/check',{projectId:own.id,paths,role:'superadmin',maxEntries:null}),e=>e.status===413&&/100,000/.test(e.message));
+      instance.store.run("UPDATE users SET role='admin' WHERE id=?",b.id);
+      try{await assert.rejects(member.call('upload/check',{projectId:own.id,paths}),e=>e.status===413&&/100,000/.test(e.message));}
+      finally{instance.store.run("UPDATE users SET role='user' WHERE id=?",b.id);}
+      await member.close();
+    });
     await t.test('Codex routes owned threads with the current protocol and isolates users',async()=>{const tr=await request('/threads','POST',{projectId:p.id},a);assert.equal(tr.status,201);assert.equal(instance.codex.calls.find(x=>x.method==='thread/start').params.sandbox,'danger-full-access');const sb=await socket(base,b);sockets.push(sb);await assert.rejects(sb.call('turn/start',{threadId:tr.data.id,text:'read other user'}));await s2.call('turn/start',{threadId:tr.data.id,text:'hello'});assert.equal(instance.codex.calls.at(-1).params.cwd,`/workspace/${p.id}`);assert.equal(instance.codex.calls.at(-1).params.sandboxPolicy.type,'externalSandbox');assert.equal(instance.codex.calls.at(-1).params.sandboxPolicy.networkAccess,'enabled');assert.equal((await request('/settings','PUT',{...a.settings,sandbox:'readOnly'},a)).status,400);assert.equal((await request('/settings','PUT',{...a.settings,effort:'ultra'},a)).status,200);await assert.rejects(s2.call('command/exec',{command:['sh']}));});
     await t.test('only superadmins assign roles; changes revoke sessions; the last owner cannot be demoted',async()=>{
       assert.equal((await request(`/admin/users/${b.id}/role`,'PATCH',{role:'superadmin'},b)).status,403);

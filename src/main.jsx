@@ -45,6 +45,7 @@ import StorageManager from './StorageManager';
 import { zipFolder } from './zip-folder';
 import { droppedFiles } from './drop-files';
 import { UploadProgress, UploadConflict } from './UploadFeedback';
+import { fileEntryLimit } from '../shared/file-limits.js';
 
 const ChangesReview = lazy(() => import('./ChangesReview'));
 const TerminalView = lazy(() => import('./TerminalView'));
@@ -321,13 +322,14 @@ function Workspace({ user, setUser, theme, setTheme }) {
     const report = value => setProgress({...value,scope:'project',compression});
     report({phase:input.dataTransfer?'scanning':'uploading',done:0,total:0});
     try {
-      const selection = input.dataTransfer ? await droppedFiles(input.dataTransfer,controller.signal,report) : input;
+      const limits={maxEntries:fileEntryLimit(user)};
+      const selection = input.dataTransfer ? await droppedFiles(input.dataTransfer,controller.signal,report,limits) : input;
       const list=selection.files, folder=selection.folder, archive=selection.archive || !!input.dataTransfer && !folder && list.length > 0 && list.every(file=>/\.zip$/i.test(file.name));
       if (!list.length && !selection.directories?.length) return;
       let uploadFiles=list;
       if(folder){
         report({phase:'compressing',done:0,total:list.reduce((n,f)=>n+f.size,0)});
-        const zip=await zipFolder(list,controller.signal,report,selection.directories);
+        const zip=await zipFolder(list,controller.signal,report,selection.directories,limits);
         compression={original:list.reduce((n,f)=>n+f.size,0),compressed:zip.size}; uploadFiles=[zip];
       }
       const onConflict = error => new Promise(resolve => {

@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { openSafe, walk } from './files.js';
 import { changesSummary, historicalChanges, projectFilePath, textFileChange, unifiedChanges } from '../shared/file-changes.js';
+import { USER_FILE_ENTRY_LIMIT, fileEntryLimit } from '../shared/file-limits.js';
 
 const skipNames = new Set(['.git', 'node_modules', '.venv']);
-export async function projectSnapshot(root, { maxFile = 512 * 1024, maxBytes = 16 * 1024 * 1024 } = {}) {
+export async function projectSnapshot(root, { maxFile = 512 * 1024, maxBytes = 16 * 1024 * 1024, maxEntries = USER_FILE_ENTRY_LIMIT } = {}) {
   const files = new Map(); let used = 0;
   try {
-    for (const entry of await walk(root, 10000, '', { skipNames })) {
+    for (const entry of await walk(root, maxEntries, '', { skipNames })) {
       if (entry.type !== 'file') continue;
       const metadata = { size: entry.size, modified: entry.modified, content: null };
       files.set(entry.path, metadata);
@@ -79,7 +80,7 @@ export function createTurnChanges({ store, root, cwd, emit, snapshot = projectSn
     state.running = (async () => {
       do {
         state.again = false;
-        const after = await snapshot(state.root);
+        const after = await snapshot(state.root, {maxEntries:fileEntryLimit(store.user(state.user.id) || state.user)});
         if (closed || state.again || !state.turnId) continue;
         const warning = state.before.warning || after.warning;
         const files = warning ? unifiedChanges(state.nativeDiff, state.cwd) : compareSnapshots(state.before, after, state.moves);
@@ -96,7 +97,7 @@ export function createTurnChanges({ store, root, cwd, emit, snapshot = projectSn
       if (previous?.running) await previous.running;
       if (previous?.status === 'inProgress') return; // CLI rejects overlapping turns.
       const state = { user, thread, root: root(user, thread), cwd: cwd(user, thread), status: 'inProgress', turnId: null, moves: new Map() };
-      state.before = await snapshot(state.root); states.set(id, state);
+      state.before = await snapshot(state.root, {maxEntries:fileEntryLimit(user)}); states.set(id, state);
     },
     bind(user, thread, turnId) { const state = states.get(key(user.id, thread.id)); if (state && !state.turnId) state.turnId = turnId; },
     cancel(user, thread) { const state = states.get(key(user.id, thread.id)); if (state && !state.turnId) states.delete(key(user.id, thread.id)); },

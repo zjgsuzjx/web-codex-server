@@ -1,3 +1,5 @@
+import { fileEntryLimit, fileEntryLimitMessage } from '../shared/file-limits.js';
+
 export class LiveSocket {
   constructor(user, onEvent, onStatus, onLatency = () => {}) { this.user = user; this.onEvent = onEvent; this.onStatus = onStatus; this.onLatency = onLatency; this.next = 1; this.pending = new Map(); this.ack = null; this.stopped = false; this.attempts = 0; this.connect(); }
   connect() {
@@ -51,7 +53,25 @@ export class LiveSocket {
     let conflictPolicy = 'ask';
     if (signal?.aborted) throw new Error('已取消上传');
     if (target.projectId && !target.extract && files.length && onConflict) {
-      const check = await this.call('upload/check', {projectId:target.projectId,paths:files.map(file=>file.uploadPath || file.webkitRelativePath || file.name)});
+      const limit=fileEntryLimit(this.user);
+      if(limit!=null&&files.length>limit)throw new Error(fileEntryLimitMessage(limit));
+      const check={conflicts:[],conflictCount:0},encoder=new TextEncoder();
+      let paths=[],size=0;
+      const inspect=async()=>{
+        if(signal?.aborted)throw new Error('已取消上传');
+        onProgress({phase:'checking',name:paths[0],done:0,total,index:0,count:files.length});
+        const result=await this.call('upload/check',{projectId:target.projectId,paths});
+        check.conflictCount+=result.conflictCount;
+        check.conflicts.push(...result.conflicts.slice(0,Math.max(0,100-check.conflicts.length)));
+        paths=[];size=0;
+      };
+      for(const file of files){
+        const path=file.uploadPath || file.webkitRelativePath || file.name,bytes=encoder.encode(JSON.stringify(path)).length+1;
+        // Keep JSON requests below the gateway's 1 MiB message ceiling.
+        if(paths.length&&size+bytes>256*1024)await inspect();
+        paths.push(path);size+=bytes;
+      }
+      if(paths.length)await inspect();
       if (check.conflictCount) {
         onProgress({phase:'conflict',name:files[0].name,done:0,total,index:0,count:files.length});
         conflictPolicy = await onConflict(check);

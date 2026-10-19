@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { constants } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
+import { USER_FILE_ENTRY_LIMIT, fileEntryLimitMessage } from '../shared/file-limits.js';
 
 export class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
 export const fail = (status, message) => { throw new HttpError(status, message); };
@@ -46,7 +47,7 @@ export async function anchored(root, rel) {
   const parts=rel.split('/');const name=parts.pop();let dir=await openDirectory(root);
   try{for(const part of parts){const next=await openDirectory(`/proc/self/fd/${dir.fd}/${part}`);await dir.close();dir=next;}return{target:`/proc/self/fd/${dir.fd}/${name}`,close:()=>dir.close()};}catch(e){await dir.close();throw e;}
 }
-export async function walk(root, max = 20000, start = '', { skipNames, pruneNames } = {}) {
+export async function walk(root, max = USER_FILE_ENTRY_LIMIT, start = '', { skipNames, pruneNames } = {}) {
   const entries = [];
   async function visit(rel, dir) {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
@@ -59,7 +60,7 @@ export async function walk(root, max = 20000, start = '', { skipNames, pruneName
       if(st.isSymbolicLink())continue;
       if (!st.isDirectory() && !st.isFile()) continue;
       entries.push({ path: name, name: item.name, type: st.isDirectory() ? 'directory' : 'file', size: st.size, modified: st.mtimeMs });
-      if (entries.length > max) fail(413, '文件数量超过上限');
+      if (max != null && entries.length > max) fail(413, fileEntryLimitMessage(max));
       if (st.isDirectory() && !pruneNames?.has(item.name)) {if(process.platform==='linux'){const handle=await openDirectory(target);try{await visit(name,`/proc/self/fd/${handle.fd}`);}finally{await handle.close();}}else await visit(name,await safePath(root,start?`${start}/${name}`:name));}
     }
   }
