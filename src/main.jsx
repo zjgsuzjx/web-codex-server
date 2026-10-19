@@ -43,6 +43,8 @@ import { closeTabState, hasUnapprovedTabChanges, isDirtyTab } from './editor-tab
 
 import StorageManager from './StorageManager';
 import { zipFolder } from './zip-folder';
+import { droppedFiles } from './drop-files';
+import { UploadProgress, UploadConflict } from './UploadFeedback';
 
 const ChangesReview = lazy(() => import('./ChangesReview'));
 const TerminalView = lazy(() => import('./TerminalView'));
@@ -124,6 +126,9 @@ function Workspace({ user, setUser, theme, setTheme }) {
   }, []);
   const [draftAttachments,setDraftAttachments]=useState({}),[attachmentPreview,setAttachmentPreview]=useState(null),[dragging,setDragging]=useState(false);
   const attachmentPicker=useRef(),archiveInput=useRef(),sendPending=useRef(false);
+  const projectUploadPending = useRef(false);
+  const [uploadConflict, setUploadConflict] = useState(null);
+  useEffect(() => () => abortUpload.current?.abort(), []);
   const draftKey=thread?.id||`new:${project?.id||''}`, attachments=draftAttachments[draftKey]||[];
   const notify = useCallback((message, error = false) => setToast({ message, error, key: Date.now() }), []);
   const settingsQueue = useRef();
@@ -305,16 +310,37 @@ function Workspace({ user, setUser, theme, setTheme }) {
   async function persistSettings(s) { try { const result = await api('/settings', { method: 'PUT', body: s }); setSettings(result); return result; } catch (e) { notify(e.message, true); throw e; } }
   function updateSettings(s) { return settingsQueue.current.update(s, settings); }
   async function upload(e) {
-    const list = [...(e.target.files || [])]; e.target.value = ''; if (!list.length || !project) return;
-    if(progress||sendPending.current)return;
-    const targetProject = project; abortUpload.current = new AbortController(); setProgress({ name: list[0].name, done: 0, total: list.reduce((n,f)=>n+f.size,0), index: 1, count: list.length });
+    const archive = e.target === archiveInput.current, list = [...(e.target.files || [])]; e.target.value = '';
+    return uploadProject({files:list,folder:list.some(file=>file.webkitRelativePath),archive});
+  }
+  async function uploadProject(input) {
+    if (!project || progress || sendPending.current || projectUploadPending.current) return;
+    projectUploadPending.current = true;
+    const targetProject = project, controller = new AbortController(); abortUpload.current = controller;
+    let compression;
+    const report = value => setProgress({...value,scope:'project',compression});
+    report({phase:input.dataTransfer?'scanning':'uploading',done:0,total:0});
     try {
-      const folder=list.some(file=>file.webkitRelativePath), archive=e.target===archiveInput.current;
+      const selection = input.dataTransfer ? await droppedFiles(input.dataTransfer,controller.signal,report) : input;
+      const list=selection.files, folder=selection.folder, archive=selection.archive || !!input.dataTransfer && !folder && list.length > 0 && list.every(file=>/\.zip$/i.test(file.name));
+      if (!list.length && !selection.directories?.length) return;
       let uploadFiles=list;
-      if(folder){setProgress(p=>({...p,phase:'正在压缩文件夹'}));uploadFiles=[await zipFolder(list,abortUpload.current.signal,(index,count)=>setProgress(p=>({...p,index,count,phase:'正在压缩文件夹'})))];}
-      const results=await socket.current.upload({projectId:targetProject.id,extract:folder||archive},uploadFiles,setProgress,abortUpload.current.signal);
-      notify(folder||archive?`已解压 ${results.reduce((n,r)=>n+(r.extracted||0),0)} 个文件或目录`:`${list.length} 个文件上传完成`);
-    } catch (e) { notify(e.message, true); } finally { setProgress(null); await refreshFiles(targetProject).catch(()=>{}); }
+      if(folder){
+        report({phase:'compressing',done:0,total:list.reduce((n,f)=>n+f.size,0)});
+        const zip=await zipFolder(list,controller.signal,report,selection.directories);
+        compression={original:list.reduce((n,f)=>n+f.size,0),compressed:zip.size}; uploadFiles=[zip];
+      }
+      const onConflict = error => new Promise(resolve => {
+        const finish = policy => { controller.signal.removeEventListener('abort',cancel); setUploadConflict(null); resolve(policy); };
+        const cancel = () => finish('cancel');
+        controller.signal.addEventListener('abort',cancel,{once:true});
+        if (controller.signal.aborted) cancel(); else setUploadConflict({...error,resolve:finish});
+      });
+      const results=await socket.current.upload({projectId:targetProject.id,extract:folder||archive},uploadFiles,report,controller.signal,onConflict);
+      const uploaded=results.reduce((n,r)=>n+(r.uploaded||0),0), skipped=results.reduce((n,r)=>n+(r.skipped||0),0), overwritten=results.reduce((n,r)=>n+(r.overwritten||0),0);
+      notify(`${uploaded} 个文件上传完成${overwritten?`，已覆盖 ${overwritten} 个`:''}${skipped?`，已跳过 ${skipped} 项`:''}`);
+    } catch (e) { notify(e.message, !controller.signal.aborted && e.message!=='已取消上传'); }
+    finally { projectUploadPending.current=false; setUploadConflict(null); setProgress(null); await refreshFiles(targetProject).catch(()=>{}); }
   }
   async function openFile(rel, reload = false) {
     setReview(null);
@@ -401,11 +427,12 @@ function Workspace({ user, setUser, theme, setTheme }) {
         <div className="composer-meters">{thread&&<ContextUsage usage={thread.tokenUsage}/>}<StorageManager api={api} Dialog={Modal} userId={user.id} onFiles={()=>{setReview(null);setEditor(true);}} onDeleted={cleanupDeleted} beforeDelete={beforeCleanupDelete}/><UsageOverview api={api} socket={socket.current} Dialog={Modal}/></div></div>
         <form className={`composer ${dragging?'is-dragging':''}`} onDragOver={e=>{if(e.dataTransfer.types.includes('Files')){e.preventDefault();e.dataTransfer.dropEffect='copy';setDragging(true);}}} onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragging(false);}} onDrop={e=>{e.preventDefault();setDragging(false);addAttachments([...e.dataTransfer.files]);}} data-effort={effortTone(previewEffort || settings.effort)} onSubmit={sendMessage}>{dragging&&<div className="attachment-drop-hint"><Paperclip size={18}/>松开文件，添加到此次对话</div>}<AttachmentList items={attachments} onPreview={setAttachmentPreview} onRemove={removeAttachment} disabled={sending}/>{contextFile&&<div className="context-chip"><File size={12}/>{contextFile}<IconButton nativeTitle title="取消文件上下文" onClick={()=>setContextFile(null)}><X size={12}/></IconButton></div>}<textarea onPaste={e=>{const files=[...e.clipboardData.items].filter(x=>x.kind==='file').map(x=>x.getAsFile()).filter(Boolean);if(files.length){e.preventDefault();addAttachments(files);const text=e.clipboardData.getData('text/plain');if(text)setInput(prev=>prev+text);}}} aria-label="发送消息" placeholder={project?'向 Codex 描述你的想法，或输入具体任务…':'先创建一个项目，再开始对话…'} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();sendMessage();}}} rows={Math.min(5,Math.max(2,input.split('\n').length))}/><div className="composer-bottom"><div className="composer-options"><IconButton nativeTitle title="添加对话附件" disabled={!project||!!progress||sending} onClick={()=>attachmentPicker.current.click()}><Plus size={19}/></IconButton><PermissionPicker settings={settings} nestedSandbox={user.nestedSandbox} role={user.role} hostExecution={user.hostExecution} onChange={updateSettings} disabled={sending||!!activeTurn||modelSaving}/></div><div className="composer-actions"><ModelPicker settings={settings} models={models} onLoad={loadCapabilities} onChange={updateSettings} onPreview={setPreviewEffort} onSaving={busy=>{modelPending.current=busy;setModelSaving(busy);}} disabled={sending||!!activeTurn||status!=='connected'}/>{activeTurn?<button type="button" className="send-button stop" aria-label="停止生成" onClick={()=>socket.current.call('turn/interrupt',{threadId:thread.id,turnId:activeTurn}).catch(e=>notify(e.message,true))}><Square size={14} fill="currentColor"/></button>:<button className="send-button" aria-label="发送" disabled={(!input.trim()&&!attachments.length)||sending||!!progress||modelSaving||threadLoading||!!toolBusy||commandBusy||status!=='connected'}>{sending?<LoaderCircle className="spin" size={17}/>:<ArrowUp size={19}/>}</button>}</div></div></form>
       </div></section>
-      {editorPresent&&<section className={`editor-panel ${review ? 'editor-review' : ''} ${editor ? '' : 'is-closing'}`} id="workspace-editor" aria-label="项目代码" aria-hidden={!editor} inert={!editor}><div className="editor-title"><Code2 size={16}/><strong>{review ? "变更审阅" : "项目代码"}</strong><span>{project?.name}</span><div className="editor-title-actions">{review&&<button type="button" className="review-return-files" onClick={()=>setReview(null)}>文件视图</button>}<IconButton title={editorFullscreen ? "退出编辑器全屏" : "全屏显示编辑器"} buttonRef={editorFullscreenToggle} aria-pressed={editorFullscreen} aria-controls="workspace-editor" onClick={()=>setEditorFullscreen(value=>!value)}>{editorFullscreen ? <Minimize2 size={17}/> : <Maximize2 size={17}/>}</IconButton><IconButton title="关闭代码面板" onClick={closeEditor}><X size={17}/></IconButton></div></div><>{review?<Suspense fallback={<LoadingPlaceholder label="正在加载变更审阅…" variant="code" rows={9}/>}><ChangesReview key={`${review.threadId}:${review.turnId}:${review.path||"all"}`} review={review} summary={turns.find(turn=>turn.id===review.turnId)?.changes} api={api} onSelect={path=>setReview(current=>current?{...current,path}:null)} onFile={openCurrentFile}/></Suspense>:<ProjectFiles project={project} files={files} filesLoading={filesLoading} tabs={tabs} selectedFile={selectedFile} tab={tab} fileBusy={fileBusy} theme={theme} uploadDisabled={!project||!!progress||sending} api={api} Dialog={Modal} notify={notify} onUploadFiles={()=>filesInput.current.click()} onUploadFolder={()=>folderInput.current.click()} onUploadArchive={()=>archiveInput.current.click()} onNewFile={()=>fileAction("newFile")} onNewFolder={()=>fileAction("newFolder")} onRefresh={()=>refreshFiles().catch(e=>notify(e.message,true))} onOpen={openCurrentFile} onAction={currentFileAction} onContext={contextChange} onFileContext={path=>setContextFile(path)} onDownload={downloadFiles} onDeleted={filesDeleted} beforeDelete={beforeFileDelete} onSelect={setSelectedFile} onCloseTabs={closeTabs} onReload={reloadFile} onSave={saveFile} onEditorSave={saveCurrentFile} onCodeChange={codeChange}/>}</></section>}
+      {editorPresent&&<section className={`editor-panel ${review ? 'editor-review' : ''} ${editor ? '' : 'is-closing'}`} id="workspace-editor" aria-label="项目代码" aria-hidden={!editor} inert={!editor}><div className="editor-title"><Code2 size={16}/><strong>{review ? "变更审阅" : "项目代码"}</strong><span>{project?.name}</span><div className="editor-title-actions">{review&&<button type="button" className="review-return-files" onClick={()=>setReview(null)}>文件视图</button>}<IconButton title={editorFullscreen ? "退出编辑器全屏" : "全屏显示编辑器"} buttonRef={editorFullscreenToggle} aria-pressed={editorFullscreen} aria-controls="workspace-editor" onClick={()=>setEditorFullscreen(value=>!value)}>{editorFullscreen ? <Minimize2 size={17}/> : <Maximize2 size={17}/>}</IconButton><IconButton title="关闭代码面板" onClick={closeEditor}><X size={17}/></IconButton></div></div><>{review?<Suspense fallback={<LoadingPlaceholder label="正在加载变更审阅…" variant="code" rows={9}/>}><ChangesReview key={`${review.threadId}:${review.turnId}:${review.path||"all"}`} review={review} summary={turns.find(turn=>turn.id===review.turnId)?.changes} api={api} onSelect={path=>setReview(current=>current?{...current,path}:null)} onFile={openCurrentFile}/></Suspense>:<ProjectFiles project={project} files={files} filesLoading={filesLoading} tabs={tabs} selectedFile={selectedFile} tab={tab} fileBusy={fileBusy} theme={theme} uploadDisabled={!project||!!progress||sending} uploadProgress={progress?.scope === "project" ? progress : null} onCancelUpload={()=>abortUpload.current?.abort()} onDropFiles={dataTransfer=>uploadProject({dataTransfer})} api={api} Dialog={Modal} notify={notify} onUploadFiles={()=>filesInput.current.click()} onUploadFolder={()=>folderInput.current.click()} onUploadArchive={()=>archiveInput.current.click()} onNewFile={()=>fileAction("newFile")} onNewFolder={()=>fileAction("newFolder")} onRefresh={()=>refreshFiles().catch(e=>notify(e.message,true))} onOpen={openCurrentFile} onAction={currentFileAction} onContext={contextChange} onFileContext={path=>setContextFile(path)} onDownload={downloadFiles} onDeleted={filesDeleted} beforeDelete={beforeFileDelete} onSelect={setSelectedFile} onCloseTabs={closeTabs} onReload={reloadFile} onSave={saveFile} onEditorSave={saveCurrentFile} onCodeChange={codeChange}/>}</></section>}
       </div>
     </main>
     {attachmentPreview&&<AttachmentPreview key={attachmentPreview.id || attachmentPreview.url} item={attachmentPreview} api={api} Dialog={Modal} onClose={()=>setAttachmentPreview(null)}/>}<input hidden ref={attachmentPicker} type="file" multiple onChange={e=>{addAttachments([...e.target.files]);e.target.value='';}}/><input hidden ref={archiveInput} type="file" multiple accept=".zip,application/zip" onChange={upload}/><input hidden ref={filesInput} type="file" multiple onChange={upload}/><input hidden ref={folderInput} type="file" multiple webkitdirectory="" onChange={upload}/>
-    {progress&&<div className="upload-progress"><Upload size={17}/><div><strong>{progress.phase||'正在上传'} {progress.index}/{progress.count}</strong><span>{progress.name} · {bytes(progress.done)} / {bytes(progress.total)}</span><div className="progress-bar"><i style={{width:`${progress.total?progress.done/progress.total*100:0}%`}}/></div></div><IconButton title="取消上传" onClick={()=>abortUpload.current.abort()}><X size={16}/></IconButton></div>}
+    {uploadConflict&&<UploadConflict conflict={uploadConflict} onResolve={uploadConflict.resolve}/>}
+    {progress&&!(progress.scope === "project"&&editorPresent&&!review)&&<UploadProgress progress={progress} onCancel={()=>abortUpload.current?.abort()}/>}
     {toast&&<div className={`toast ${toast.error?'error':''}`} role="status">{toast.error?<ShieldCheck size={16}/>:<Check size={16}/>}<span>{toast.message}</span><IconButton title="关闭提示" onClick={()=>setToast(null)}><X size={14}/></IconButton></div>}
     {modal==='project'&&<Modal title="新建项目" subtitle="每个项目都是一个独立的创作空间。" onClose={()=>setModal(null)}><form className="modal-form" onSubmit={async e=>{e.preventDefault();try{await newProject(new FormData(e.target).get('name'));}catch(e){notify(e.message,true);}}}><label>项目名称<input name="name" required autoFocus maxLength={80} placeholder="例如：我的个人网站"/></label><p className="field-hint">创建后，你可以上传现有代码，或让 Codex 从头开始。</p><button className="primary full"><Plus size={16}/>创建项目</button></form></Modal>}
     {['settings','appearance','profile'].includes(modal)&&<SettingsPanel api={api} user={user} onAvatar={updateAvatar} onSkins={updateSkins} onResetAppearance={()=>setTheme('light')} initialTab={modal==='appearance'?'appearance':modal==='profile'?'profile':'general'} settings={settings} settingsQueue={settingsQueue.current} socket={socket.current} models={models} account={account} reload={()=>loadCapabilities(true)} notify={notify} onClose={()=>setModal(null)} onLogout={async()=>{await api('/logout',{method:'POST'});setUser(null);}}/>}

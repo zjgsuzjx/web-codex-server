@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Archive, Check, ChevronRight, Code2, Download, File, FolderOpen, FolderPlus, MessageSquare, MoreHorizontal, Plus, RefreshCw, Save, Upload, X } from 'lucide-react';
 import FileTree, { ExplorerDivider } from './FileExplorer';
 import FileImage from './FileImage';
@@ -6,6 +6,7 @@ import IconButton from './IconButton';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import Tooltip from './Tooltip';
 import EditorTabs from './EditorTabs';
+import { UploadProgress } from './UploadFeedback';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
@@ -38,16 +39,24 @@ function FileBreadcrumbs({ project, path }) {
   </nav>;
 }
 
-export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onCloseTabs, onReload, onSave, onEditorSave, onCodeChange }) {
+export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, uploadProgress, onCancelUpload, onDropFiles, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onCloseTabs, onReload, onSave, onEditorSave, onCodeChange }) {
   const [showMeta, setShowMeta] = useState(() => localStorage.getItem('explorer-show-meta') === 'true');
   const [selectionCount, setSelectionCount] = useState(0);
   const [clearSelectionRequest, setClearSelectionRequest] = useState(0);
   const [selectionRequest, setSelectionRequest] = useState(null);
   const editorTabs = useRef();
+  const dragDepth = useRef(0), [dropActive, setDropActive] = useState(false);
+  const resetDrop = useCallback(() => { dragDepth.current=0; setDropActive(false); }, []);
+  useEffect(() => {
+    window.addEventListener('dragend',resetDrop); window.addEventListener('drop',resetDrop); window.addEventListener('blur',resetDrop);
+    return () => { window.removeEventListener('dragend',resetDrop); window.removeEventListener('drop',resetDrop); window.removeEventListener('blur',resetDrop); };
+  }, [resetDrop]);
+  useEffect(() => { if (uploadDisabled) resetDrop(); }, [uploadDisabled,resetDrop]);
+  const fileDrag = event => [...event.dataTransfer.types].includes('Files');
   const openFile = useCallback(path => { onOpen(path); editorTabs.current?.reveal(path); }, [onOpen]);
   const selectFile = useCallback(path => { setSelectionRequest({ path }); onSelect(path); }, [onSelect]);
   const dirty = !!tab && tab.kind !== 'image' && tab.content !== tab.original;
-  return <div className="editor-body">
+  return <div className="editor-body" onDragEnterCapture={event=>{if(!fileDrag(event))return;event.preventDefault();event.stopPropagation();if(!uploadDisabled){dragDepth.current++;setDropActive(true);}}} onDragOverCapture={event=>{if(!fileDrag(event))return;event.preventDefault();event.stopPropagation();event.dataTransfer.dropEffect=uploadDisabled?'none':'copy';}} onDragLeaveCapture={event=>{if(!fileDrag(event))return;event.stopPropagation();if(--dragDepth.current<=0)resetDrop();}} onDropCapture={event=>{if(!fileDrag(event))return;event.preventDefault();event.stopPropagation();resetDrop();if(!uploadDisabled)onDropFiles(event.dataTransfer);}}>
     <aside className="file-explorer">
       <div className={`explorer-heading ${selectionCount > 1 ? 'has-selection' : ''}`}><div className="explorer-heading-label"><span className="explorer-heading-name">资源管理器</span><div className="explorer-selection-count"><button type="button" aria-label="取消文件选择" onClick={() => setClearSelectionRequest(value => value + 1)}><X size={12}/></button><span role="status" aria-live="polite">{selectionCount > 1 ? `已选 ${selectionCount} 项` : ''}</span></div></div><div className="explorer-actions">
         <ExplorerMenu title="上传" icon={Upload} disabled={uploadDisabled}>
@@ -80,7 +89,9 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
       {fileBusy ? <LoadingPlaceholder label="正在读取文件内容…" variant="code" rows={9}/> : tab ? <>
         <FileBreadcrumbs project={project} path={tab.path}/>
         {tab.kind === 'image' ? <FileImage key={`${project.id}/${tab.path}/${tab.modified}`} file={tab}/> : <div className="monaco-container"><Suspense fallback={<LoadingPlaceholder label="正在加载编辑器…" variant="code" rows={9}/>}><CodeEditor file={`${project.id}/${tab.path}`} content={tab.content} dirty={dirty} onChange={onCodeChange} onSave={onEditorSave} notify={notify} theme={theme}/></Suspense></div>}
-      </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
+      </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><p className="editor-drop-hint">拖入文件、文件夹或 ZIP 即可上传</p><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
     </div>
+    {dropActive&&<div className="editor-drop-overlay"><div><Upload size={32}/><strong>松开即可上传到项目</strong><span>文件夹将先压缩，再上传解压</span></div></div>}
+    {uploadProgress&&<UploadProgress progress={uploadProgress} onCancel={onCancelUpload} inline/>}
   </div>;
 }

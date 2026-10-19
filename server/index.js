@@ -14,7 +14,7 @@ import { createResources } from './resources.js';
 import { ROLES, isAdministrator, executionTarget, projectCwd } from './execution.js';
 import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomicWrite, anchored, safeRename, safeRemove } from './files.js';
 import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInputs } from './attachments.js';
-import { stageZip, publishZip } from './archives.js';
+import { stageZip, publishZip, uploadPlan } from './archives.js';
 import { imageResult, readMedia, mediaLocation } from './chat-media.js';
 import { attachmentHeader, downloadFile, downloadSelected } from './downloads.js';
 import { createTurnChanges } from './turn-changes.js';
@@ -538,6 +538,13 @@ export async function createApp(options = {}) {
     if (method === 'terminal/input') { if (!ws.terminal || typeof params.data !== 'string' || params.data.length > 16384) fail(400, '终端输入无效'); ws.terminal.stream.write(params.data); return { ok: true }; }
     if (method === 'terminal/resize') { if (ws.terminal) await ws.terminal.exec.resize({ h: Math.max(5, Math.min(100, Number(params.rows) || 24)), w: Math.max(20, Math.min(300, Number(params.cols) || 80)) }).catch(() => {}); return { ok: true }; }
     if (method === 'terminal/stop') { ws.terminal?.close(); ws.terminal = null; return { ok: true }; }
+    if (method === 'upload/check') {
+      const p = store.project(u, params.projectId);
+      if (!Array.isArray(params.paths) || !params.paths.length || params.paths.length > 20000) fail(400, '上传文件列表无效');
+      const entries = params.paths.map(value => ({path:relativePath(value,false),size:0}));
+      const { conflicts } = await uploadPlan(root(u,p),entries);
+      return {conflicts:conflicts.slice(0,100),conflictCount:conflicts.length};
+    }
     if (method === 'upload/begin') return mutation(u, () => uploadBegin(ws, u, params));
     if (method === 'upload/resume') {
       const item = uploads.get(params.uploadId); if (!item || item.uid !== u.id) fail(404, '上传任务已过期');
@@ -559,21 +566,28 @@ export async function createApp(options = {}) {
           return { ok: true, ...avatarUpdated(u), sha256: checksum };
         } finally { await removeUpload(item); }
       }
-      const checksum = item.hash.digest('hex'); if (params.sha256 && params.sha256 !== checksum) { await removeUpload(item); fail(400, '文件校验失败'); }
-      await item.handle.sync(); await item.handle.close();
+      const checksum = item.checksum ||= item.hash.digest('hex'); if (params.sha256 && params.sha256 !== checksum) { await removeUpload(item); fail(400, '文件校验失败'); }
+      if (!item.sealed) { await item.handle.sync(); await item.handle.close(); item.sealed = true; }
       if (item.wallpaper) {
         try { if (ws.device !== item.device) fail(403, '只能在对应设备上修改壁纸'); return { ok: true, ...await skins.finish(u, item), sha256: checksum }; }
         finally { await removeUpload(item); }
       }
       if (item.extract) {
         const staging = await fs.mkdtemp(path.join(uploadsDir(u), 'extract-'));
+        let conflict = false;
         try {
           const reserved = [...uploads.values()].filter(x => x.uid === u.id && x.id !== item.id && !x.avatar).reduce((sum,x)=>sum+x.size,0);
           const limit = storageLimit(u, config.quota);
-          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit == null ? Infinity : Math.max(0, limit - await used(u) - reserved)});
-          await publishZip(root(u, item.project), staging, entries);
-          store.audit(u.id, 'upload/extract'); return {ok:true,extracted:entries.length,sha256:checksum};
-        } finally { await fs.rm(staging,{recursive:true,force:true}); await removeUpload(item); }
+          let lastProgress = 0;
+          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit ?? Infinity,onProgress:(done,total)=>{
+            if (done === total || Date.now() - lastProgress > 80) { lastProgress = Date.now(); send(ws, {type:'upload/progress',uploadId:item.id,phase:'extracting',done,total}); }
+          }});
+          const result = await publishZip(root(u, item.project), staging, entries, {policy:params.conflictPolicy || 'ask',beforePublish:async plan=>{
+            if (limit != null && plan.growth > 0 && await used(u) + reserved + plan.growth > limit) fail(413, '解压后文件大小超过存储配额');
+          }});
+          store.audit(u.id, 'upload/extract'); return {ok:true,...result,sha256:checksum};
+        } catch (e) { conflict = e.code === 'UPLOAD_CONFLICT'; if (conflict) item.touched = Date.now(); throw e; }
+        finally { await fs.rm(staging,{recursive:true,force:true}); if (!conflict) await removeUpload(item); }
       }
       if (item.attachment) {
         const attachment = {id:item.id,name:item.path,size:item.size,mime:'application/octet-stream'};
@@ -585,10 +599,13 @@ export async function createApp(options = {}) {
         finally {await anchor.close();await removeUpload(item);}
         return {ok:true,attachment:attachmentPublic(attachment),sha256:checksum};
       }
-      await makeParents(root(u, item.project), item.path);
-      const anchor=await anchored(root(u,item.project),item.path);
-      try { await fs.link(item.temp, anchor.target); } catch (e) { if (e.code === 'EEXIST') { await removeUpload(item); fail(409, '目标文件已存在，请重命名文件后上传'); } throw e; } finally {await anchor.close();}
-      await removeUpload(item); store.audit(u.id, 'upload/finish'); return { ok: true, path: item.path, sha256: checksum };
+      const staging = await fs.mkdtemp(path.join(uploadsDir(u), 'publish-'));
+      let conflict = false;
+      try {
+        const result = await publishZip(root(u, item.project), staging, [{path:item.path,size:item.size,source:item.temp}], {policy:params.conflictPolicy || 'ask'});
+        store.audit(u.id, 'upload/finish'); return { ok: true, path: item.path, ...result, sha256: checksum };
+      } catch (e) { conflict = e.code === 'UPLOAD_CONFLICT'; if (conflict) item.touched = Date.now(); throw e; }
+      finally { await fs.rm(staging, {recursive:true,force:true}); if (!conflict) await removeUpload(item); }
     });
     if (method === 'approval/reply') { await codex.reply(u, params.requestId, params.result); return { ok: true }; }
     if (method === 'codex/start') { await codex.ensure(u); return { ok: true }; }
@@ -661,7 +678,7 @@ export async function createApp(options = {}) {
           let msg; try { msg = JSON.parse(data.toString()); } catch { fail(400, '消息格式无效'); }
           if (!msg || typeof msg.id !== 'number' || typeof msg.method !== 'string' || !msg.params || typeof msg.params !== 'object' || Array.isArray(msg.params)) fail(400, '请求格式无效');
           try { const result = await rpc(ws, store.user(u.id), msg.method, msg.params); send(ws, { id: msg.id, result }); }
-          catch (e) { send(ws, { id: msg.id, error: { message: e.status ? e.message : `Codex 操作失败：${e.message}`, status: e.status || 500 } }); }
+          catch (e) { send(ws, { id: msg.id, error: { message: e.status ? e.message : `Codex 操作失败：${e.message}`, status: e.status || 500, ...(e.code === 'UPLOAD_CONFLICT' ? {code:e.code,conflicts:e.conflicts,conflictCount:e.conflictCount} : {}) } }); }
         }
       }).catch(e => send(ws, { type: 'error', error: e.status ? e.message : '上传失败，请重试' })).finally(() => { queued--; });
     });

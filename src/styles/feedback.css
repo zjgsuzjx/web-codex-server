@@ -33,31 +33,9 @@
   height: 20px;
   width: 20px;
 }
-.upload-progress>svg {
-  color: var(--accent);
-}
-.upload-progress>div {
-  flex: 1;
-  min-width: 0;
-}
-.upload-progress strong {
-  font-size: 11px;
-  font-weight: 500;
-  display: block;
-  margin-bottom: 7px;
-}
-.upload-progress span {
-  font-size: 9px;
-  color: var(--muted);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 11px;
-}
 .upload-progress .icon-button {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
 }
 /* Static page text has no insertion caret; real editing surfaces keep theirs. */
 /* Shared scrollbars, including horizontal code blocks and embedded surfaces. */
@@ -334,17 +312,109 @@
   position: fixed;
   bottom: 25px;
   right: 25px;
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  width: 340px;
-  max-width: 90vw;
-  padding: 17px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 14px 16px;
   background: var(--bg);
   border: 1px solid var(--line);
   box-shadow: var(--ui-shadow-popover);
   border-radius: var(--ui-radius-lg);
   z-index: 90;
+  color: var(--text);
+  overflow: hidden;
+}
+.upload-progress::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg,transparent,var(--accent),transparent);
+  opacity: .65;
+}
+.upload-progress-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+.upload-progress-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 9px;
+  color: var(--accent);
+  background: color-mix(in srgb,var(--accent) 10%,var(--bg));
+}
+.upload-progress-heading strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 550;
+}
+.upload-percent {
+  color: var(--accent);
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.5px;
+}
+.upload-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--hover);
+}
+.upload-progress-track i {
+  display: block;
+  position: relative;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width .15s ease-out;
+}
+.upload-progress-track i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,transparent,#ffffff55,transparent);
+  animation: upload-sheen 1.8s ease-in-out infinite;
+}
+.upload-progress-track .indeterminate { animation: upload-indeterminate 1.4s ease-in-out infinite alternate; }
+.upload-progress-details {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.upload-progress-details span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.upload-progress-details span:last-child { flex: none; font-variant-numeric: tabular-nums; }
+.upload-compression { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding-top: 9px; margin-top: 9px; border-top: 1px solid var(--line); color: var(--accent); font-size: 10px; }
+.upload-compression span { color: var(--muted); }
+.upload-conflict-paths { list-style: none; padding: 10px 12px; margin: 0 0 14px; max-height: 180px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.upload-conflict-paths li { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; color: var(--muted); }
+.upload-conflict-paths li>span { min-width: 0; overflow-wrap: anywhere; }
+.upload-conflict-paths small { margin-left: auto; flex: none; font-size: 10px; }
+.upload-conflict-hint { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
+.upload-conflict-choices { display: grid; gap: 10px; }
+.upload-conflict-choices>button { display: flex; gap: 12px; align-items: center; padding: 14px; text-align: left; border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s,background .15s; }
+.upload-conflict-choices>button:hover { border-color: var(--accent); background: color-mix(in srgb,var(--accent) 6%,var(--bg)); }
+.upload-conflict-choices>button>svg { color: var(--accent); }
+.upload-conflict-choices strong { display: block; font-size: 13px; margin-bottom: 5px; font-weight: 550; }
+.upload-conflict-choices small { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; }
+@keyframes upload-sheen { from { opacity: 0; } 50% { opacity: .9; } to { opacity: 0; } }
+@keyframes upload-indeterminate { from { transform: translateX(0); } to { transform: translateX(185%); } }
+@media (prefers-reduced-motion:reduce) {
+  .upload-progress-track i,.upload-progress-track i::after { animation: none; transition: none; }
+}
+@media (forced-colors:active) {
+  .upload-progress-track { border: 1px solid CanvasText; }
+  .upload-progress-track i { background: Highlight; }
+  .upload-progress-track i::after { display: none; }
 }
 @media (max-width:800px) {
   .toast {
