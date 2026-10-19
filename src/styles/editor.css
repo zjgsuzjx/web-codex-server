@@ -66,12 +66,30 @@
   margin-left: auto;
 }
 .editor-body {
+  position: relative;
   --explorer-width: 268px;
   display: flex;
   flex: 1;
   min-height: 0;
   min-width: 0;
 }
+.editor-drop-overlay {
+  position: absolute;
+  inset: 10px;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb,var(--bg) 94%,var(--accent));
+  color: var(--accent);
+  pointer-events: none;
+}
+.editor-drop-overlay>div { display: grid; justify-items: center; gap: 12px; padding: 20px; text-align: center; }
+.editor-drop-overlay strong { font-size: 16px; font-weight: 550; }
+.editor-drop-overlay span { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.editor-placeholder .editor-drop-hint { margin-top: 6px; color: var(--subtle); font-size: 11px; }
+.upload-progress.editor-upload-progress { position: absolute; bottom: 18px; right: 18px; max-width: calc(100% - 36px); z-index: 40; }
 .file-explorer {
   position: relative;
   z-index: 3;

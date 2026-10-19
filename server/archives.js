@@ -4,10 +4,11 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { crc32 } from 'node:zlib';
-import { fail, relativePath, safePath, makeParents, anchored, safeRemove } from './files.js';
+import { randomUUID } from 'node:crypto';
+import { fail, relativePath, safePath, makeParents, anchored } from './files.js';
 
 // Extract into a private spool first. Validate the entire archive before publishing.
-export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntries = 20000 }) {
+export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntries = 20000, onProgress }) {
   const zip = await new Promise((resolve, reject) => yauzl.open(filename, { lazyEntries: true, autoClose: false, strictFileNames: true }, (e, z) => e ? reject(e) : resolve(z))).catch(() => fail(400, 'ZIP 无效或已损坏'));
   const entries = [], names = new Set(); let total = 0, actual = 0;
   try {
@@ -31,7 +32,8 @@ export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntrie
             try { await pipeline(stream, limit, handle.createWriteStream()); } finally { await handle.close().catch(() => {}); }
             if (crc !== entry.crc32) fail(400, 'ZIP 文件校验失败');
           }
-          entries.push({ path: rel, directory, size: entry.uncompressedSize }); zip.readEntry();
+          entries.push({ path: rel, directory, size: entry.uncompressedSize });
+          onProgress?.(entries.length, zip.entryCount); zip.readEntry();
         })().catch(reject);
       });
       zip.readEntry();
@@ -40,23 +42,79 @@ export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntrie
   } catch (e) { if (e.status) throw e; fail(400, 'ZIP 无效、损坏或解压数据超过限制'); }
   finally { zip.close(); }
 }
-export async function publishZip(root, staging, entries) {
+export async function uploadPlan(root, entries, policy = 'ask') {
+  if (!['ask', 'skip', 'overwrite'].includes(policy)) fail(400, '重名处理方式无效');
+  const conflicts = [], accepted = []; let skipped = 0, growth = 0, overwritten = 0;
   for (const entry of entries) {
-    const target = await safePath(root, entry.path, { missing: true });
-    try { const st = await fs.lstat(target); if (!entry.directory || !st.isDirectory()) fail(409, `目标路径已存在：${entry.path}`); }
-    catch (e) { if (e.code !== 'ENOENT') throw e; }
+    const parts = relativePath(entry.path, false).split('/');
+    let existing, conflict;
+    for (let i = 1; i <= parts.length; i++) {
+      const rel = parts.slice(0, i).join('/');
+      const target = await safePath(root, rel, { missing: true });
+      let stat;
+      try { stat = await fs.lstat(target); } catch (e) { if (e.code === 'ENOENT') break; throw e; }
+      if (!stat.isFile() && !stat.isDirectory()) fail(403, '不允许替换链接或特殊文件');
+      if (i < parts.length && !stat.isDirectory()) { conflict = { path: entry.path, overwrite: false }; break; }
+      if (i === parts.length) {
+        existing = stat;
+        if (!(entry.directory && stat.isDirectory())) conflict = { path: entry.path, overwrite: !entry.directory && stat.isFile() };
+      }
+    }
+    if (conflict) {
+      conflicts.push(conflict);
+      // A file/folder type collision is never removed recursively by an upload.
+      if (policy === 'skip' || policy === 'overwrite' && !conflict.overwrite) { skipped++; continue; }
+      if (policy === 'overwrite') overwritten++;
+    }
+    accepted.push(entry);
+    if (!entry.directory) growth += entry.size - (existing?.isFile() ? existing.size : 0);
   }
+  return { entries: accepted, conflicts, skipped, growth, overwritten };
+}
+
+export async function publishZip(root, staging, entries, { policy = 'ask', beforePublish } = {}) {
+  const plan = await uploadPlan(root, entries, policy);
+  if (plan.conflicts.length && policy === 'ask') {
+    const error = new Error('目标路径已存在，请选择重名文件的处理方式');
+    Object.assign(error, { status: 409, code: 'UPLOAD_CONFLICT', conflicts: plan.conflicts.slice(0, 100), conflictCount: plan.conflicts.length });
+    throw error;
+  }
+  await beforePublish?.(plan);
   const published = [];
   try {
-    for (const entry of entries) {
+    for (const entry of plan.entries) {
       await makeParents(root, entry.path + (entry.directory ? '/placeholder' : ''));
       if (entry.directory) continue;
       const anchor = await anchored(root, entry.path);
-      try { await fs.link(path.join(staging, entry.path), anchor.target); published.push(entry.path); } finally { await anchor.close(); }
+      let backup, keep = false;
+      try {
+        if (policy === 'overwrite') {
+          try {
+            const stat = await fs.lstat(anchor.target);
+            if (!stat.isFile() || stat.isSymbolicLink()) fail(409, '目标文件类型已变化，请重新上传');
+            backup = path.join(staging, `.backup-${randomUUID()}`);
+            await fs.link(anchor.target, backup);
+          } catch (e) { if (e.code !== 'ENOENT') throw e; }
+        }
+        const source = entry.source || path.join(staging, entry.path);
+        if (backup) await fs.rename(source, anchor.target);
+        else await fs.link(source, anchor.target);
+        published.push({ path:entry.path, backup }); keep = true;
+      } finally { await anchor.close(); if (!keep && backup) await fs.rm(backup, { force: true }); }
     }
   } catch (e) {
-    for (const rel of published.reverse()) await safeRemove(root, rel).catch(() => {});
+    for (const { path:rel, backup } of published.slice().reverse()) {
+      // Re-open each bounded path during rollback; never retain one fd per file.
+      try {
+        const anchor = await anchored(root,rel);
+        try { if (backup) await fs.rename(backup, anchor.target); else await fs.unlink(anchor.target); }
+        finally { await anchor.close(); }
+      } catch {}
+    }
     if (e.code === 'EEXIST') fail(409, '目标文件已存在，请检查文件树后重试');
     throw e;
+  } finally {
+    for (const { backup } of published) if (backup) await fs.rm(backup, { force: true });
   }
+  return { extracted: plan.entries.length, uploaded: plan.entries.filter(e => !e.directory).length, skipped: plan.skipped, overwritten: plan.overwritten };
 }

@@ -9,7 +9,7 @@ export class LiveSocket {
       const msg = JSON.parse(event.data);
       const failure = typeof msg.error === 'string' ? msg.error : msg.error?.message;
       if (failure && /存储配额不足|存储空间已满|ENOSPC|EDQUOT|SQLITE_FULL|no space left|database or disk is full/i.test(failure)) this.onEvent({ type: 'storage/full' });
-      if (msg.id != null) { const waiter = this.pending.get(msg.id); if (waiter) { clearTimeout(waiter.timer); this.pending.delete(msg.id); msg.error ? waiter.reject(new Error(msg.error.message)) : waiter.resolve(msg.result); } }
+      if (msg.id != null) { const waiter = this.pending.get(msg.id); if (waiter) { clearTimeout(waiter.timer); this.pending.delete(msg.id); msg.error ? waiter.reject(Object.assign(new Error(msg.error.message), msg.error)) : waiter.resolve(msg.result); } }
       else if (msg.type === 'upload/ack') { if (this.ack) { clearTimeout(this.ack.timer); this.ack.resolve(msg); this.ack = null; } }
       else if (msg.type === 'error') { if (this.ack) { clearTimeout(this.ack.timer); this.ack.reject(new Error(msg.error)); this.ack = null; } else this.onEvent(msg); }
       else { this.onEvent(msg); for (const listener of this.listeners || []) listener(msg); }
@@ -45,13 +45,27 @@ export class LiveSocket {
     await this.ready();
     return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.ack = null; reject(new Error('上传确认超时')); }, 60000); this.ack = { resolve, reject, timer }; this.ws.send(data); });
   }
-  async upload(destination, files, onProgress, signal) {
+  async upload(destination, files, onProgress, signal, onConflict) {
     let complete = 0; const total = files.reduce((n, f) => n + f.size, 0), results = [];
+    const target = typeof destination === 'string' ? {projectId:destination} : destination;
+    let conflictPolicy = 'ask';
+    if (signal?.aborted) throw new Error('已取消上传');
+    if (target.projectId && !target.extract && files.length && onConflict) {
+      const check = await this.call('upload/check', {projectId:target.projectId,paths:files.map(file=>file.uploadPath || file.webkitRelativePath || file.name)});
+      if (check.conflictCount) {
+        onProgress({phase:'conflict',name:files[0].name,done:0,total,index:0,count:files.length});
+        conflictPolicy = await onConflict(check);
+        if (!['skip','overwrite'].includes(conflictPolicy) || signal?.aborted) throw new Error('已取消上传');
+      }
+    }
     for (let index = 0; index < files.length; index++) {
-      const file = files[index], filename = file.webkitRelativePath || file.name;
-      const target = typeof destination === 'string' ? {projectId:destination} : destination;
+      if (signal?.aborted) throw new Error('已取消上传');
+      const file = files[index], filename = file.uploadPath || file.webkitRelativePath || file.name;
       let task = await this.call('upload/begin', { ...target, path: filename, size: file.size }), offset = task.offset;
+      const report = (extra = {}) => onProgress({ name: filename, done: complete + offset, total, index: index + 1, count: files.length, phase: 'uploading', ...extra });
+      const unsubscribe = this.subscribe(event => { if (event.type === 'upload/progress' && event.uploadId === task.uploadId) report({ phase:event.phase, stageDone:event.done, stageTotal:event.total }); });
       try {
+        report();
         while (offset < file.size) {
           if (signal?.aborted) throw new Error('已取消上传');
           try {
@@ -60,12 +74,25 @@ export class LiveSocket {
             if (this.ws.readyState === WebSocket.OPEN) throw e;
             await this.ready(); task = await this.call('upload/resume', { uploadId: task.uploadId }); offset = task.offset;
           }
-          onProgress({ name: filename, done: complete + offset, total, index: index + 1, count: files.length });
+          report();
         }
         if (signal?.aborted) throw new Error('已取消上传');
-        results.push(await this.call('upload/finish', { uploadId: task.uploadId })); complete += file.size;
-        onProgress({ name: filename, done: complete, total, index: index + 1, count: files.length });
+        let result;
+        while (!result) {
+          if (signal?.aborted) throw new Error('已取消上传');
+          report({phase:target.extract ? 'extracting' : 'finishing',stageDone:0,stageTotal:0});
+          try { result = await this.call('upload/finish', { uploadId: task.uploadId, conflictPolicy }); }
+          catch (error) {
+            if (error.code !== 'UPLOAD_CONFLICT' || !onConflict) throw error;
+            report({phase:'conflict',stageDone:0,stageTotal:0});
+            conflictPolicy = await onConflict(error);
+            if (!['skip','overwrite'].includes(conflictPolicy) || signal?.aborted) throw new Error('已取消上传');
+          }
+        }
+        results.push(result); complete += file.size;
+        report({done:complete,phase:'complete'});
       } catch (e) { await this.call('upload/cancel', { uploadId: task.uploadId }).catch(() => {}); throw e; }
+      finally { unsubscribe(); }
     }
     return results;
   }
