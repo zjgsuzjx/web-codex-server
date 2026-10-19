@@ -105,10 +105,12 @@ export class CodexManager {
   async prepareHome(user, repairProjects = false) {
     // Host root may create root-owned CLI state. Repair only this user's Codex
     // bind, in a confined helper without host PID/network, Docker socket or root mount.
+    // chown also clears set-ID bits. FOWNER lets it update files already owned by
+    // the worker UID, including extracted packages with setuid/setgid programs.
     const home = path.join(this.config.hostDataDir, 'users', user.username, 'codex').replaceAll('\\', '/');
     const projectDir = path.join(this.config.hostDataDir, 'users', user.username, 'projects').replaceAll('\\','/');
     const helper = await this.docker.createContainer({ Image: this.config.workerImage, User: '0:0', Cmd: ['chown', '-R', '--no-dereference', '1000:1000', '/codex-home', ...(repairProjects?['/own-projects']:[])],
-      HostConfig: { Binds: [`${home}:/codex-home`,...(repairProjects?[`${projectDir}:/own-projects`]:[])], NetworkMode: 'none', ReadonlyRootfs: true, CapDrop: ['ALL'], CapAdd: ['CHOWN', 'DAC_OVERRIDE'], SecurityOpt: ['no-new-privileges:true'], PidsLimit: 16, Memory: 32 * 1024 * 1024 } });
+      HostConfig: { Binds: [`${home}:/codex-home`,...(repairProjects?[`${projectDir}:/own-projects`]:[])], NetworkMode: 'none', ReadonlyRootfs: true, CapDrop: ['ALL'], CapAdd: ['CHOWN', 'DAC_OVERRIDE', 'FOWNER'], SecurityOpt: ['no-new-privileges:true'], PidsLimit: 16, Memory: 32 * 1024 * 1024 } });
     try { await helper.start(); const result = await helper.wait(); if(result.StatusCode !== 0) fail(500, '无法准备用户 Codex 目录'); }
     finally { await helper.remove({force:true}).catch(()=>{}); }
   }
