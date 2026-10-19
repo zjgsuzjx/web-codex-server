@@ -16,6 +16,7 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+COPY Dockerfile ./Dockerfile
 COPY server ./server
 COPY shared ./shared
 COPY test ./test
@@ -28,6 +29,8 @@ COPY src/editor-language.js ./src/editor-language.js
 COPY src/file-selection.js ./src/file-selection.js
 COPY src/editor-tabs.js ./src/editor-tabs.js
 COPY src/socket.js ./src/socket.js
+COPY src/zip-folder.js ./src/zip-folder.js
+COPY src/drop-files.js ./src/drop-files.js
 COPY scripts/smoke.mjs ./scripts/smoke.mjs
 COPY scripts/role-smoke.mjs ./scripts/role-smoke.mjs
 COPY scripts/deploy-release.sh ./scripts/deploy-release.sh
