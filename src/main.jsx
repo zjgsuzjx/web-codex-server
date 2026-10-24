@@ -1,4 +1,5 @@
 import IconButton from './IconButton';
+import Auth from './Auth';
 import SettingsPanel from './SettingsPanel';
 import { BrowserGraphicsProvider, BrowserGraphicsNotice } from './BrowserGraphics';
 import { createSettingsQueue } from '../shared/settings-save.js';
@@ -18,7 +19,7 @@ import { AppearanceProvider, useAppearance } from './Appearance';
 import WorkspaceWelcome from './WorkspaceWelcome';
 import { useState, useEffect, useRef, useCallback, memo, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Plus, ArrowUp, Square, PanelLeft, Code2, MessageSquare, Folder, File, Upload, X, Maximize2, Minimize2, ChevronRight, ChevronDown, Search, Check, Copy, Terminal, ShieldCheck, Sparkles, ArrowRight, RefreshCw, GitFork, Archive, LoaderCircle, Paperclip, Pencil, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, ArrowUp, Square, PanelLeft, Code2, MessageSquare, Folder, File, Upload, X, Maximize2, Minimize2, ChevronRight, ChevronDown, Search, Check, Copy, Terminal, ShieldCheck, Sparkles, ArrowRight, RefreshCw, GitFork, Archive, LoaderCircle, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { Markdown, GeneratedImage, ToolOutput } from './ChatOutput';
 import { contentImage, isProcessItem, reasoningText, toolContent } from '../shared/chat-content.js';
 import { LiveSocket } from './socket';
@@ -87,14 +88,9 @@ function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('theme-v2', theme); }, [theme]);
   csrfToken = user?.csrf || '';
   if (user === undefined) return <WorkspaceWelcome/>;
-  return user ? <AppearanceProvider key={user.id} user={user} fallbackTheme={theme}><ThemedWorkspace user={user} setUser={setUser} setTheme={setTheme}/></AppearanceProvider> : <Auth onLogin={setUser} inviteRequired={inviteRequired}/>;
+  return user ? <AppearanceProvider key={user.id} user={user} fallbackTheme={theme}><ThemedWorkspace user={user} setUser={setUser} setTheme={setTheme}/></AppearanceProvider> : <Auth onLogin={setUser} inviteRequired={inviteRequired} request={api} theme={theme} setTheme={setTheme}/>;
 }
 function ThemedWorkspace(props) { const appearance = useAppearance(); return <BrowserGraphicsProvider><Workspace {...props} theme={appearance.theme}/></BrowserGraphicsProvider>; }
-function Auth({ onLogin, inviteRequired }) {
-  const [register, setRegister] = useState(false), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  async function submit(e) { e.preventDefault(); if (busy) return; setError(''); setBusy(true); const data = Object.fromEntries(new FormData(e.target)); try { const r = await api(register ? '/register' : '/login', { method: 'POST', body: data }); onLogin(r.user); } catch (err) { setError(err.message); } finally { setBusy(false); } }
-  return <main className="auth-layout"><div className="auth-brand"><BrandMark size={24} className="brand-mark"/><span>STARVALLEY <b>WORKSPACE</b></span></div><section className="auth-card"><div className="auth-symbol"><BrandMark size={44} className="brand-mark"/></div><p className="eyebrow">YOUR IDEAS. YOUR WORKSPACE.</p><h1>{register ? '开始创造。' : '欢迎回来。'}</h1><p className="auth-intro">一个安静的空间，让想法变成代码。</p><form onSubmit={submit} onChange={()=>error&&setError('')}><label>用户名<input name="username" autoComplete="username" required minLength={3} maxLength={32} placeholder="你的用户名" pattern="[a-zA-Z][a-zA-Z0-9_\-]{2,31}"/></label><label>密码<input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} required minLength={register ? 10 : 1} maxLength={128} placeholder={register ? '至少 10 个字符' : '输入密码'}/></label>{register && inviteRequired && <label>邀请码<input name="inviteCode" required autoComplete="off" placeholder="输入管理员提供的邀请码"/></label>}{error && <p className="form-error auth-error" role="alert"><AlertCircle size={16}/><span>{error}</span></p>}<button className="primary full" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17}/> : <>{register ? '创建账号' : '进入工作区'}<ArrowRight size={17}/></>}</button></form><p className="auth-switch">{register ? '已有账号？' : '还没有账号？'} <button onClick={() => { setRegister(!register); setError(''); }}>{register ? '登录' : '使用邀请码注册'}</button></p><div className="auth-assurance"><ShieldCheck size={14}/><span>独立工作区 · 安全文件存储</span></div></section><footer className="auth-footer">Starvalley Workspace · Built for making things.</footer></main>;
-}
 function Workspace({ user, setUser, theme, setTheme }) {
   const appearance = useAppearance();
   const updateSkins = useCallback(skins => setUser(current => current ? { ...current, skins } : current), [setUser]);

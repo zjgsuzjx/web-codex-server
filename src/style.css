@@ -12,5 +12,6 @@
 @import './styles/editor.css';
 @import './styles/resources.css';
 @import './styles/auth.css';
+@import './styles/auth-screen.css';
 @import './styles/feedback.css';
 @import './styles/browser-graphics.css';
