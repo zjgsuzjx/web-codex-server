@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PendingRequests } from '../server/pending-requests.js';
-import { answerResult, hasAnswer } from '../shared/user-input.js';
+import { answerResult, hasAnswer, keepRequestOnTurn } from '../shared/user-input.js';
+import { AsyncUserInputs } from '../server/async-user-input.js';
 import { CodexManager } from '../server/codex.js';
 import { Duplex } from 'node:stream';
 import fs from 'node:fs/promises';
@@ -11,6 +12,45 @@ import { WebSocket } from 'ws';
 import { createApp } from '../server/index.js';
 
 const request = (id = 42, ms = null, threadId = 'thread') => ({ id, method: 'item/tool/requestUserInput', params: { threadId, turnId: 'turn', autoResolutionMs: ms, questions: [{ id: 'choice', options: [{ label: 'A' }, { label: 'B' }], isOther: true }, { id: 'text', options: null, isSecret: true }] } });
+const asyncQuestion = (threadId = 'thread', turnId = 'turn', id = 'async-call') => ({ method: 'item/completed', params: { threadId, turnId, item: { id, type: 'agentMessage', delivery: 'async', text: 'Rendered question text', questions: [{ title: 'Which environment reproduces this?', options: ['Editor', 'Build'] }, { title: 'Additional details?' }] } } });
+
+test('async questions use structured metadata, require explicit answers, and survive normal turn transitions', async () => {
+  const sent=[],resolved=[],queue=new AsyncUserInputs(async(r,text)=>sent.push({r,text}),p=>resolved.push(p));
+  const event=asyncQuestion();
+  assert.equal(queue.observe({...event,params:{...event.params,item:{...event.params.item,delivery:undefined}}}),undefined);
+  assert.equal(queue.observe({...event,params:{...event.params,item:{...event.params.item,questions:undefined}}}),undefined);
+  assert.equal(queue.observe({...event,params:{...event.params,item:{...event.params.item,questions:[{title:'Bad',options:[42]}]}}}),undefined);
+  const r=queue.observe(event),questions=r.params.questions;
+  assert.equal(r.params.isBlocking,false);assert.equal(r.expiresAt,null);
+  assert.deepEqual(questions[0].options.map(o=>o.label),['Editor','Build']);assert.equal(questions[0].isOther,true);
+  assert.equal(hasAnswer(questions[0],{}),false);
+  assert.equal(queue.observe(event),undefined);
+  for(const transition of [{method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}},{method:'turn/started',params:{threadId:'thread',turn:{id:'next'}}}]) {
+    assert.ok(keepRequestOnTurn(r,transition));queue.observe(transition);assert.equal(queue.requests.size,1);
+  }
+  await assert.rejects(queue.reply(r.id,{answers:{}}),/全部问题/);
+  await assert.rejects(queue.reply(r.id,{answers:{unknown:{answers:['invalid']}}}),/格式/);
+  const result=answerResult(questions,{question_1:{option:'Build'},question_2:{custom:true,text:'fixture details'}});
+  await queue.reply(r.id,result);
+  assert.match(sent[0].text,/Which environment reproduces this\?\n回答：Build/);assert.match(sent[0].text,/fixture details/);
+  assert.equal(resolved[0].reason,'answered');assert.equal(queue.requests.size,0);
+  assert.equal(queue.observe(event),undefined);await assert.rejects(queue.reply(r.id,result),/失效/);
+  assert.equal(keepRequestOnTurn(request(),{method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}}),false);
+});
+
+test('async replies reject duplicate submissions, retain failed answers for retry, and cancel on interruption/loss', async () => {
+  let finish;const sent=[],resolved=[],queue=new AsyncUserInputs((r,text)=>{sent.push(text);return new Promise((resolve,reject)=>finish={resolve,reject});},p=>resolved.push(p));
+  const r=queue.observe(asyncQuestion()),result={answers:{question_1:{answers:['custom environment']},question_2:{answers:['details']}}};
+  const first=queue.reply(r.id,result);await assert.rejects(queue.reply(r.id,result),/正在提交/);
+  finish.reject(Error('temporary failure'));await assert.rejects(first,/temporary failure/);assert.equal(queue.requests.size,1);assert.equal(resolved.length,0);
+  const retry=queue.reply(r.id,result);finish.resolve();await retry;assert.equal(sent.length,2);assert.equal(resolved.length,1);
+  for(const status of ['interrupted','failed']) {
+    const pending=queue.observe(asyncQuestion('thread','turn',status));
+    queue.observe({method:'turn/completed',params:{threadId:'thread',turn:{id:'other',status}}});assert.ok(queue.requests.has(pending.id));
+    queue.observe({method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status}}});assert.equal(queue.requests.size,0);
+  }
+  queue.observe(asyncQuestion('thread','turn','lost'));queue.observe({method:'connection/lost'});assert.equal(queue.requests.size,0);
+});
 
 test('questions require explicit answers and retain custom/secret responses without default assent', () => {
   const questions=request().params.questions;
@@ -153,4 +193,70 @@ test('native questions reach connected and reconnected pages and reply to the sa
   } finally {
     for (const ws of pages) ws.terminate(); await app.close(); await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+test('structured async questions reach all pages, survive completion, and deliver answers through authenticated user turns', async () => {
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sv-async-questions-')),threads=new Map(),pages=[],inputs=[];
+  let publish,sequence=0,failNext=false,nativeReplies=0;
+  const app=await createApp({dataDir:dir,inviteCode:'async-fixture-invite',codexFactory:(config,emit)=>{
+    publish=emit;
+    return {instances:new Map(),async resume(){},async stopIdle(){},async shutdown(){},async reply(){nativeReplies++;throw Error('Async answers must not be JSON-RPC replies');},async call(u,method,p){
+      if(method==='account/read')return {account:{type:'chatgpt'}};
+      if(method==='thread/start'){const thread={id:'async-thread',turns:[]};threads.set(thread.id,thread);return {thread};}
+      if(method==='thread/read')return {thread:threads.get(p.threadId)};
+      if(method==='turn/start'){
+        if(failNext){failNext=false;throw Error('Synthetic send failure');}
+        const thread=threads.get(p.threadId),text=p.input[0].text;inputs.push({uid:u.id,text});
+        let turn=thread.turns.find(t=>t.status==='inProgress');
+        if(!turn){turn={id:`turn-${++sequence}`,status:'inProgress',items:[]};thread.turns.push(turn);emit(u.id,{method:'turn/started',params:{threadId:thread.id,turn}});}
+        turn.items.push({id:`user-${inputs.length}`,type:'userMessage',content:p.input});
+        if(text==='ask')emit(u.id,asyncQuestion(thread.id,turn.id,`async-${turn.id}`));
+        return {turn};
+      }
+      return {};
+    }};
+  }});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  const base=`http://127.0.0.1:${app.server.address().port}`;app.config.publicUrl=base;
+  let cookie,csrf;
+  const post=async(url,body)=>{const response=await fetch(`${base}/api${url}`,{method:'POST',headers:{'Content-Type':'application/json',Origin:base,...(cookie?{Cookie:cookie,'X-CSRF-Token':csrf}:{})},body:JSON.stringify(body)});assert.ok(response.ok);return response;};
+  async function connect(){
+    const ws=new WebSocket(`${base.replace('http','ws')}/ws?csrf=${csrf}`,{headers:{Cookie:cookie,Origin:base}}),messages=[];pages.push(ws);ws.on('message',data=>messages.push(JSON.parse(data)));
+    await new Promise((resolve,reject)=>{ws.once('open',resolve);ws.once('error',reject);});
+    const wait=async predicate=>{for(let n=0;n<200;n++){const i=messages.findIndex(predicate);if(i>=0)return messages.splice(i,1)[0];await new Promise(resolve=>setTimeout(resolve,10));}throw Error('Async WebSocket event timeout');};
+    return {ws,wait,ready:await wait(m=>m.type==='ready'),call:async(id,method,params)=>{ws.send(JSON.stringify({id,method,params}));return wait(m=>m.id===id);}};
+  }
+  try{
+    const registration=await post('/register',{username:'AsyncQuestionTest',password:'synthetic-password-42',inviteCode:'async-fixture-invite'});cookie=registration.headers.get('set-cookie').split(';')[0];const user=(await registration.json()).user;csrf=user.csrf;
+    const project=await(await post('/projects',{name:'异步问答测试'})).json(),thread=await(await post('/threads',{projectId:project.id})).json();
+    const first=await connect();await first.call(1,'turn/start',{threadId:thread.id,text:'ask'});
+    const question=(await first.wait(m=>m.event?.method==='item/agentMessage/requestUserInput')).event;
+    const second=await connect();assert.deepEqual(second.ready.pending,[question]);
+    const result={answers:{question_1:{answers:['Build']},question_2:{answers:['fixture details']}}};
+    assert.equal((await second.call(2,'approval/reply',{requestId:question.id,result})).result.ok,true);
+    for(const page of [first,second])assert.equal((await page.wait(m=>m.event?.method==='serverRequest/resolved')).event.params.requestId,question.id);
+    assert.equal(threads.get(thread.id).turns.length,1);assert.match(inputs.at(-1).text,/回答：Build/);assert.equal(nativeReplies,0);
+    const original=threads.get(thread.id).turns[0];original.status='completed';publish(user.id,{method:'turn/completed',params:{threadId:thread.id,turn:original}});
+    await first.call(3,'turn/start',{threadId:thread.id,text:'ask'});
+    const later=(await first.wait(m=>m.event?.method==='item/agentMessage/requestUserInput')).event;
+    const completed=threads.get(thread.id).turns[1];completed.status='completed';publish(user.id,{method:'turn/completed',params:{threadId:thread.id,turn:completed}});
+    assert.equal((await connect()).ready.pending[0].id,later.id);
+    failNext=true;assert.match((await first.call(4,'approval/reply',{requestId:later.id,result})).error.message,/Synthetic send failure/);
+    assert.equal((await connect()).ready.pending[0].id,later.id);
+    assert.equal((await first.call(5,'approval/reply',{requestId:later.id,result})).result.ok,true);
+    assert.equal(threads.get(thread.id).turns.length,3);assert.equal((await connect()).ready.pending.length,0);
+    assert.match((await first.call(6,'approval/reply',{requestId:later.id,result})).error.message,/失效/);assert.equal(nativeReplies,0);
+    // A different account cannot submit this account's server-generated ID.
+    await first.call(7,'turn/start',{threadId:thread.id,text:'ask'});
+    const privateQuestion=(await first.wait(m=>m.event?.method==='item/agentMessage/requestUserInput')).event;
+    cookie=undefined;csrf=undefined;
+    const otherRegistration=await post('/register',{username:'OtherAsyncTest',password:'synthetic-password-43',inviteCode:'async-fixture-invite'});cookie=otherRegistration.headers.get('set-cookie').split(';')[0];csrf=(await otherRegistration.json()).user.csrf;
+    const other=await connect();assert.equal(other.ready.pending.length,0);assert.match((await other.call(8,'approval/reply',{requestId:privateQuestion.id,result})).error.message,/失效/);assert.equal(inputs.length,5);
+    assert.equal((await first.call(9,'approval/reply',{requestId:privateQuestion.id,result})).result.ok,true);
+    // CLI-owned child threads need no web conversation-list entry to answer.
+    threads.set('async-child',{id:'async-child',turns:[]});publish(user.id,asyncQuestion('async-child','child-turn'));
+    const childQuestion=(await first.wait(m=>m.event?.method==='item/agentMessage/requestUserInput')).event;
+    assert.equal((await first.call(10,'approval/reply',{requestId:childQuestion.id,result})).result.ok,true);
+    assert.equal(threads.get('async-child').turns.length,1);assert.equal(inputs.at(-1).uid,user.id);assert.equal(nativeReplies,0);
+  }finally{for(const ws of pages)ws.terminate();await app.close();await fs.rm(dir,{recursive:true,force:true});}
 });
