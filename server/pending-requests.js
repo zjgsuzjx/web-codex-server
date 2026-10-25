@@ -1,6 +1,18 @@
 import { fail } from './files.js';
 import { isUserInput } from '../shared/user-input.js';
 
+export function validateAnswers(request, result, requireAll = false) {
+  const answers = result?.answers;
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) fail(400, '回答格式无效');
+  const questions = request.params.questions || [];
+  for (const [key, value] of Object.entries(answers)) {
+    const question = questions.find(q => q.id === key);
+    if (!question || !Array.isArray(value?.answers) || value.answers.length > 1 || value.answers.some(v => typeof v !== 'string' || v.length > 20000)) fail(400, '回答格式无效');
+    if (question.options?.length && !question.isOther && value.answers.some(v => !question.options.some(o => o.label === v))) fail(400, '请选择提供的答案');
+  }
+  if (requireAll && questions.some(q => !answers[q.id]?.answers?.[0]?.trim())) fail(400, '请回答全部问题后提交');
+}
+
 // One server clock and one reply for all browser tabs, including disconnected clients.
 export class PendingRequests {
   constructor(sendReply, resolved) {
@@ -35,16 +47,7 @@ export class PendingRequests {
     if (reason !== 'timeout' && request.expiresAt !== null && Date.now() >= request.expiresAt) {
       this.reply(id, { answers: {} }, 'timeout'); fail(409, '回答时间已结束');
     }
-    if (isUserInput(request)) {
-      const answers = result?.answers;
-      if (!answers || typeof answers !== 'object' || Array.isArray(answers)) fail(400, '回答格式无效');
-      const questions = request.params.questions || [];
-      for (const [key, value] of Object.entries(answers)) {
-        const question = questions.find(q => q.id === key);
-        if (!question || !Array.isArray(value?.answers) || value.answers.length > 1 || value.answers.some(v => typeof v !== 'string' || v.length > 20000)) fail(400, '回答格式无效');
-        if (question.options?.length && !question.isOther && value.answers.some(v => !question.options.some(o => o.label === v))) fail(400, '请选择提供的答案');
-      }
-    }
+    if (isUserInput(request)) validateAnswers(request, result);
     this.sendReply({ id: request.id, result });
     this.remove(id);
     this.resolved({ threadId: request.params?.threadId, requestId: request.id, reason });

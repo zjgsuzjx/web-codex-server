@@ -10,6 +10,7 @@ import archiver from 'archiver';
 import TOML from '@iarna/toml';
 import { createStore, passwordHash, passwordMatches, digest } from './store.js';
 import { CodexManager } from './codex.js';
+import { AsyncUserInputs } from './async-user-input.js';
 import { createResources } from './resources.js';
 import { ROLES, isAdministrator, executionTarget, projectCwd } from './execution.js';
 import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomicWrite, anchored, safeRename, safeRemove } from './files.js';
@@ -53,13 +54,28 @@ export async function createApp(options = {}) {
   const clients = new Map(), uploads = new Map(), uploadLocks = new Set(), rates = new Map(), mutationLocks = new Map(), eventCounters = new Map();
   let resources, turnChanges, cleanup;
   const turnActivity = createTurnActivity(store);
-  const titleJobs = new Map(), attachmentSends = new Map();
+  const titleJobs = new Map(), attachmentSends = new Map(), asyncInputs = new Map();
   const userDir = u => path.join(config.dataDir, 'users', u.username);
   const root = (u, p) => path.join(userDir(u), 'projects', p.id);
   const uploadsDir = u => path.join(config.dataDir, 'uploads', u.id);
   const send = (ws, value) => { if (ws.readyState === WebSocket.OPEN) { if (ws.bufferedAmount > 8 * MB) ws.close(1013, '客户端处理过慢，请重连'); else ws.send(JSON.stringify(value)); } };
   const emit = (uid, msg) => {
     if(!store.user(uid))return;
+    if (!asyncInputs.has(uid) && msg.method === 'item/completed' && msg.params?.item?.delivery === 'async' && msg.params.item.questions?.length) {
+      asyncInputs.set(uid, new AsyncUserInputs(async (request, text) => {
+        const u = store.user(uid);
+        if (!u) fail(403, '账号已失效');
+        // Reuse the authenticated turn path: app-server adds input to an active
+        // turn, or starts the next turn when the asynchronous work has finished.
+        if (store.get('SELECT id FROM threads WHERE id=? AND user_id=?', request.params.threadId, uid)) await rpc(null, u, 'turn/start', { threadId: request.params.threadId, text });
+        // Child-thread events are authenticated by the owning CLI connection,
+        // even when that child is absent from the web conversation list.
+        else await codex.call(u, 'turn/start', { threadId: request.params.threadId, input: [{ type: 'text', text }] });
+      }, params => emit(uid, { method: 'serverRequest/resolved', params })));
+    }
+    const question = asyncInputs.get(uid)?.observe(msg);
+    if (msg.method === 'connection/lost') asyncInputs.delete(uid);
+    if (question) emit(uid, question);
     resources?.observe(uid, msg);
     turnChanges?.observe(uid, msg);
     const tid = msg.params?.threadId || msg.params?.thread?.id || null;
@@ -610,7 +626,14 @@ export async function createApp(options = {}) {
       } catch (e) { conflict = e.code === 'UPLOAD_CONFLICT'; if (conflict) item.touched = Date.now(); throw e; }
       finally { await fs.rm(staging, {recursive:true,force:true}); if (!conflict) await removeUpload(item); }
     });
-    if (method === 'approval/reply') { await codex.reply(u, params.requestId, params.result); return { ok: true }; }
+    if (method === 'approval/reply') {
+      if (typeof params.requestId === 'string' && params.requestId.startsWith('web:async:')) {
+        const queue = asyncInputs.get(u.id);
+        if (!queue) fail(404, '该请求已失效');
+        await queue.reply(params.requestId, params.result);
+      } else await codex.reply(u, params.requestId, params.result);
+      return { ok: true };
+    }
     if (method === 'codex/start') { await codex.ensure(u); return { ok: true }; }
     if (method === 'codex/restart') { await codex.restart(u); return { ok: true }; }
     if (method === 'turn/start') return mutation(u, async () => {
@@ -667,7 +690,7 @@ export async function createApp(options = {}) {
     if (!clients.has(u.id)) clients.set(u.id, new Set()); clients.get(u.id).add(ws); ws.alive = true;
     ws.on('pong', () => { ws.alive = true; });
     const current = eventCounters.get(u.id)||0;
-    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), avatarUrl: avatarUrl(u), skins: skins.snapshot(u), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || [])] });
+    send(ws, { type: 'ready', seq: current, serverTime: Date.now(), avatarUrl: avatarUrl(u), skins: skins.snapshot(u), activeTurns: turnActivity.active(u.id), pending: [...(codex.instances.get(u.id)?.requests.values() || []), ...(asyncInputs.get(u.id)?.requests.values() || [])] });
     ws.on('message', (data, binary) => {
       if (++queued > 8) { ws.close(1008, '请等待服务器确认后发送'); return; }
       chain = chain.then(async () => {
