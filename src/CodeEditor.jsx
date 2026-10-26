@@ -8,6 +8,7 @@ import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, TextSelect, Save } from '
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/esm/vs/basic-languages/monaco.contribution';
 import { editorLanguage } from './editor-language';
+import { codeFontFamily } from './typography';
 import 'monaco-editor/esm/vs/language/json/monaco.contribution';
 import 'monaco-editor/esm/vs/language/css/monaco.contribution';
 import 'monaco-editor/esm/vs/language/html/monaco.contribution';
@@ -71,7 +72,7 @@ export default memo(function CodeEditor({ file, content, dirty = false, onChange
     ];
   }
   // Cursor/status updates must not reapply all Monaco options on every keystroke.
-  const options = useMemo(() => ({ contextmenu: false, renderValidationDecorations: 'off', fontSize: 13.5, lineHeight: 22, fontFamily: '"JetBrains Mono", "Cascadia Code", "SF Mono", Menlo, Consolas, monospace', lineNumbersMinChars: 3, minimap: { enabled: false }, padding: { top: 8, bottom: 8 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', glyphMargin: false, renderLineHighlight: 'all', bracketPairColorization: { enabled: false }, guides: { indentation: true, bracketPairs: false }, overviewRulerLanes: 0, hideCursorInOverviewRuler: true, smoothScrolling: !reducedMotion, scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }), [readonly, reducedMotion]);
+  const options = useMemo(() => ({ contextmenu: false, renderValidationDecorations: 'off', fontSize: 13.5, lineHeight: 22, fontFamily: codeFontFamily(), lineNumbersMinChars: 3, minimap: { enabled: false }, padding: { top: 8, bottom: 8 }, scrollBeyondLastLine: false, automaticLayout: true, readOnly: readonly, tabSize: 2, wordWrap: 'on', glyphMargin: false, renderLineHighlight: 'all', bracketPairColorization: { enabled: false }, guides: { indentation: true, bracketPairs: false }, overviewRulerLanes: 0, hideCursorInOverviewRuler: true, smoothScrolling: !reducedMotion, scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8, useShadows: false, verticalHasArrows: false, horizontalHasArrows: false } }), [readonly, reducedMotion]);
   const updateTheme = () => {
     const c = appearanceColors();
     const token = name => c[`code-${name}`].slice(1,7);

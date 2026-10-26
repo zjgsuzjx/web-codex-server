@@ -940,7 +940,7 @@
 }
 .review-diff-code {
   overflow: auto;
-  font-family: 'Cascadia Code','SFMono-Regular',Consolas,monospace;
+  font-family: var(--font-code);
   font-size: 11px;
   line-height: 1.8;
   max-height: 65dvh;

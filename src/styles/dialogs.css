@@ -24,7 +24,7 @@
   min-width: 0;
 }
 .code-input {
-  font-family: Consolas,monospace;
+  font-family: var(--font-code);
   resize: vertical;
 }
 .setting-inline {
@@ -640,7 +640,7 @@
   width: 100%;
   min-height: 330px;
   resize: vertical;
-  font-family: Consolas,monospace;
+  font-family: var(--font-code);
   font-size: 12px;
   line-height: 1.8;
   border-radius: var(--ui-radius-lg);

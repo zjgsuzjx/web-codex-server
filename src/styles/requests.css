@@ -343,7 +343,7 @@
   font-size: 11px;
 }
 .approval-body textarea {
-  font-family: Consolas,monospace;
+  font-family: var(--font-code);
   min-height: 100px;
   resize: vertical;
   font-size: 11px;
