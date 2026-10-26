@@ -1,9 +1,11 @@
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import { useMemo } from 'react';
 import remarkGfm from 'remark-gfm';
-import { Copy, Download, FileText, Globe2, Image, LoaderCircle, ExternalLink } from 'lucide-react';
+import { Download, FileText, Globe2, Image, LoaderCircle, ExternalLink } from 'lucide-react';
 import { contentImage, mediaUrl, toolContent } from '../shared/chat-content.js';
 import { remarkReplyFormat } from '../shared/markdown-format.js';
 import ChatImage from './ChatImage';
+import CodeBlock from './CodeBlock';
 import { downloadLinkInfo, fileLinkInfo, rehypeFileReferences, websiteInfo } from './link-info';
 
 function WebsiteLink({ href, children, ...props }) {
@@ -15,7 +17,7 @@ function WebsiteLink({ href, children, ...props }) {
 
 const nodeText = node => typeof node === 'string' || typeof node === 'number' ? String(node) : Array.isArray(node) ? node.map(nodeText).join('') : nodeText(node?.props?.children || '');
 export function Markdown({ text = '', threadId, onFile, notify, onPreview }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkReplyFormat]} rehypePlugins={[rehypeFileReferences]} urlTransform={(url, key) => key === 'src' ? mediaUrl(url, threadId) : fileLinkInfo(url) || downloadLinkInfo(url, '', threadId) ? url : defaultUrlTransform(url)} components={{
+  const components = useMemo(() => ({
     a: ({ node, href, children, ...props }) => {
       const local = fileLinkInfo(href), image = node.children?.some(child => child.tagName === 'img');
       const label = image ? '打开图片链接' : children;
@@ -28,8 +30,14 @@ export function Markdown({ text = '', threadId, onFile, notify, onPreview }) {
     },
     table: ({ node, children, ...props }) => <div className="markdown-table" role="region" aria-label="回复表格，可横向滚动" tabIndex={0}><table {...props}>{children}</table></div>,
     img: ({ node, src, alt }) => src ? <ChatImage src={src} alt={alt || '图片'} onPreview={onPreview}/> : <span className="output-error">图片地址无法预览</span>,
-    pre: ({ node, children, ...props }) => <div className="code-block"><div className="code-block-header"><span>代码</span><button type="button" onClick={() => navigator.clipboard.writeText(nodeText(children)).then(() => notify?.('已复制')).catch(() => notify?.('复制失败', true))}><Copy size={12}/>复制</button></div><pre {...props}>{children}</pre></div>
-  }}>{text || ''}</ReactMarkdown>;
+    pre: ({ node, children }) => {
+      const code = node.children?.find(child => child.tagName === 'code');
+      const classes = code?.properties?.className || [];
+      const fence = classes.find(name => name.startsWith('language-'))?.slice(9) || '';
+      return <CodeBlock code={code?.children?.map(child => child.value || '').join('') ?? nodeText(children)} fence={fence} notify={notify}/>;
+    }
+  }), [threadId, onFile, notify, onPreview]);
+  return <ReactMarkdown remarkPlugins={[remarkGfm, remarkReplyFormat]} rehypePlugins={[rehypeFileReferences]} urlTransform={(url, key) => key === 'src' ? mediaUrl(url, threadId) : fileLinkInfo(url) || downloadLinkInfo(url, '', threadId) ? url : defaultUrlTransform(url)} components={components}>{text || ''}</ReactMarkdown>;
 }
 
 export function GeneratedImage({ item, onPreview }) {
