@@ -47,7 +47,7 @@ export async function anchored(root, rel) {
   const parts=rel.split('/');const name=parts.pop();let dir=await openDirectory(root);
   try{for(const part of parts){const next=await openDirectory(`/proc/self/fd/${dir.fd}/${part}`);await dir.close();dir=next;}return{target:`/proc/self/fd/${dir.fd}/${name}`,close:()=>dir.close()};}catch(e){await dir.close();throw e;}
 }
-export async function walk(root, max = USER_FILE_ENTRY_LIMIT, start = '', { skipNames, pruneNames } = {}) {
+export async function walk(root, max = USER_FILE_ENTRY_LIMIT, start = '', { skipNames, pruneNames, filter } = {}) {
   const entries = [];
   async function visit(rel, dir) {
     for (const item of await fs.readdir(dir, { withFileTypes: true })) {
@@ -55,6 +55,7 @@ export async function walk(root, max = USER_FILE_ENTRY_LIMIT, start = '', { skip
       if (item.isDirectory() && skipNames?.has(item.name)) continue;
       const name = rel ? `${rel}/${item.name}` : item.name;
       try{relativePath(name,false);}catch{continue;}
+      if (filter && !await filter(name, item.isDirectory())) continue;
       const target = path.join(dir,item.name);
       let st;try{st=await fs.lstat(target);}catch(e){if(e.code==='ENOENT')continue;throw e;}
       if(st.isSymbolicLink())continue;

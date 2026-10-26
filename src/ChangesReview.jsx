@@ -10,6 +10,7 @@ function DiffFile({ file, onFile }) {
   return <details className="review-diff-file" open><summary><FileDiff size={14}/><span title={file.path}>{file.path}</span><small>{kindLabel[file.kind] || '修改'}</small><ChangeStats {...file}/><ChevronDown size={13}/></summary>
     {file.kind !== 'delete' && <div className="review-file-actions"><button type="button" onClick={() => onFile(file.path)}><File size={12}/>打开当前文件</button></div>}
     {file.previousPath && <p className="review-previous-path">原路径：{file.previousPath}</p>}
+    {file.previewWarning && <p className="review-scope-note">{file.previewWarning}</p>}
     {file.patches?.some(patch => patch.hunks?.length) ? <div className="review-diff-code" tabIndex={0} aria-label={`${file.path} 的代码差异`}>{file.patches.map((patch, index) => <div key={index}>{file.patches.length > 1 && <div className="diff-hunk-header">第 {index + 1} 次修改</div>}{patch.hunks.map((hunk, h) => <div key={h}><div className="diff-hunk-header">@@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</div>{hunkRows(hunk).map((row, line) => <div className={`diff-line diff-${row.type}`} key={line}><span className="diff-line-number">{row.oldLine}</span><span className="diff-line-number">{row.newLine}</span><span className="diff-line-sign">{row.type === 'add' ? '+' : row.type === 'delete' ? '−' : ''}</span><code>{row.text || ' '}</code></div>)}</div>)}</div>)}</div> : <p className="review-diff-unavailable">{file.reason || (file.kind === 'rename' ? '文件路径已更改，内容没有文本行变更。' : '文件没有文本行变更。')}</p>}
   </details>;
 }

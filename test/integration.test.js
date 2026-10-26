@@ -268,25 +268,34 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       await request(`/projects/${project.id}/file`, 'PUT', { path: 'app.js', content: 'preexisting edit\nold\n' }, a);
       await request(`/projects/${project.id}/file`, 'PUT', { path: 'delete.txt', content: 'removed\n' }, a);
       const tr = (await request('/threads', 'POST', { projectId: project.id }, a)).data;
-      const start = await s2.call('turn/start', { threadId: tr.id, text: 'modify files' });
       const projectDir = path.join(dir, 'users', 'alice', 'projects', project.id);
+      await fs.mkdir(path.join(projectDir, '.work'));
+      await fs.writeFile(path.join(projectDir, '.work', 'Backup.cs'), 'old backup\n');
+      const source = '// Unity C# source\n'.repeat(40000);
+      await fs.writeFile(path.join(projectDir, 'MarkerManager.cs'), source);
+      const start = await s2.call('turn/start', { threadId: tr.id, text: 'modify files' });
       await fs.writeFile(path.join(projectDir, 'app.js'), 'preexisting edit\nnew\nextra\n');
       await fs.writeFile(path.join(projectDir, 'new.js'), 'created\n'); await fs.unlink(path.join(projectDir, 'delete.txt'));
+      await fs.writeFile(path.join(projectDir, '.work', 'Backup.cs'), 'new backup\n');
+      await fs.writeFile(path.join(projectDir, '.work', 'After.dll'), Buffer.from([0, 1, 2]));
+      await fs.appendFile(path.join(projectDir, 'MarkerManager.cs'), '// actual change\n');
       instance.codex.emit(a.id, { method: 'item/completed', params: { threadId: tr.id, turnId: start.turn.id, item: { id: 'shell-diff', type: 'commandExecution', status: 'completed' } } });
       const turn = instance.codex.threads.get(tr.id).turns[0]; turn.status = 'completed';
       instance.codex.emit(a.id, { method: 'turn/completed', params: { threadId: tr.id, turn } });
       const endpoint = `/threads/${tr.id}/turns/${turn.id}/changes`;
       let details;
       for (let i = 0; i < 100; i++) { details = await request(endpoint, 'GET', null, a); if (details.data?.source === 'snapshot' && details.data.status === 'completed') break; await new Promise(resolve => setTimeout(resolve, 5)); }
-      assert.equal(details.status, 200); assert.equal(details.data.files.length, 3); assert.equal(details.data.added, 3); assert.equal(details.data.removed, 2);
+      assert.equal(details.status, 200); assert.equal(details.data.files.length, 4); assert.equal(details.data.added, 4); assert.equal(details.data.removed, 2);
+      const csharp = await request(endpoint + '?path=MarkerManager.cs', 'GET', null, a);
+      assert.equal(csharp.data.files[0].added, 1); assert.ok(csharp.data.files[0].patches[0].hunks[0].lines.includes('+// actual change'));
       assert.equal((await request(endpoint, 'GET')).status, 401); assert.equal((await request(endpoint, 'GET', null, b)).status, 404);
       const single = await request(endpoint + '?path=app.js', 'GET', null, a); assert.equal(single.data.files.length, 1); assert.equal(single.data.added, 2); assert.equal(single.data.removed, 1);
       assert.equal((await request(endpoint + '?path=..%2Fsecret', 'GET', null, a)).status, 400);
       assert.equal((await request(`/threads/${tr.id}/turns/wrong/changes`, 'GET', null, a)).status, 404);
-      const history = (await request(`/threads/${tr.id}`, 'GET', null, a)).data.thread.turns[0]; assert.equal(history.changes.files.length, 3); assert.equal('patches' in history.changes.files[0], false);
+      const history = (await request(`/threads/${tr.id}`, 'GET', null, a)).data.thread.turns[0]; assert.equal(history.changes.files.length, 4); assert.equal('patches' in history.changes.files[0], false);
       const other = (await request('/threads', 'POST', { projectId: project.id }, a)).data;
       assert.equal((await request(`/threads/${other.id}/turns/${turn.id}/changes`, 'GET', null, a)).status, 404);
-      const fork = await s2.call('thread/fork', { threadId: tr.id }); const inherited = await request(`/threads/${fork.thread.id}/turns/${turn.id}/changes`, 'GET', null, a); assert.equal(inherited.data.added, 3);
+      const fork = await s2.call('thread/fork', { threadId: tr.id }); const inherited = await request(`/threads/${fork.thread.id}/turns/${turn.id}/changes`, 'GET', null, a); assert.equal(inherited.data.added, 4);
     });
     await t.test('turn clocks and sidebar activity survive reads and reconnects without leaking across users', async () => {
       const tr = (await request('/threads', 'POST', { projectId: p.id }, a)).data;

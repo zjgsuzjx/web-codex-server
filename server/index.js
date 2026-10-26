@@ -19,6 +19,7 @@ import { stageZip, publishZip, uploadPlan } from './archives.js';
 import { imageResult, readMedia, mediaLocation } from './chat-media.js';
 import { attachmentHeader, downloadFile, downloadSelected } from './downloads.js';
 import { createTurnChanges } from './turn-changes.js';
+import { generatedChangePath } from './change-files.js';
 import { createTurnActivity } from './turn-activity.js';
 import { changesSummary, historicalChanges } from '../shared/file-changes.js';
 import { storageLimit, topPaths } from '../shared/storage.js';
@@ -390,7 +391,7 @@ export async function createApp(options = {}) {
       const result = await codex.call(req.user, 'thread/read', { threadId: thread.id, includeTurns: true });
       const turn = result.thread.turns?.find(turn => turn.id === req.params.turnId);
       if (!turn) fail(404, '本轮变更不存在');
-      const files = historicalChanges(turn, changeRoots(req.user, thread));
+      const files = historicalChanges(turn, changeRoots(req.user, thread)).filter(file => !generatedChangePath(file.path));
       details = { ...changesSummary(files, { status: turn.status, source: 'history', warning: '此历史轮次仅保留操作补丁，行数为已记录的修改操作总计。' }), files };
     }
     if (req.query.path != null) { const selected = relativePath(req.query.path, false), files = details.files.filter(file => file.path === selected); details = { ...details, ...changesSummary(files, details), files }; }

@@ -2,27 +2,41 @@ import { createHash } from 'node:crypto';
 import { openSafe, walk } from './files.js';
 import { changesSummary, historicalChanges, projectFilePath, textFileChange, unifiedChanges } from '../shared/file-changes.js';
 import { USER_FILE_ENTRY_LIMIT, fileEntryLimit } from '../shared/file-limits.js';
+import { changeFileFilter, generatedChangePath } from './change-files.js';
 
 const skipNames = new Set(['.git', 'node_modules', '.venv']);
-export async function projectSnapshot(root, { maxFile = 512 * 1024, maxBytes = 16 * 1024 * 1024, maxEntries = USER_FILE_ENTRY_LIMIT } = {}) {
+const sourcePriority = name => /\.(?:[cm]?[jt]sx?|cs|py|rs|go|java|kt|swift|c|cc|cpp|h|hpp|vue|svelte|html|css|scss|sh|ps1)$/i.test(name) ? 0 : 1;
+export async function projectSnapshot(root, { maxFile = 4 * 1024 * 1024, maxBytes = 32 * 1024 * 1024, maxEntries = USER_FILE_ENTRY_LIMIT, baseline } = {}) {
   const files = new Map(); let used = 0;
   try {
-    for (const entry of await walk(root, maxEntries, '', { skipNames })) {
+    const filter = await changeFileFilter(root, baseline);
+    const entries = await walk(root, maxEntries, '', { skipNames, filter });
+    // Source baselines come before large assets; unchanged files share their
+    // immutable baseline instead of consuming a second snapshot's text budget.
+    entries.sort((a, b) => sourcePriority(a.path) - sourcePriority(b.path) || a.path.localeCompare(b.path));
+    for (const entry of entries) {
       if (entry.type !== 'file') continue;
+      const previous = baseline?.files.get(entry.path);
       const metadata = { size: entry.size, modified: entry.modified, content: null };
       files.set(entry.path, metadata);
-      if (entry.size > maxFile || used + entry.size > maxBytes) { metadata.reason = '文件或本轮快照超过预览大小限制。'; continue; }
+      if (entry.size > maxFile) { metadata.reason = '文件超过单文件逐行预览大小限制。'; continue; }
       let opened;
       try {
         opened = await openSafe(root, entry.path);
-        if (opened.stat.size > maxFile || used + opened.stat.size > maxBytes) { metadata.reason = '文件超过预览大小限制。'; continue; }
+        metadata.size = opened.stat.size; metadata.modified = opened.stat.mtimeMs;
+        if (opened.stat.size > maxFile) { metadata.reason = '文件超过单文件逐行预览大小限制。'; continue; }
         // A file can grow during a tool operation. Never use unbounded readFile.
         const buffer = Buffer.alloc(Math.min(maxFile + 1, opened.stat.size + 1)); let length = 0;
         while (length < buffer.length) { const { bytesRead } = await opened.handle.read(buffer, length, buffer.length - length, length); if (!bytesRead) break; length += bytesRead; }
-        used += length;
         if (length > maxFile || length > opened.stat.size) { metadata.reason = '文件仍在写入，暂不提供逐行预览。'; continue; }
         const bytes = buffer.subarray(0, length); metadata.hash = createHash('sha256').update(bytes).digest('hex');
-        try { if (bytes.includes(0)) throw new Error(); metadata.content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+        if (previous?.content != null && previous.hash === metadata.hash) { metadata.content = previous.content; continue; }
+        try {
+          if (bytes.includes(0)) throw new Error();
+          const content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          if (used + length > maxBytes) metadata.reason = '本轮文本快照已达到容量限制，未保留此文件的逐行预览。';
+          else { metadata.content = content; used += length; }
+        }
         catch { metadata.reason = '二进制或非 UTF-8 文件，不提供逐行预览。'; }
       } catch { metadata.reason = '文件无法安全读取。'; }
       finally { await opened?.handle.close(); }
@@ -64,14 +78,22 @@ export function createTurnChanges({ store, root, cwd, emit, snapshot = projectSn
   const states = new Map(); let closed = false;
   const key = (uid, tid) => `${uid}:${tid}`;
   const row = (tid, turnId) => store.get('SELECT * FROM turn_changes WHERE thread_id=? AND turn_id=?', tid, turnId);
+  function stored(saved, details = false) {
+    const summary = JSON.parse(saved.summary), files = details ? JSON.parse(saved.details) : summary.files;
+    // Existing histories may contain scratch files captured before project filtering.
+    const visible = summary.scope === 'project' ? files : files.filter(file => !generatedChangePath(file.path));
+    return { ...summary, ...changesSummary(visible, summary), ...(details ? { files: visible } : {}) };
+  }
   function save(state, files, source, warning = '') {
     let detailBytes = 0;
     files = files.map(file => {
-      const size = Buffer.byteLength(JSON.stringify(file), 'utf8'); detailBytes += size;
-      return detailBytes > 4 * 1024 * 1024 ? { ...file, patches: undefined, reason: '本轮差异预览超过大小限制。' } : file;
+      if (!file.patches) return file;
+      const size = Buffer.byteLength(JSON.stringify(file.patches), 'utf8');
+      if (detailBytes + size > 4 * 1024 * 1024) return { ...file, patches: undefined, reason: '本轮差异预览超过大小限制。' };
+      detailBytes += size; return file;
     });
     const revision = (row(state.thread.id, state.turnId)?.revision || 0) + 1;
-    const summary = changesSummary(files, { revision, status: state.status, source, warning });
+    const summary = { ...changesSummary(files, { revision, status: state.status, source, warning }), scope: 'project' };
     store.run('INSERT INTO turn_changes(thread_id,turn_id,revision,summary,details) VALUES(?,?,?,?,?) ON CONFLICT(thread_id,turn_id) DO UPDATE SET revision=excluded.revision,summary=excluded.summary,details=excluded.details', state.thread.id, state.turnId, revision, JSON.stringify(summary), JSON.stringify(files));
     emit(state.user.id, { method: 'turn/changes/updated', params: { threadId: state.thread.id, turnId: state.turnId, changes: summary } });
   }
@@ -80,10 +102,14 @@ export function createTurnChanges({ store, root, cwd, emit, snapshot = projectSn
     state.running = (async () => {
       do {
         state.again = false;
-        const after = await snapshot(state.root, {maxEntries:fileEntryLimit(store.user(state.user.id) || state.user)});
+        const after = await snapshot(state.root, {maxEntries:fileEntryLimit(store.user(state.user.id) || state.user), baseline: state.before});
         if (closed || state.again || !state.turnId) continue;
         const warning = state.before.warning || after.warning;
-        const files = warning ? unifiedChanges(state.nativeDiff, state.cwd) : compareSnapshots(state.before, after, state.moves);
+        const native = unifiedChanges(state.nativeDiff, state.cwd).filter(file => after.files.has(file.path) || state.before.files.has(file.path) || !generatedChangePath(file.path));
+        const files = warning ? native : compareSnapshots(state.before, after, state.moves).map(file => {
+          const fallback = !file.patches && native.find(candidate => candidate.path === file.path && candidate.kind === file.kind);
+          return fallback ? { ...fallback, previousPath: file.previousPath, previewWarning: '快照未保留完整文本，以下为 Codex 记录的本轮修改补丁。' } : file;
+        });
         save(state, files, warning ? 'native' : 'snapshot', warning || '');
       } while (!closed && state.again);
     })().catch(() => {}).finally(() => { state.running = null; if (state.status !== 'inProgress') states.delete(key(state.user.id, state.thread.id)); });
@@ -114,10 +140,10 @@ export function createTurnChanges({ store, root, cwd, emit, snapshot = projectSn
         if (!thread) return;
         if (event.method === 'turn/diff/updated' && p.turnId) {
           const saved = row(tid, p.turnId); if (saved && JSON.parse(saved.summary).status !== 'inProgress') return;
-          const user = store.user(uid); save({ user, thread, turnId: p.turnId, status: 'inProgress' }, unifiedChanges(p.diff, cwd(user, thread)), 'native', '此轮没有开始快照，显示 Codex 提供的修改补丁。');
+          const user = store.user(uid); save({ user, thread, turnId: p.turnId, status: 'inProgress' }, unifiedChanges(p.diff, cwd(user, thread)).filter(file => !generatedChangePath(file.path)), 'native', '此轮没有开始快照，显示 Codex 提供的修改补丁。');
         } else if (event.method === 'turn/completed' && p.turn?.id) {
           const saved = row(tid, p.turn.id), summary = saved && JSON.parse(saved.summary);
-          if (summary?.status === 'inProgress') save({ user: store.user(uid), thread, turnId: p.turn.id, status: p.turn.status }, JSON.parse(saved.details), summary.source, '跟踪曾中断，显示最后一次捕获的变更。');
+          if (summary?.status === 'inProgress') save({ user: store.user(uid), thread, turnId: p.turn.id, status: p.turn.status }, stored(saved, true).files, summary.source, '跟踪曾中断，显示最后一次捕获的变更。');
         }
         return;
       }
@@ -140,11 +166,11 @@ export function createTurnChanges({ store, root, cwd, emit, snapshot = projectSn
       }
     },
     summary(thread, turn) {
-      const saved = row(thread.id, turn.id); if (saved) return JSON.parse(saved.summary);
-      const user = store.user(thread.user_id), files = historicalChanges(turn, cwd(user, thread));
+      const saved = row(thread.id, turn.id); if (saved) return stored(saved);
+      const user = store.user(thread.user_id), files = historicalChanges(turn, cwd(user, thread)).filter(file => !generatedChangePath(file.path));
       return files.length ? changesSummary(files, { status: turn.status, source: 'history', warning: '此历史轮次仅保留操作补丁，行数为已记录的修改操作总计。' }) : null;
     },
-    details(thread, turnId) { const saved = row(thread.id, turnId); return saved ? { ...JSON.parse(saved.summary), files: JSON.parse(saved.details) } : null; },
+    details(thread, turnId) { const saved = row(thread.id, turnId); return saved ? stored(saved, true) : null; },
     fork(from, to) { store.run('INSERT OR IGNORE INTO turn_changes SELECT ?,turn_id,revision,summary,details FROM turn_changes WHERE thread_id=?', to, from); },
     async close() { closed = true; for (const state of states.values()) clearTimeout(state.timer); await Promise.all([...states.values()].map(state => state.running)); states.clear(); }
   };
