@@ -34,12 +34,6 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.code-block pre {
-  margin: 0;
-  padding: 16px;
-  overflow: auto;
-  white-space: pre;
-}
 .markdown blockquote {
   border-left: 2px solid var(--subtle);
   padding-left: 14px;
@@ -885,36 +879,6 @@
   background: transparent;
   padding: 0;
   border: 0;
-}
-.code-block {
-  background: var(--ui-field);
-  border: 1px solid var(--line);
-  border-radius: var(--ui-radius-lg);
-  overflow: hidden;
-  margin: 18px 0;
-}
-.code-block-header {
-  font-family: var(--font-ui);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg);
-  font-size: 11px;
-  color: var(--muted);
-  border-bottom: 1px solid var(--line);
-}
-.code-block-header button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10px;
-  color: var(--muted);
-  padding: 4px 7px;
-  border-radius: var(--ui-radius-sm);
-}
-.code-block-header button:hover {
-  background: var(--ui-hover);
 }
 .tool-item {
   margin: 8px 0 12px 42px;

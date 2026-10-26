@@ -6,6 +6,7 @@
 @import './styles/shell.css';
 @import './styles/chat.css';
 @import './styles/output.css';
+@import './styles/code-block.css';
 @import './styles/composer.css';
 @import './styles/controls.css';
 @import './styles/dialogs.css';
