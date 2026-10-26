@@ -8,7 +8,7 @@
     "start": "node server/index.js",
     "build": "vite build",
     "test": "node --test test/*.test.js",
-    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js && node --check server/attachments.js && node --check server/archives.js && node --check server/chat-media.js && node --check server/turn-changes.js && node --check server/downloads.js && node --check server/pending-requests.js && node --check server/storage.js && node --check server/file-images.js && node --check server/avatar.js && node --check server/skins.js && node --check shared/skins.js"
+    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js && node --check server/attachments.js && node --check server/archives.js && node --check server/chat-media.js && node --check server/turn-changes.js && node --check server/change-files.js && node --check server/downloads.js && node --check server/pending-requests.js && node --check server/storage.js && node --check server/file-images.js && node --check server/avatar.js && node --check server/skins.js && node --check shared/skins.js"
   },
   "engines": {
     "node": ">=24"
@@ -20,6 +20,7 @@
     "dockerode": "^5.0.1",
     "express": "^5.1.0",
     "fflate": "^0.8.3",
+    "ignore": "^7.0.5",
     "micromark-util-decode-string": "^2.0.1",
     "tldts": "^7.4.18",
     "ws": "^8.18.3",

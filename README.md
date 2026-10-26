@@ -81,7 +81,7 @@ Each task shows changed files and added/deleted line counts. Open the review pan
 
 ![Per-task file changes and the integrated diff review panel](docs/images/change-review.jpg)
 
-*Changes are measured against a snapshot at the start of the task, including shell writes. Concurrent manual edits also count; oversized or binary files can have unknown line counts.*
+*Changes are measured against a snapshot at the start of the task, including shell writes. Git projects respect ignore rules and include tracked files and eligible new files; uploaded folders also respect nested `.gitignore` files. Common scratch folders (such as `.work`) and untracked build outputs are omitted. Source files get preview priority, unchanged text shares its baseline, and binary data does not consume the text budget. Text previews support up to 4 MiB per file, 32 MiB of text per snapshot, and 4 MiB of stored patches per task. If a snapshot preview is unavailable, a recorded Codex patch may be shown with a notice. Concurrent manual edits also count; binary files and files above these limits can have unknown line counts. Old tasks whose baselines were discarded cannot have their full diffs reconstructed retroactively.*
 
 ### Bring your files; take your work with you
 
