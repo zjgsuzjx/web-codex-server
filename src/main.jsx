@@ -25,7 +25,6 @@ import { contentImage, isProcessItem, reasoningText, toolContent } from '../shar
 import { LiveSocket } from './socket';
 import './style.css';
 import './workspace-toolbar.css';
-import '@fontsource-variable/inter';
 import PermissionPicker from './PermissionPicker';
 import UsageOverview from './UsageOverview';
 import { createDeltaBuffer, applyDeltas, applyLifecycle, mergeTurns } from './deltas';

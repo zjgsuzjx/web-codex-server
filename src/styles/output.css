@@ -1,4 +1,8 @@
 /* output: shared semantic colors and control geometry live in tokens.css. */
+.markdown,.user-message>div,.thinking-text {
+  font-family: var(--font-content);
+}
+
 .user-message {
   display: flex;
   justify-content: flex-end;
@@ -890,6 +894,7 @@
   margin: 18px 0;
 }
 .code-block-header {
+  font-family: var(--font-ui);
   display: flex;
   align-items: center;
   justify-content: space-between;

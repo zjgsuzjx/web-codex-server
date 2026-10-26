@@ -4,6 +4,7 @@
 }
 button,input,textarea,select {
   font: inherit;
+  font-family: var(--font-ui);
 }
 button,a,input,textarea,select {
   -webkit-tap-highlight-color: transparent;
@@ -47,8 +48,8 @@ summary {
 summary::-webkit-details-marker {
   display: none;
 }
-pre,code,kbd {
-  font-family: 'Cascadia Code','SFMono-Regular',Consolas,monospace;
+pre,code,kbd,samp {
+  font-family: var(--font-code);
 }
 pre {
   white-space: pre-wrap;
