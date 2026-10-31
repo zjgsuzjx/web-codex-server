@@ -41,7 +41,9 @@ export async function stageArchive(filename, staging, { name, ...options }) {
   // -P preserves unsafe names for our own validator; no native tool writes files.
   const args = converted ? ['-c', '-f', '-', '--format=pax', '-P', `@${path.resolve(filename)}`] : ['--', path.resolve(filename)];
   // No stdin or controlling terminal: encrypted input must fail without prompting.
-  const child = spawn(command, args, { cwd: staging, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TAR_READER_OPTIONS: '', TAR_WRITER_OPTIONS: '' } });
+  // Minimal Linux images default to the C locale, which rejects Unicode paths.
+  const env = { ...process.env, TAR_READER_OPTIONS: '', TAR_WRITER_OPTIONS: '', ...(process.platform === 'linux' ? { LC_ALL: 'C.UTF-8', LANG: 'C.UTF-8' } : {}) };
+  const child = spawn(command, args, { cwd: staging, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env });
   let diagnostic = '', timedOut = false;
   child.stderr.on('data', chunk => { if (diagnostic.length < 4096) diagnostic += chunk.toString().slice(0, 4096 - diagnostic.length); });
   const completion = new Promise(resolve => {
