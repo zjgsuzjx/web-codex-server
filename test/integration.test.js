@@ -82,6 +82,23 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
     await t.test('unfinished and conflicting uploads do not overwrite existing files',async()=>{const task=await s2.call('upload/begin',{projectId:p.id,path:'src/hello.txt',size:2});await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}));await s2.chunk(Buffer.from('XX'));await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}),e=>e.code==='UPLOAD_CONFLICT'&&e.conflicts[0].path==='src/hello.txt');assert.equal((await request(`/projects/${p.id}/file?path=src/hello.txt`,'GET',null,a)).data.content,'hello world');const skipped=await s2.call('upload/finish',{uploadId:task.uploadId,conflictPolicy:'skip'});assert.equal(skipped.skipped,1);assert.equal(skipped.uploaded,0);});
     await t.test('editor uses optimistic concurrency and supports rename and deletion',async()=>{const file=(await request(`/projects/${p.id}/file?path=src/hello.txt`,'GET',null,a)).data;const saved=await request(`/projects/${p.id}/file`,'PUT',{path:'src/hello.txt',content:'modified',etag:file.etag},a);assert.equal(saved.status,200);assert.equal((await request(`/projects/${p.id}/file`,'PUT',{path:'src/hello.txt',content:'stale',etag:file.etag},a)).status,409);assert.equal((await request(`/projects/${p.id}/file`,'PATCH',{from:'src/hello.txt',to:'src/new.txt'},a)).status,200);assert.equal((await request(`/projects/${p.id}/file`,'DELETE',{path:'src/new.txt'},a)).status,200);});
     await t.test('directory download produces a zip; unauthorized user cannot download',async()=>{const r=await fetch(base+`/api/projects/${p.id}/download`,{headers:{Cookie:a.cookie,Origin:base}});assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'application/zip');const buf=Buffer.from(await r.arrayBuffer());assert.equal(buf.subarray(0,2).toString(),'PK');assert.ok(buf.includes(Buffer.from('resumed.txt')));assert.equal((await request(`/projects/${p.id}/download`,'GET',null,b)).status,404);});
+    await t.test('search inventories skip dot directories without changing the ordinary file tree', async () => {
+      const fixture = path.join(dir, 'users', a.username, 'projects', p.id, 'search-fixture');
+      await fs.mkdir(path.join(fixture, '.hidden', 'nested'), { recursive: true });
+      await fs.writeFile(path.join(fixture, '.hidden', 'nested', 'secret.txt'), 'synthetic');
+      await fs.writeFile(path.join(fixture, '.env'), 'synthetic');
+      await fs.writeFile(path.join(fixture, 'visible.txt'), 'synthetic');
+      try {
+        const url = `/projects/${p.id}/files?path=search-fixture`;
+        const ordinary = (await request(url, 'GET', null, a)).data;
+        assert.ok(ordinary.some(entry => entry.path.includes('/.hidden/')));
+        const search = await request(url + '&excludeHidden=true', 'GET', null, a);
+        assert.equal(search.status, 200);
+        assert.deepEqual(search.data.map(entry => entry.path), ['search-fixture/.env', 'search-fixture/visible.txt']);
+        assert.deepEqual((await request(url + '/.hidden&excludeHidden=true', 'GET', null, a)).data, []);
+        assert.equal((await request(url + '&excludeHidden=true', 'GET', null, b)).status, 404);
+      } finally { await fs.rm(fixture, { recursive: true, force: true }); }
+    });
     await t.test('file inventories and upload preflight enforce persisted role limits',async t=>{
       const own=(await request('/projects','POST',{name:'Count limits'},b)).data;
       const roots=new Set([path.resolve(dir,'users',a.username,'projects',p.id),path.resolve(dir,'users',b.username,'projects',own.id)]);

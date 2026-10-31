@@ -36,11 +36,18 @@ function matchScore(value, query) {
   return 4 + gaps / Math.max(1, value.length);
 }
 
+function searchableEntry(entry) {
+  const folders = entry.path.split('/');
+  if (entry.type !== 'directory') folders.pop();
+  return folders.every(folder => !folder.startsWith('.'));
+}
+
 export function findFiles(entries, query, limit = 80) {
   const tokens = query.trim().toLocaleLowerCase().replaceAll('\\', '/').split(/\s+/).filter(Boolean);
+  if (!tokens.length) return { entries: [], total: 0 };
   const matches = [];
   for (const entry of entries) {
-    if (entry.type !== 'file') continue;
+    if (entry.type !== 'file' || !searchableEntry(entry)) continue;
     const name = entry.name.toLocaleLowerCase(), path = entry.path.toLocaleLowerCase();
     const score = tokens.reduce((sum, token) => sum + Math.min(matchScore(name, token), 8 + matchScore(path, token)), 0);
     if (Number.isFinite(score)) matches.push({ entry, score });
@@ -50,16 +57,16 @@ export function findFiles(entries, query, limit = 80) {
 }
 
 // The ordinary tree leaves dependency/cache folders lazy. Index them once per
-// picker session, progressively, so collapsed folders are searchable as well.
+// active search, progressively. Dot-prefixed folders are never indexed.
 export async function indexLazyFiles(entries, loadDirectory, { signal, onBatch } = {}) {
-  const queue = entries.filter(entry => entry.type === 'directory' && entry.lazy).map(entry => entry.path);
+  const queue = entries.filter(entry => entry.type === 'directory' && entry.lazy && searchableEntry(entry)).map(entry => entry.path);
   const visited = new Set(), failures = [];
   for (let i = 0; i < queue.length && !signal?.aborted; i++) {
     const path = queue[i];
     if (visited.has(path)) continue;
     visited.add(path);
     try {
-      const rows = await loadDirectory(path, signal);
+      const rows = (await loadDirectory(path, signal)).filter(searchableEntry);
       if (signal?.aborted) break;
       onBatch?.(rows);
       for (const row of rows) if (row.type === 'directory' && row.lazy) queue.push(row.path);

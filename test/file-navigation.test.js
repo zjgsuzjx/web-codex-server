@@ -25,21 +25,29 @@ test('quick file matching prioritizes names and supports paths, fuzzy input, Uni
   assert.deepEqual(findFiles(entries, 'test projectfiles').entries.map(entry => entry.path), ['test/ProjectFiles.test.js']);
   assert.equal(findFiles(entries, '中文').entries[0].path, 'src/中文文件.js');
   assert.equal(findFiles(entries, 'no-such-file').total, 0);
-  assert.equal(findFiles(entries, '', 2).entries.length, 2);
-  assert.equal(findFiles(entries, '').total, 5);
+  assert.equal(findFiles(entries, 'js', 2).entries.length, 2);
+  assert.equal(findFiles(entries, 'js').total, 5);
+  assert.deepEqual(findFiles(entries, ''), { entries: [], total: 0 });
+  assert.deepEqual(findFiles(entries, '  \t '), { entries: [], total: 0 });
+});
+
+test('quick search excludes dot folders at every depth while keeping dot files', () => {
+  const entries = ['.git/config', 'src/.private/config', 'src/.private/deeper/config', 'node_modules/.cache/config', 'src/config', '.config', 'src/.config', 'dot.folder/config'].map(path => file(path));
+  assert.deepEqual(findFiles(entries, 'config').entries.map(entry => entry.path).sort(), ['.config', 'dot.folder/config', 'src/.config', 'src/config']);
 });
 
 test('quick file indexing discovers nested lazy folders, retains results after errors and aborts obsolete work', async () => {
   const directory = path => ({ path, name: path.split('/').at(-1), type: 'directory', lazy: true });
   const calls = [], batches = [], controller = new AbortController();
-  const failures = await indexLazyFiles([directory('.cache'), directory('broken')], async path => {
+  const failures = await indexLazyFiles([directory('.git'), directory('node_modules'), directory('broken')], async path => {
     calls.push(path);
     if (path === 'broken') throw new Error('unavailable');
-    return path === '.cache' ? [file('.cache/a.js'), directory('.cache/nested')] : [file('.cache/nested/b.js')];
+    return path === 'node_modules' ? [file('node_modules/a.js'), directory('node_modules/nested'), directory('node_modules/.cache'), file('node_modules/.cache/b.js')] : [file('node_modules/nested/b.js')];
   }, { onBatch: rows => batches.push(...rows) });
-  assert.deepEqual(calls, ['.cache', 'broken', '.cache/nested']);
+  assert.deepEqual(calls, ['node_modules', 'broken', 'node_modules/nested']);
   assert.equal(failures[0].path, 'broken');
-  assert.equal(findFiles(batches, 'b.js').entries[0].path, '.cache/nested/b.js');
+  assert.equal(findFiles(batches, 'b.js').entries[0].path, 'node_modules/nested/b.js');
+  assert.ok(batches.every(entry => !entry.path.includes('.cache')));
   let delivered = false, requested = 0;
   await indexLazyFiles([directory('first'), directory('second')], async () => {
     requested++; controller.abort(); return [file('stale.js')];
