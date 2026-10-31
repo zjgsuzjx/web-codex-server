@@ -8,5 +8,6 @@ data
 .deploy-state
 .deploy-releases
 dist
+test
 test-results
 *.tar.gz

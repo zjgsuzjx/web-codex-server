@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-test('runtime Docker COPY rules include the relative module graph of every test and the server',async()=>{
+test('runtime image excludes tests and frontend sources while including server and maintenance modules',async()=>{
   const root=fileURLToPath(new URL('../',import.meta.url));
   const dockerfile=await fs.readFile(path.join(root,'Dockerfile'),'utf8');
   const runtime=dockerfile.split(/^FROM /m).at(-1),copies=[];
@@ -23,7 +23,11 @@ test('runtime Docker COPY rules include the relative module graph of every test 
     }
     return false;
   }
-  const pending=['server/index.js',...(await fs.readdir(path.join(root,'test'))).filter(name=>name.endsWith('.test.js')).map(name=>'test/'+name)],visited=new Set();
+  const ignored=await fs.readFile(path.join(root,'.dockerignore'),'utf8');
+  assert.match(ignored,/^\/?test\/?\s*$/m,'Exclude test/ from the Docker build context');
+  for(const name of await fs.readdir(path.join(root,'test')))assert.equal(await included('test/'+name),false,'Test files must not ship in the runtime image');
+  assert.ok(copies.every(copy=>!copy.source.startsWith('src/')),'Unbundled frontend modules are not needed by the runtime');
+  const pending=['server/index.js','scripts/smoke.mjs','scripts/role-smoke.mjs'],visited=new Set();
   while(pending.length){
     const relative=pending.pop();if(visited.has(relative))continue;visited.add(relative);
     assert.ok(await included(relative),`Runtime image is missing ${relative}; include it in Dockerfile COPY rules`);

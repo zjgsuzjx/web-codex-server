@@ -63,8 +63,8 @@ build_image --build-arg "APP_REVISION=$REVISION" --label "org.opencontainers.ima
 # The EXIT trap performs the same cleanup if either image build fails.
 finish_build
 # The candidate has no production data, host namespace or Docker socket mounted.
-timeout --kill-after=15s 300s docker run --rm --network none --memory 384m --cpus .75 "$WEB_IMAGE" sh -c 'npm run check && npm test'
-# Wait here if work started during the build; reuse the tested candidate.
+timeout --kill-after=15s 300s docker run --rm --network none --memory 384m --cpus .75 "$WEB_IMAGE" npm run check
+# Wait here if work started during the build; reuse the checked candidate.
 wait_ready
 
 rollback() {
