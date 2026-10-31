@@ -211,7 +211,7 @@ docker compose logs --tail 100 web
 curl -fsS http://127.0.0.1:3100/api/health
 ```
 
-可选 [GitHub Actions 工作流](../.github/workflows/deploy.yml)在 `main` 更新时发出 SSH 请求，由服务器通过 `git archive` 导出源码并构建。候选镜像在不挂载生产数据或 Docker socket 的容器中进行语法检查；应用忙碌时推迟切换，切换或健康检查失败恢复旧镜像。不使用定时轮询仓库。
+可选 [GitHub Actions 工作流](../.github/workflows/deploy.yml)仅保留手动触发（`workflow_dispatch`），push 和合并不会自动部署。日常发布按请求直接通过 SSH 执行，由服务器通过 `git archive` 导出源码并构建。候选镜像在不挂载生产数据或 Docker socket 的容器中进行语法检查；应用忙碌时推迟切换，切换或健康检查失败恢复旧镜像。不使用定时轮询仓库。发布后清理专属构建缓存及本项目无引用旧镜像／发布源码，保留生产、回滚、worker 和容器引用资源。
 
 Docker 构建上下文排除 `test/`；生产镜像只包含服务端和已打包前端，不复制测试目录或仅供测试使用的前端源码。Actions 部署运行 `npm run check` 与健康／版本检查，`npm test` 在开发时单独执行。
 
