@@ -297,7 +297,12 @@ export async function createApp(options = {}) {
     store.run('INSERT INTO projects(id,user_id,name,created) VALUES(?,?,?,?)', p.id, req.user.id, p.name, p.created); store.audit(req.user.id, 'project/create'); res.status(201).json(p);
   });
   app.patch('/api/projects/:id', (req, res) => { store.project(req.user, req.params.id); const name = req.body.name?.trim(); if (!name || name.length > 80) fail(400, '项目名称无效'); store.run('UPDATE projects SET name=? WHERE id=? AND user_id=?', name, req.params.id, req.user.id); res.json({ ok: true }); });
-  app.get('/api/projects/:id/files', async (req, res) => { const p = store.project(req.user, req.params.id); const start = relativePath(req.query.path || ''); const entries = await walk(root(req.user, p), fileEntryLimit(req.user), start, { pruneNames }); res.json(entries.map(e => ({ ...e, path: start ? `${start}/${e.path}` : e.path, lazy: e.type === 'directory' && pruneNames.has(e.name) }))); });
+  app.get('/api/projects/:id/files', async (req, res) => {
+    const p = store.project(req.user, req.params.id), start = relativePath(req.query.path || ''), excludeHidden = req.query.excludeHidden === 'true';
+    if (excludeHidden && start.split('/').some(part => part.startsWith('.'))) return res.json([]);
+    const entries = await walk(root(req.user, p), fileEntryLimit(req.user), start, { pruneNames, filter: excludeHidden ? (name, directory) => !directory || !path.basename(name).startsWith('.') : undefined });
+    res.json(entries.map(e => ({ ...e, path: start ? `${start}/${e.path}` : e.path, lazy: e.type === 'directory' && pruneNames.has(e.name) })));
+  });
   app.post('/api/projects/:id/size', async (req, res) => {
     const p = store.project(req.user, req.params.id), paths = selectedPaths(req.body.paths), entries = [];
     for (const rel of paths) { await safePath(root(req.user, p), rel); entries.push({ path: rel, ...await measure(root(req.user, p), rel, true) }); }
