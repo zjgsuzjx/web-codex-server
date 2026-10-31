@@ -191,7 +191,7 @@ export class CodexManager {
   }
   async resume(user, thread, settings) {
     const inst = await this.ensure(user);
-    if (!inst.loaded.has(thread.id)) { await this.raw(inst, 'thread/resume', { threadId: thread.id, cwd: projectCwd(this.config, this.currentUser(user), thread.project_id), ...settings }); inst.loaded.add(thread.id); }
+    if (!inst.loaded.has(thread.id)) { await this.raw(inst, 'thread/resume', { threadId: thread.id, cwd: projectCwd(this.config, this.currentUser(user), thread.project_id), ...settings, excludeTurns: true }); inst.loaded.add(thread.id); }
   }
   drop(uid) {
     const inst = this.instances.get(uid); if (!inst) return;

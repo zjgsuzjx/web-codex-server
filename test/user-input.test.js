@@ -144,6 +144,7 @@ test('native questions reach connected and reconnected pages and reply to the sa
       if (method === 'account/read') return { account: { type: 'chatgpt' } };
       if (method === 'thread/start') { const thread = { id: 'question-thread', turns: [] }; threads.set(thread.id, thread); return { thread }; }
       if (method === 'thread/read') return { thread: threads.get(params.threadId) };
+      if (method === 'thread/turns/list') return { data: [...threads.get(params.threadId).turns].reverse(), nextCursor: null };
       if (method === 'turn/start') {
         const inst = await ensure(user), turn = { id: 'paused-turn', status: 'inProgress', items: [] };
         threads.get(params.threadId).turns.push(turn);
@@ -204,6 +205,7 @@ test('structured async questions reach all pages, survive completion, and delive
       if(method==='account/read')return {account:{type:'chatgpt'}};
       if(method==='thread/start'){const thread={id:'async-thread',turns:[]};threads.set(thread.id,thread);return {thread};}
       if(method==='thread/read')return {thread:threads.get(p.threadId)};
+      if(method==='thread/turns/list')return {data:[...threads.get(p.threadId).turns].reverse(),nextCursor:null};
       if(method==='turn/start'){
         if(failNext){failNext=false;throw Error('Synthetic send failure');}
         const thread=threads.get(p.threadId),text=p.input[0].text;inputs.push({uid:u.id,text});

@@ -11,7 +11,21 @@
   flex: 1;
   min-height: 0;
   scrollbar-gutter: stable;
+  overflow-anchor: none;
 }
+.history-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.history-status:not(:empty) { margin-bottom: 18px; }
+.history-status span { display: inline-flex; align-items: center; gap: 6px; }
+.history-status button { color: var(--muted); padding: 6px 10px; border-radius: 8px; }
+.history-status button:hover { color: var(--text); background: var(--hover); }
 .welcome-create {
   display: flex;
   margin: 25px auto 0;
@@ -34,10 +48,6 @@
 }
 .editor-open .messages {
   padding: 24px 20px 16px;
-}
-.turn {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 220px;
 }
 .welcome,.messages,.editor-placeholder {
   animation: content-in .22s var(--motion-ease);

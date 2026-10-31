@@ -15,6 +15,12 @@ function mockCodex(config, emit) {
     calls.push({ method, params });
     if (method === 'thread/start') { const thread = { id: randomUUID(), turns: [] }; threads.set(thread.id, thread); return { thread }; }
     if (method === 'thread/read') return { thread: threads.get(params.threadId) };
+    if (method === 'thread/turns/list') {
+      const turns = threads.get(params.threadId).turns, ordered = params.sortDirection === 'asc' ? [...turns] : [...turns].reverse();
+      const start = params.cursor ? ordered.findIndex(turn => turn.id === params.cursor) + 1 : 0;
+      const data = ordered.slice(start, start + params.limit);
+      return { data, nextCursor: start + data.length < turns.length ? data.at(-1).id : null };
+    }
     if (method === 'thread/fork') { const thread = { ...structuredClone(threads.get(params.threadId)), id: randomUUID() }; threads.set(thread.id, thread); return { thread }; }
     if (method === 'account/read') return { account: { type: 'chatgpt' }, requiresOpenaiAuth: true };
     if (method === 'account/rateLimits/read') return { rateLimits: { limitId: 'codex', primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1800000000 }, secondary: { usedPercent: 7, windowDurationMins: 10080 } } };
@@ -103,6 +109,34 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       await member.close();
     });
     await t.test('Codex routes owned threads with the current protocol and isolates users',async()=>{const tr=await request('/threads','POST',{projectId:p.id},a);assert.equal(tr.status,201);assert.equal(instance.codex.calls.find(x=>x.method==='thread/start').params.sandbox,'danger-full-access');const sb=await socket(base,b);sockets.push(sb);await assert.rejects(sb.call('turn/start',{threadId:tr.data.id,text:'read other user'}));await s2.call('turn/start',{threadId:tr.data.id,text:'hello'});assert.equal(instance.codex.calls.at(-1).params.cwd,`/workspace/${p.id}`);assert.equal(instance.codex.calls.at(-1).params.sandboxPolicy.type,'externalSandbox');assert.equal(instance.codex.calls.at(-1).params.sandboxPolicy.networkAccess,'enabled');assert.equal((await request('/settings','PUT',{...a.settings,sandbox:'readOnly'},a)).status,400);assert.equal((await request('/settings','PUT',{...a.settings,effort:'ultra'},a)).status,200);await assert.rejects(s2.call('command/exec',{command:['sh']}));});
+    await t.test('long conversations page newest turns first without reading the entire history', async () => {
+      const tr = (await request('/threads', 'POST', { projectId: p.id }, a)).data;
+      instance.store.run("UPDATE threads SET title_state='manual' WHERE id=?", tr.id);
+      const turns = instance.codex.threads.get(tr.id).turns;
+      for (let i = 0; i < 75; i++) turns.push({ id: `history-${i}`, status: 'completed', items: [{ id: `item-${i}`, type: 'agentMessage', text: `Answer ${i}` }] });
+      const before = instance.codex.calls.length;
+      const recent = await request(`/threads/${tr.id}`, 'GET', null, a);
+      assert.equal(recent.status, 200);
+      assert.deepEqual(recent.data.thread.turns.map(t => t.id), turns.slice(-8).map(t => t.id));
+      assert.equal(recent.data.thread.turns.at(-1).items[0].text, 'Answer 74');
+      const calls = instance.codex.calls.slice(before);
+      assert.equal(calls.find(c => c.method === 'thread/read').params.includeTurns, false);
+      assert.deepEqual(calls.find(c => c.method === 'thread/turns/list').params, { threadId: tr.id, limit: 8, sortDirection: 'desc', itemsView: 'full' });
+      // A newer live turn must not shift the older cursor or introduce gaps.
+      turns.push({ id: 'new-live', status: 'inProgress', items: [] });
+      let cursor = recent.data.nextCursor, seen = [...recent.data.thread.turns.map(t => t.id)];
+      const pageStart = instance.codex.calls.length;
+      while (cursor) {
+        const page = await request(`/threads/${tr.id}?limit=16&cursor=${encodeURIComponent(cursor)}`, 'GET', null, a);
+        assert.equal(page.status, 200); assert.ok(page.data.thread.turns.length <= 16);
+        seen = [...page.data.thread.turns.map(t => t.id), ...seen]; cursor = page.data.nextCursor;
+      }
+      assert.deepEqual(seen, turns.slice(0, 75).map(t => t.id));
+      assert.ok(instance.codex.calls.slice(pageStart).every(c => c.method === 'thread/turns/list'));
+      assert.equal((await request(`/threads/${tr.id}?cursor=history-67`, 'GET', null, b)).status, 404);
+      assert.equal((await request(`/threads/${tr.id}`)).status, 401);
+      for (const query of ['limit=0', 'limit=33', 'limit=1.5', 'limit=abc', 'cursor=', `cursor=${'x'.repeat(4097)}`]) assert.equal((await request(`/threads/${tr.id}?${query}`, 'GET', null, a)).status, 400);
+    });
     await t.test('only superadmins assign roles; changes revoke sessions; the last owner cannot be demoted',async()=>{
       assert.equal((await request(`/admin/users/${b.id}/role`,'PATCH',{role:'superadmin'},b)).status,403);
       assert.equal((await request(`/admin/users/${a.id}/role`,'PATCH',{role:'admin'},a)).status,409);

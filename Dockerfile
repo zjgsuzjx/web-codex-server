@@ -22,6 +22,7 @@ COPY server ./server
 COPY shared ./shared
 COPY test ./test
 COPY src/deltas.js ./src/deltas.js
+COPY src/conversation-history.js ./src/conversation-history.js
 COPY src/model-options.js ./src/model-options.js
 COPY src/completion-notice.js ./src/completion-notice.js
 COPY src/connection-state.js ./src/connection-state.js
