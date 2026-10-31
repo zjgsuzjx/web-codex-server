@@ -23,7 +23,8 @@ export async function archiveBuffer(dir, extension, entries) {
     '.7z': ['--format=7zip'], '.tar.bz2': ['-j'], '.tbz2': ['-j'], '.tbz': ['-j'],
     '.tar.xz': ['-J'], '.txz': ['-J'], '.tar.zst': ['--zstd'], '.tzst': ['--zstd'],
   }[extension];
-  execFileSync(process.platform === 'win32' ? 'tar.exe' : 'bsdtar', ['-c', '-f', output, '-P', ...flags, '@' + input], { windowsHide: true });
+  const env = { ...process.env, ...(process.platform === 'linux' ? { LC_ALL: 'C.UTF-8', LANG: 'C.UTF-8' } : {}) };
+  execFileSync(process.platform === 'win32' ? 'tar.exe' : 'bsdtar', ['-c', '-f', output, '-P', ...flags, '@' + input], { windowsHide: true, env });
   return fs.readFile(output);
 }
 
