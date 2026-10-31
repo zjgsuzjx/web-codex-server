@@ -211,7 +211,7 @@ docker compose logs --tail 100 web
 curl -fsS http://127.0.0.1:3100/api/health
 ```
 
-The optional [GitHub Actions workflow](../.github/workflows/deploy.yml) submits an SSH request when `main` changes. The server builds from `git archive`, runs syntax checks on a candidate image without production data or Docker socket mounts, defers switching while the application is busy, and restores the prior image on switch/health failure. It uses no recurring repository polling.
+The optional [GitHub Actions workflow](../.github/workflows/deploy.yml) is manual-only (`workflow_dispatch`); pushes and merges do not deploy. Routine releases are performed over SSH on request. The server builds from `git archive`, runs syntax checks on a candidate image without production data or Docker socket mounts, defers switching while the application is busy, and restores the prior image on switch/health failure. It uses no recurring repository polling. After release, clear the dedicated build cache and unused project images/release sources, preserving production, rollback, worker and container-referenced resources.
 
 Docker build contexts exclude `test/`. Production images contain the server and bundled frontend, with no test directory or test-only frontend source copies. Actions deployment runs `npm run check` and health/revision checks; run `npm test` separately during development.
 

@@ -14,7 +14,11 @@ test('tree and grouped ZIP downloads respect finite and unlimited entry budgets'
   function response(){const res=new PassThrough();res.headers=new Map();res.setHeader=(name,value)=>res.headers.set(name,value);res.type=value=>res.setHeader('Content-Type',value);return res;}
   try{
     await assert.rejects(walk(root,1,'folder'),e=>e.status===413&&/1 项/.test(e.message));
-    assert.equal((await walk(root,null,'folder')).length,2);
+    const tree=await walk(root,null,'folder');
+    assert.equal(tree.length,2);
+    const stat=await fs.stat(path.join(root,'folder/a'));
+    assert.equal(tree.find(entry=>entry.path==='a').modified,stat.mtimeMs);
+    assert.equal(tree.find(entry=>entry.path==='a').created,stat.birthtimeMs>0?stat.birthtimeMs:null);
     const limited=response();
     await assert.rejects(downloadSelected(limited,root,['folder'],'selected.zip',{maxEntries:2}),e=>e.status===413&&/2 项/.test(e.message));
     assert.equal(limited.headers.size,0);limited.destroy();

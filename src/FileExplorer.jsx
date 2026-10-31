@@ -5,6 +5,7 @@ import useLongPress from './useLongPress';
 import { selectPaths, contextPaths, parentPath } from './file-selection';
 import { formatBytes } from '../shared/usage';
 import { topPaths } from '../shared/storage';
+import { compareFileEntries } from './file-navigation';
 
 export const ExplorerDivider = memo(function ExplorerDivider() {
   const ref = useRef(), [width, setWidth] = useState(() => { const mobile = window.innerWidth <= 800, stored = Number(localStorage.getItem(mobile ? 'explorer-width-mobile' : 'explorer-width')); return stored >= (mobile ? 112 : 200) && stored <= 480 ? stored : mobile ? 145 : 268; });
@@ -20,7 +21,7 @@ export const ExplorerDivider = memo(function ExplorerDivider() {
   return <div ref={ref} className="explorer-divider" role="separator" tabIndex={0} aria-label="调整资源管理器宽度" aria-orientation="vertical" aria-valuemin={minimum} aria-valuemax={maximum} aria-valuenow={current} onKeyDown={e => { const value = e.key === 'Home' ? minimum : e.key === 'End' ? maximum : e.key === 'ArrowLeft' ? current - 10 : e.key === 'ArrowRight' ? current + 10 : null; if (value != null) { e.preventDefault(); change(value); } }} onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); e.currentTarget.dataset.start = `${e.clientX},${current}`; e.currentTarget.classList.add('dragging'); }} onPointerMove={e => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) return; const [x, start] = e.currentTarget.dataset.start.split(',').map(Number); change(start + e.clientX - x); }} onLostPointerCapture={e => e.currentTarget.classList.remove('dragging')} onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}><i/></div>;
 });
 
-export default memo(function FileTree({ entries, showMeta = false, selected, selectionRequest, onOpen, onAction, onContext, onRefresh, onDownload, onSelectionCountChange, clearSelectionRequest, project, api, Dialog, onDeleted, beforeDelete, notify }) {
+export default memo(function FileTree({ entries, sort = 'name-asc', showMeta = false, selected, selectionRequest, onOpen, onAction, onContext, onRefresh, onDownload, onSelectionCountChange, clearSelectionRequest, project, api, Dialog, onDeleted, beforeDelete, notify }) {
   const [expanded, setExpanded] = useState(new Set()), [selection, setSelection] = useState(new Set()), [extra, setExtra] = useState([]), [loaded, setLoaded] = useState(new Set());
   const [busy, setBusy] = useState(false), [detail, setDetail] = useState(null), [error, setError] = useState(''), [menu, setMenu] = useState(null);
   const [treeFocused, setTreeFocused] = useState(false);
@@ -60,6 +61,28 @@ export default memo(function FileTree({ entries, showMeta = false, selected, sel
   useEffect(() => { if (!showMeta) setSelection(prev => new Set([...prev].filter(path => !allEntries.some(entry => entry.path === path && entry.type === 'file' && entry.name.toLowerCase().endsWith('.meta'))))); }, [showMeta, allEntries]);
   useEffect(() => { setExpanded(new Set()); clearSelection(); setExtra([]); setLoaded(new Set()); setDetail(null); setError(''); setMenu(null); }, [project.id]);
   useEffect(() => { setExtra([]); setLoaded(new Set()); setMenu(null); setExpanded(prev => new Set([...prev].filter(path => !entries.some(entry => entry.path === path && entry.lazy)))); setSelection(prev => new Set([...prev].filter(path => entries.some(entry => entry.path === path)))); }, [entries]);
+  useEffect(() => {
+    if (!selected || tree.current?.contains(document.activeElement)) return;
+    const controller = new AbortController(), known = new Map(allEntries.map(entry => [entry.path, entry]));
+    const parts = selected.split('/').slice(0, -1), parents = parts.map((_, index) => parts.slice(0, index + 1).join('/'));
+    async function reveal() {
+      const added = [], opened = [];
+      for (const path of parents) {
+        if (!known.get(path)?.lazy || loaded.has(path)) continue;
+        const rows = await api(`/projects/${project.id}/files?path=${encodeURIComponent(path)}`, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        for (const entry of rows) known.set(entry.path, entry);
+        added.push(...rows); opened.push(path);
+      }
+      if (controller.signal.aborted || tree.current?.contains(document.activeElement)) return;
+      if (added.length) setExtra(previous => [...new Map([...previous, ...added].map(entry => [entry.path, entry])).values()]);
+      if (opened.length) setLoaded(previous => new Set([...previous, ...opened]));
+      if (added.some(entry => entry.path === selected)) selectEntry(selected);
+      setExpanded(previous => parents.every(path => previous.has(path)) ? previous : new Set([...previous, ...parents]));
+    }
+    reveal().catch(error => { if (!controller.signal.aborted) notify(error.message, true); });
+    return () => controller.abort();
+  }, [selected, selectionRequest, entries, allEntries, loaded, project.id, api, notify]);
   const folders = useMemo(() => {
     const map = new Map();
     for (const entry of allEntries) {
@@ -67,9 +90,9 @@ export default memo(function FileTree({ entries, showMeta = false, selected, sel
       if (!map.has(parent)) map.set(parent, []);
       map.get(parent).push(entry);
     }
-    for (const rows of map.values()) rows.sort((a, b) => a.type !== b.type ? (a.type === 'directory' ? -1 : 1) : a.name.localeCompare(b.name));
+    for (const rows of map.values()) rows.sort(compareFileEntries(sort));
     return map;
-  }, [allEntries]);
+  }, [allEntries, sort]);
   const visible = useMemo(() => {
     const rows = [];
     function visit(parent = '', depth = 0) {
@@ -81,6 +104,10 @@ export default memo(function FileTree({ entries, showMeta = false, selected, sel
     }
     visit(); return rows;
   }, [folders, expanded, showMeta]);
+  useEffect(() => {
+    if (activePath !== selected || tree.current?.contains(document.activeElement)) return;
+    [...tree.current.querySelectorAll('[data-file-path]')].find(row => row.dataset.filePath === selected)?.scrollIntoView({ block: 'nearest' });
+  }, [selected, activePath, visible]);
   const visiblePaths = visible.map(({ entry }) => entry.path);
   async function toggle(entry) {
     if (entry.lazy && !loaded.has(entry.path)) {

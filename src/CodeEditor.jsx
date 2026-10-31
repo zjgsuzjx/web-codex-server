@@ -23,9 +23,19 @@ loader.config({ monaco });
 for (const defaults of [monaco.languages.typescript.javascriptDefaults, monaco.languages.typescript.typescriptDefaults]) defaults.setDiagnosticsOptions({ noSemanticValidation: true, noSyntaxValidation: true, noSuggestionDiagnostics: true });
 monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: false });
 for (const defaults of [monaco.languages.css.cssDefaults, monaco.languages.css.scssDefaults, monaco.languages.css.lessDefaults]) defaults.setOptions({ validate: false });
-export default memo(function CodeEditor({ file, content, dirty = false, onChange, onSave, notify, readonly = false, theme = 'light' }) {
+export default memo(function CodeEditor({ file, content, dirty = false, onChange, onSave, notify, readonly = false, theme = 'light', focusRequested = false, onFocused }) {
   const saveRef=useRef(onSave);saveRef.current=onSave;
   const editorRef = useRef(), [menu, setMenu] = useState(null);
+  const focusRequest = useRef(focusRequested); focusRequest.current = focusRequested;
+  function focusWhenReady() {
+    if (focusRequest.current && editorRef.current?.getDomNode()?.isConnected) { editorRef.current.focus(); onFocused?.(); }
+  }
+  useEffect(() => {
+    if (!focusRequested) return;
+    // Run after the picker portal has restored its previous focus.
+    const frame = requestAnimationFrame(focusWhenReady);
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequested, onFocused]);
   const subscriptions = useRef([]);
   const [status, setStatus] = useState({ line: 1, column: 1, tabSize: 2, insertSpaces: true, language: '' });
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -101,6 +111,7 @@ export default memo(function CodeEditor({ file, content, dirty = false, onChange
     if (rect) openMenu({ x: rect.x + (position?.left || 40), y: rect.y + (position?.top || 20) + 22, preservePosition: true });
   }}><Editor path={file} value={content} language={editorLanguage(file, monaco.languages.getLanguages())} theme="starvalley-skin" onChange={onChange} loading={<LoadingPlaceholder label="正在准备编辑器…" variant="code" rows={9}/>} onMount={editor => {
     editorRef.current = editor;
+    requestAnimationFrame(focusWhenReady);
     updateTheme(); editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, ()=>saveRef.current?.());
     const update = () => {
       const model = editor.getModel(), position = editor.getPosition(), options = model?.getOptions(), language = monaco.languages.getLanguages().find(item => item.id === model?.getLanguageId());
