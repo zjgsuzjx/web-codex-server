@@ -60,7 +60,7 @@ export async function walk(root, max = USER_FILE_ENTRY_LIMIT, start = '', { skip
       let st;try{st=await fs.lstat(target);}catch(e){if(e.code==='ENOENT')continue;throw e;}
       if(st.isSymbolicLink())continue;
       if (!st.isDirectory() && !st.isFile()) continue;
-      entries.push({ path: name, name: item.name, type: st.isDirectory() ? 'directory' : 'file', size: st.size, modified: st.mtimeMs });
+      entries.push({ path: name, name: item.name, type: st.isDirectory() ? 'directory' : 'file', size: st.size, modified: st.mtimeMs, created: Number.isFinite(st.birthtimeMs) && st.birthtimeMs > 0 ? st.birthtimeMs : null });
       if (max != null && entries.length > max) fail(413, fileEntryLimitMessage(max));
       if (st.isDirectory() && !pruneNames?.has(item.name)) {if(process.platform==='linux'){const handle=await openDirectory(target);try{await visit(name,`/proc/self/fd/${handle.fd}`);}finally{await handle.close();}}else await visit(name,await safePath(root,start?`${start}/${name}`:name));}
     }

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Archive, Check, ChevronRight, Code2, Download, File, FolderOpen, FolderPlus, MessageSquare, MoreHorizontal, Plus, RefreshCw, Save, Upload, X } from 'lucide-react';
+import { Archive, Check, ChevronRight, Code2, Download, File, FolderOpen, FolderPlus, MessageSquare, MoreHorizontal, Plus, RefreshCw, Save, Search, Upload, X } from 'lucide-react';
 import FileTree, { ExplorerDivider } from './FileExplorer';
 import FileImage from './FileImage';
 import IconButton from './IconButton';
@@ -7,6 +7,8 @@ import LoadingPlaceholder from './LoadingPlaceholder';
 import Tooltip from './Tooltip';
 import EditorTabs from './EditorTabs';
 import { UploadProgress } from './UploadFeedback';
+import Select from './Select';
+import { fileSortOptions } from './file-navigation';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
@@ -39,8 +41,9 @@ function FileBreadcrumbs({ project, path }) {
   </nav>;
 }
 
-export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, uploadProgress, onCancelUpload, onDropFiles, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onCloseTabs, onReload, onSave, onEditorSave, onCodeChange }) {
+export default function ProjectFiles({ project, files, filesLoading, tabs, selectedFile, tab, fileBusy, theme, uploadDisabled, uploadProgress, focusFile, onFocused, onQuickOpen, onCancelUpload, onDropFiles, api, Dialog, notify, onUploadFiles, onUploadFolder, onUploadArchive, onNewFile, onNewFolder, onRefresh, onOpen, onAction, onContext, onFileContext, onDownload, onDeleted, beforeDelete, onSelect, onCloseTabs, onReload, onSave, onEditorSave, onCodeChange }) {
   const [showMeta, setShowMeta] = useState(() => localStorage.getItem('explorer-show-meta') === 'true');
+  const [sort, setSort] = useState(() => { const saved = localStorage.getItem('explorer-sort'); return fileSortOptions.some(option => option.value === saved) ? saved : 'name-asc'; });
   const [selectionCount, setSelectionCount] = useState(0);
   const [clearSelectionRequest, setClearSelectionRequest] = useState(0);
   const [selectionRequest, setSelectionRequest] = useState(null);
@@ -73,7 +76,8 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
           <button type="button" role="switch" aria-checked={showMeta} onClick={() => { const next = !showMeta; setShowMeta(next); localStorage.setItem('explorer-show-meta', String(next)); }}><span className="explorer-menu-check">{showMeta && <Check size={14}/>}</span>显示 .meta 文件</button>
         </ExplorerMenu>
       </div></div>
-      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} showMeta={showMeta} onOpen={openFile} selected={selectedFile} selectionRequest={selectionRequest} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} clearSelectionRequest={clearSelectionRequest} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
+      <div className="explorer-tools"><IconButton title="查找文件（Ctrl+P / ⌘P）" disabled={!project} onClick={onQuickOpen}><Search size={15}/></IconButton><Select aria-label="文件排序" value={sort} disabled={!project} onChange={event => { setSort(event.target.value); localStorage.setItem('explorer-sort', event.target.value); }}>{fileSortOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></div>
+      {project ? <>{filesLoading && !files.length ? <LoadingPlaceholder label="正在读取文件…" variant="list" rows={6}/> : <FileTree entries={files} sort={sort} showMeta={showMeta} onOpen={openFile} selected={selectedFile} selectionRequest={selectionRequest} onAction={onAction} onContext={onContext} onRefresh={onRefresh} onDownload={onDownload} onSelectionCountChange={setSelectionCount} clearSelectionRequest={clearSelectionRequest} project={project} api={api} Dialog={Dialog} onDeleted={onDeleted} beforeDelete={beforeDelete} notify={notify}/>}
         {!filesLoading && !files.length && <div className="files-empty"><FolderOpen size={25}/><p>项目还是空的</p><button onClick={onUploadFiles}>上传你的第一个文件</button></div>}
       </> : <p className="files-empty">先选择一个项目</p>}
     </aside>
@@ -88,8 +92,8 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
       </div>}</div>
       {fileBusy ? <LoadingPlaceholder label="正在读取文件内容…" variant="code" rows={9}/> : tab ? <>
         <FileBreadcrumbs project={project} path={tab.path}/>
-        {tab.kind === 'image' ? <FileImage key={`${project.id}/${tab.path}/${tab.modified}`} file={tab}/> : <div className="monaco-container"><Suspense fallback={<LoadingPlaceholder label="正在加载编辑器…" variant="code" rows={9}/>}><CodeEditor file={`${project.id}/${tab.path}`} content={tab.content} dirty={dirty} onChange={onCodeChange} onSave={onEditorSave} notify={notify} theme={theme}/></Suspense></div>}
-      </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><p className="editor-drop-hint">拖入文件、文件夹或 ZIP 即可上传</p><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
+        {tab.kind === 'image' ? <FileImage key={`${project.id}/${tab.path}/${tab.modified}`} file={tab} focusRequested={focusFile === tab.path} onFocused={onFocused}/> : <div className="monaco-container"><Suspense fallback={<LoadingPlaceholder label="正在加载编辑器…" variant="code" rows={9}/>}><CodeEditor focusRequested={focusFile === tab.path} onFocused={onFocused} file={`${project.id}/${tab.path}`} content={tab.content} dirty={dirty} onChange={onCodeChange} onSave={onEditorSave} notify={notify} theme={theme}/></Suspense></div>}
+      </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><p className="editor-drop-hint">拖入文件、文件夹或 ZIP 即可上传</p><div><kbd>Ctrl</kbd> + <kbd>P</kbd><span>查找文件</span></div><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
     </div>
     {dropActive&&<div className="editor-drop-overlay"><div><Upload size={32}/><strong>松开即可上传到项目</strong><span>文件夹将先压缩，再上传解压</span></div></div>}
     {uploadProgress&&<UploadProgress progress={uploadProgress} onCancel={onCancelUpload} inline/>}

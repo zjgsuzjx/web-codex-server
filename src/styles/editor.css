@@ -152,6 +152,39 @@
 .explorer-menu {
   position: relative;
 }
+.explorer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px 6px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.explorer-tools>.custom-select { flex: 1; min-width: 0; }
+.explorer-tools .select-trigger { min-height: 28px; padding: 4px 7px; font-size: 11px; gap: 4px; }
+.explorer-tools .select-trigger>span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explorer-tools>.icon-button { width: 26px; height: 28px; flex: none; }
+.quick-file-picker { width: min(600px,100%); padding: 16px; }
+.quick-file-picker>header { padding: 0; border: 0; align-items: center; }
+.quick-file-picker h2 { font-size: 15px; }
+.quick-file-picker>header p { margin-top: 2px; font-size: 11px; }
+.quick-file-input { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--ui-radius-sm); color: var(--muted); }
+.quick-file-input:focus-within { border-color: var(--accent); }
+.quick-file-input>input { flex: 1; min-width: 0; border: 0; padding: 11px 0; background: transparent; box-shadow: none; outline: none; font-size: 13px; }
+.quick-file-input>svg { flex: none; }
+.quick-file-results { margin-top: 8px; max-height: min(420px,45dvh); overflow: auto; }
+.quick-file-results>button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; text-align: left; border-radius: var(--ui-radius-sm); }
+.quick-file-results>button:is(:hover,[aria-selected=true]) { background: var(--ui-selected); }
+.quick-file-results>button>svg { flex: none; color: var(--muted); }
+.quick-file-results>button>span { flex: 1; min-width: 0; }
+.quick-file-results strong,.quick-file-results small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-file-results strong { font-size: 12px; font-weight: 500; }
+.quick-file-results small { color: var(--muted); font-size: 10px; margin-top: 3px; }
+.quick-file-results kbd { color: var(--muted); font-size: 10px; }
+.quick-file-empty { text-align: center; padding: 24px 8px; color: var(--muted); font-size: 12px; }
+.quick-file-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; padding-top: 10px; color: var(--muted); font-size: 10px; }
+.quick-file-error { color: var(--danger); font-size: 11px; margin: 8px 0 0; }
+.quick-file-error>button { color: var(--accent); margin-left: 8px; }
 .explorer-menu>summary {
   display: grid;
   place-items: center;
