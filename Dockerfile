@@ -17,24 +17,8 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-COPY Dockerfile ./Dockerfile
 COPY server ./server
 COPY shared ./shared
-COPY test ./test
-COPY src/deltas.js ./src/deltas.js
-COPY src/conversation-history.js ./src/conversation-history.js
-COPY src/model-options.js ./src/model-options.js
-COPY src/completion-notice.js ./src/completion-notice.js
-COPY src/connection-state.js ./src/connection-state.js
-COPY src/link-info.js ./src/link-info.js
-COPY src/editor-language.js ./src/editor-language.js
-COPY src/code-language.js ./src/code-language.js
-COPY src/code-highlight.js ./src/code-highlight.js
-COPY src/file-selection.js ./src/file-selection.js
-COPY src/editor-tabs.js ./src/editor-tabs.js
-COPY src/socket.js ./src/socket.js
-COPY src/zip-folder.js ./src/zip-folder.js
-COPY src/drop-files.js ./src/drop-files.js
 COPY scripts/smoke.mjs ./scripts/smoke.mjs
 COPY scripts/role-smoke.mjs ./scripts/role-smoke.mjs
 COPY scripts/deploy-release.sh ./scripts/deploy-release.sh

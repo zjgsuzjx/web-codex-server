@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Build, clean cache, test and deploy over SSH
+      - name: Build, clean cache, check and deploy over SSH
         shell: bash
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -56,7 +56,7 @@ jobs:
           echo "Deployment started: $revision; log: $log"
           # The server prunes its dedicated build cache after build attempts,
           # before stopping the bounded builder and releasing temporary swap.
-          # A green workflow requires cleanup, tests and target health to pass.
+          # A green workflow requires cleanup, syntax checks and target health to pass.
           /usr/bin/timeout --signal=TERM --kill-after=60s 55m /bin/bash "$PWD/scripts/deploy-main.sh" "$revision" 2>&1 | tee "$log"
           REMOTE
           printf 'Server deployment completed for `%s`; the health endpoint reports this revision. Build attempts automatically clear the dedicated BuildKit cache before stopping the builder.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

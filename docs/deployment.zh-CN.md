@@ -211,7 +211,9 @@ docker compose logs --tail 100 web
 curl -fsS http://127.0.0.1:3100/api/health
 ```
 
-可选 [GitHub Actions 工作流](../.github/workflows/deploy.yml)在 `main` 更新时发出 SSH 请求，由服务器通过 `git archive` 导出源码并构建。候选镜像在不挂载生产数据或 Docker socket 的容器中检查和测试；应用忙碌时推迟切换，切换或健康检查失败恢复旧镜像。不使用定时轮询仓库。
+可选 [GitHub Actions 工作流](../.github/workflows/deploy.yml)在 `main` 更新时发出 SSH 请求，由服务器通过 `git archive` 导出源码并构建。候选镜像在不挂载生产数据或 Docker socket 的容器中进行语法检查；应用忙碌时推迟切换，切换或健康检查失败恢复旧镜像。不使用定时轮询仓库。
+
+Docker 构建上下文排除 `test/`；生产镜像只包含服务端和已打包前端，不复制测试目录或仅供测试使用的前端源码。Actions 部署运行 `npm run check` 与健康／版本检查，`npm test` 在开发时单独执行。
 
 **用于其他安装环境前，请调整以下脚本假设：**
 
@@ -232,7 +234,7 @@ curl -fsS http://127.0.0.1:3100/api/health
 | `DEPLOY_KNOWN_HOSTS` | 通过可信渠道独立核对的主机密钥记录 |
 | `DEPLOY_PORT` | 可选端口，默认 `22` |
 
-Actions 会等待服务器完成。**候选检查与测试、切换、目标 revision 健康检查全部成功，工作流才显示成功。** 构建失败、资源不足、持续忙碌超时、过期请求或健康检查失败都会使工作流失败。日志同时显示在 Actions 和私有 `.deploy-state/request-*.log` 中；`.deploy-state/result-<commit>.json` 记录退出结果。首次手动构建可能显示未知 revision。应用升级会短暂重启网关，浏览器随后重新连接。
+Actions 会等待服务器完成。**候选语法检查、切换、目标 revision 健康检查全部成功，工作流才显示成功。** 构建失败、资源不足、持续忙碌超时、过期请求或健康检查失败都会使工作流失败。日志同时显示在 Actions 和私有 `.deploy-state/request-*.log` 中；`.deploy-state/result-<commit>.json` 记录退出结果。首次手动构建可能显示未知 revision。应用升级会短暂重启网关，浏览器随后重新连接。
 
 ### 构建资源保护
 
@@ -252,7 +254,7 @@ Actions 会等待服务器完成。**候选检查与测试、切换、目标 rev
 
 原 2 GiB 主机上已完成的受限 Vite 构建约需七分钟，不能保证未来耗时和容量。Swap 用速度换取缓冲空间；容量不足时保留旧版本，不停止真实用户任务或其他服务。构建期间的专用 BuildKit 自动 GC 目标为最多 2 GiB、保留 512 MiB、磁盘空闲目标 3.5 GiB，这是 GC 目标而非硬磁盘配额。
 
-**每次构建结束后自动清空构建缓存。** worker 与 web 镜像在同一次发布中仍可共享缓存；两者构建完成后、候选测试之前，脚本执行 `docker buildx prune --builder sv-codex-bounded-20261016 --all --force`，清理此专用构建器的全部可回收缓存（包括内部／前端缓存），构建失败或中断时也通过退出处理清理残留。清理沿用已经验证的内存、CPU、IO 限额及临时 Swap，最多等待 120 秒，再停止构建器并移除临时 Swap。清理失败／超时会使 Actions 失败，且不切换应用版本；不会为重试清理重新启动已停止的构建器。Actions 日志显示回收结果。后续发布需要重新下载依赖和构建，耗时可能增加。
+**每次构建结束后自动清空构建缓存。** worker 与 web 镜像在同一次发布中仍可共享缓存；两者构建完成后、候选语法检查之前，脚本执行 `docker buildx prune --builder sv-codex-bounded-20261016 --all --force`，清理此专用构建器的全部可回收缓存（包括内部／前端缓存），构建失败或中断时也通过退出处理清理残留。清理沿用已经验证的内存、CPU、IO 限额及临时 Swap，最多等待 120 秒，再停止构建器并移除临时 Swap。清理失败／超时会使 Actions 失败，且不切换应用版本；不会为重试清理重新启动已停止的构建器。Actions 日志显示回收结果。后续发布需要重新下载依赖和构建，耗时可能增加。
 
 此操作仅针对上述专用构建器，保留已加载的应用／worker 镜像及回滚版本，不执行全局 Docker 清理，不删除数据卷、用户文件或其他服务缓存。旧发布镜像的增长不属于 BuildKit 缓存，应单独管理。
 

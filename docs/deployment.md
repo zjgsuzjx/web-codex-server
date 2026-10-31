@@ -211,7 +211,9 @@ docker compose logs --tail 100 web
 curl -fsS http://127.0.0.1:3100/api/health
 ```
 
-The optional [GitHub Actions workflow](../.github/workflows/deploy.yml) submits an SSH request when `main` changes. The server builds from `git archive`, checks/tests a candidate image without production data or Docker socket mounts, defers switching while the application is busy, and restores the prior image on switch/health failure. It uses no recurring repository polling.
+The optional [GitHub Actions workflow](../.github/workflows/deploy.yml) submits an SSH request when `main` changes. The server builds from `git archive`, runs syntax checks on a candidate image without production data or Docker socket mounts, defers switching while the application is busy, and restores the prior image on switch/health failure. It uses no recurring repository polling.
+
+Docker build contexts exclude `test/`. Production images contain the server and bundled frontend, with no test directory or test-only frontend source copies. Actions deployment runs `npm run check` and health/revision checks; run `npm test` separately during development.
 
 **Adapt the supplied scripts before using them on a different installation:**
 
@@ -232,7 +234,7 @@ Configure repository Actions secrets:
 | `DEPLOY_KNOWN_HOSTS` | Host key records independently verified through a trusted channel |
 | `DEPLOY_PORT` | Optional port; defaults to `22` |
 
-Actions stays connected until the server finishes. **Success requires candidate checks/tests, a successful switch, and a healthy endpoint reporting the requested revision.** A build failure, insufficient resources, busy timeout, stale request, or failed health check fails the workflow. Logs stream to Actions and the private `.deploy-state/request-*.log`; `.deploy-state/result-<commit>.json` records the exit status. The initial manual build may report an unknown revision. Application upgrades briefly restart the gateway and reconnect browser clients.
+Actions stays connected until the server finishes. **Success requires candidate syntax checks, a successful switch, and a healthy endpoint reporting the requested revision.** A build failure, insufficient resources, busy timeout, stale request, or failed health check fails the workflow. Logs stream to Actions and the private `.deploy-state/request-*.log`; `.deploy-state/result-<commit>.json` records the exit status. The initial manual build may report an unknown revision. Application upgrades briefly restart the gateway and reconnect browser clients.
 
 ### Build resource protection
 
@@ -252,7 +254,7 @@ If existing swap is insufficient, the script temporarily creates **only** `.depl
 
 The successful limited build on the original 2 GiB host took about seven minutes for Vite; this is not a timing or capacity guarantee. Swap trades speed for headroom. Insufficient capacity defers the release without stopping users or other services. During builds, dedicated BuildKit automatic GC targets 2 GiB maximum usage, 512 MiB retained, and 3.5 GiB free disk; these are GC targets, not hard disk quotas.
 
-**Build attempts automatically clear their build cache.** The worker and web images can share cache within a release. After both builds, before candidate tests, the script runs `docker buildx prune --builder sv-codex-bounded-20261016 --all --force` to remove all reclaimable cache from this dedicated builder, including internal/frontend records. Exit handling also clears leftovers after failed or interrupted builds. Pruning keeps the verified memory/CPU/IO limits and temporary swap, has a 120-second timeout, and runs before stopping the builder and removing temporary swap. A cleanup failure/timeout fails Actions before promotion; exit handling never restarts a stopped builder to retry pruning. Reclaimed space is printed in Actions logs. Later releases need to fetch dependencies and rebuild, which can take longer.
+**Build attempts automatically clear their build cache.** The worker and web images can share cache within a release. After both builds, before candidate syntax checks, the script runs `docker buildx prune --builder sv-codex-bounded-20261016 --all --force` to remove all reclaimable cache from this dedicated builder, including internal/frontend records. Exit handling also clears leftovers after failed or interrupted builds. Pruning keeps the verified memory/CPU/IO limits and temporary swap, has a 120-second timeout, and runs before stopping the builder and removing temporary swap. A cleanup failure/timeout fails Actions before promotion; exit handling never restarts a stopped builder to retry pruning. Reclaimed space is printed in Actions logs. Later releases need to fetch dependencies and rebuild, which can take longer.
 
 This targets only the dedicated builder, retaining loaded application/worker images and rollback versions. It does not run system-wide Docker cleanup or remove volumes, user files, or other services' caches. Old release images are separate from BuildKit cache and require their own retention policy.
 

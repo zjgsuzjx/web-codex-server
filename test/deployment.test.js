@@ -184,7 +184,7 @@ fi
 if [[ "$1" == run && "$*" == *--privileged* ]]; then
   if [[ "\${@: -1}" == create ]]; then touch "$MOCK_SWAP_STATE"; else rm -f "$MOCK_SWAP_STATE"; fi
 fi
-if [[ "$1" == run && "$MOCK_SCENARIO" == failed-tests ]]; then exit 1; fi
+if [[ "$1" == run && "$MOCK_SCENARIO" == failed-checks ]]; then exit 1; fi
 `,
     curl: `#!/bin/bash
 if [[ "$*" == *--unix-socket* ]]; then echo '{"Warnings":null}'; exit; fi
@@ -217,12 +217,14 @@ else exec /usr/bin/awk "$@"; fi
     return { code, calls: await fs.readFile(log, 'utf8') };
   }
   try {
-    await t.test('idle release is tested before promotion and records its revision', async () => {
+    await t.test('idle release checks syntax without running tests before promotion and records its revision', async () => {
       const result = await run('success'); assert.equal(result.code, 0);
       const calls = result.calls.trim().split('\n');
       const tested = calls.findIndex(call => call.startsWith('run --rm --network none'));
       const promoted = calls.findIndex(call => call.startsWith('tag starvalley-codex-web:'));
       assert.ok(tested >= 0 && promoted > tested, result.calls);
+      assert.ok(calls[tested].endsWith('npm run check'),result.calls);
+      assert.ok(!/npm test|node --test/.test(result.calls),'Production deployment must not run the test suite');
       const built = calls.findLastIndex(call => call.startsWith('buildx build '));
       const pruned = calls.indexOf('buildx prune --builder sv-codex-bounded-20261016 --all --force');
       const stopped = calls.findLastIndex(call => call === 'buildx stop sv-codex-bounded-20261016');
@@ -242,7 +244,7 @@ else exec /usr/bin/awk "$@"; fi
     });
     await t.test('busy application does not build or switch', async () => { const result = await run('busy'); assert.equal(result.code, 75); assert.equal(result.calls, ''); });
     await t.test('new work during build postpones the switch', async () => { const result = await run('work-started'); assert.equal(result.code, 75); assert.ok(result.calls.includes('run --rm')); assert.ok(!result.calls.includes('compose')); });
-    await t.test('work finishing after build reuses the tested candidate', async () => { const result = await run('work-finished'); assert.equal(result.code, 0); assert.equal(result.calls.match(/buildx build /g)?.length, 1); assert.equal(result.calls.match(/run --rm --network none --memory/g)?.length, 1); });
+    await t.test('work finishing after build reuses the checked candidate', async () => { const result = await run('work-finished'); assert.equal(result.code, 0); assert.equal(result.calls.match(/buildx build /g)?.length, 1); assert.equal(result.calls.match(/run --rm --network none --memory/g)?.length, 1); });
     await t.test('low memory defers before any builder or swap starts', async () => { const result = await run('low-memory'); assert.equal(result.code, 75); assert.ok(!result.calls.includes('buildx')); assert.ok(!result.calls.includes('run --rm')); });
     await t.test('insufficient disk refuses extra swap and leaves production intact', async () => { const result = await run('swap-low-disk'); assert.equal(result.code, 75); assert.ok(!result.calls.includes('--privileged')); assert.ok(!result.calls.includes('buildx')); });
     for (const scenario of ['swap-success', 'swap-build-failed']) {
@@ -274,7 +276,7 @@ else exec /usr/bin/awk "$@"; fi
         assert.equal(await fs.stat(path.join(directory, 'swap-state')).then(() => true, () => false), false);
       });
     }
-    await t.test('candidate test failure keeps the running image', async () => { const result = await run('failed-tests'); assert.equal(result.code, 1); assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote')); });
+    await t.test('candidate syntax check failure keeps the running image', async () => { const result = await run('failed-checks'); assert.equal(result.code, 1); assert.ok(!result.calls.includes('compose')); assert.ok(!result.calls.includes('promote')); });
     await t.test('failed health restores the previous image and a saved original compose file', async () => { const result = await run('failed-health'); assert.equal(result.code, 1); assert.equal(result.calls.match(/compose /g)?.length, 2); assert.ok(result.calls.includes('tag sha256:previous starvalley-codex-web:local')); assert.ok(result.calls.includes('--file ' + path.join(app, '.deploy-state/previous-compose.'))); assert.ok(!result.calls.includes('promote')); });
     await t.test('legacy health requires an explicit bootstrap flag', async () => { assert.equal((await run('bootstrap')).code, 75); assert.equal((await run('bootstrap', true)).code, 0); });
     await t.test('local memory or credentials cannot enter a release', async () => { await fs.writeFile(path.join(source, 'MEMORY.md'), 'local only'); const result = await run('success'); assert.equal(result.code, 1); assert.equal(result.calls, ''); });
