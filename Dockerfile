@@ -9,7 +9,7 @@ COPY shared ./shared
 RUN node --max-old-space-size=1536 --max-semi-space-size=8 --expose-gc node_modules/vite/bin/vite.js build && npm prune --omit=dev
 
 FROM node:24-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git libarchive-tools && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ARG APP_REVISION=unknown
 ENV APP_REVISION=$APP_REVISION

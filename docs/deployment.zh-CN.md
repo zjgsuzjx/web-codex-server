@@ -191,11 +191,12 @@ bash scripts/backup.sh
 | 项目数 | 每用户 50 个 |
 | 对话附件 | 每轮最多 10 个、每个 20 MB，计入存储配额 |
 | 浏览器文件夹压缩 | 最多 128 MB；更大目录先在本地生成 ZIP |
+| 压缩包导入 | ZIP、7Z、RAR、TAR、TAR.GZ/TGZ、TAR.BZ2/TBZ2/TBZ、TAR.XZ/TXZ、TAR.ZST/TZST；不支持加密包和分卷包 |
 | 上传中断 | 同一页面内恢复，30 分钟后过期；服务重启需重新上传 |
 
 容量统计包含项目、对话附件及 Codex 状态。旧 `USER_QUOTA_MB` 环境变量不再生效，上限按当前角色计算。智能清理使用用户已有的 Codex 连接，分析有界的本人项目文件清单，不包含凭据或其他用户数据。用户确认后再次发送清理清单，网关核对已批准的 ID 及文件变化后执行删除。物理磁盘满可能使 Codex 无法启动，此时仍需先在文件管理器中手动删除腾出空间。
 
-Codex 与终端写入不受应用存储配额约束，请监控主机磁盘；需要硬性容量限制时，使用文件系统配额。文本附件有正文内联上限，二进制文档需要模型工具读取或解析。ZIP 解压会验证路径和大小，并拒绝覆盖已有项目文件。
+Codex 与终端写入不受应用存储配额约束，请监控主机磁盘；需要硬性容量限制时，使用文件系统配额。文本附件有正文内联上限，二进制文档需要模型工具读取或解析。压缩包在私有临时目录验证路径、条目类型、数量与展开大小，通过后才写入项目；拒绝链接与特殊文件。遇到重名文件可选择跳过、覆盖或取消，写入失败会恢复被覆盖文件。不支持的压缩算法和 TAR 稀疏文件会报错。单独的 GZ/BZ2/XZ/ZST 压缩流及自解压可执行文件不属于压缩包导入格式。原生解压工具的超时上限为 120 秒。
 
 关闭 worker 网络会以 `NetworkMode=none` 重建容器，同时阻断模型/API 访问。切换前请停止任务并关闭终端。
 
@@ -263,6 +264,8 @@ Actions 会等待服务器完成。**候选语法检查、切换、目标 revisi
 ## 本地开发
 
 使用 Node.js 24+。没有生产 `.env` 时，后端默认使用 `http://localhost:3100` 与本地 `./data`。不要将容器使用的 `DATA_DIR=/data` 直接用于宿主机开发。
+
+7Z/RAR 与 BZip2/XZ TAR 导入需要 `libarchive-tools`（Debian/Ubuntu 使用 `apt-get install libarchive-tools`）。`bsdtar`、`bsdcat` 需在 PATH 中；Windows 使用系统 `tar.exe`，另需安装 libarchive 提供的 `bsdcat`。ZIP、TAR、gzip TAR、Zstandard TAR 使用 Node 库解压。Docker 已在 web 运行镜像内安装原生工具，无需修改 worker 镜像；升级时需重新构建 web 镜像。
 
 ```bash
 npm ci

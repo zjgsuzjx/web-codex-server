@@ -7,6 +7,7 @@ import LoadingPlaceholder from './LoadingPlaceholder';
 import Tooltip from './Tooltip';
 import EditorTabs from './EditorTabs';
 import { UploadProgress } from './UploadFeedback';
+import { ARCHIVE_FORMAT_LABEL } from '../shared/archive-formats.js';
 import Select from './Select';
 import { fileSortOptions } from './file-navigation';
 
@@ -65,7 +66,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
         <ExplorerMenu title="上传" icon={Upload} disabled={uploadDisabled}>
           <button type="button" onClick={onUploadFiles}><File size={15}/>上传文件</button>
           <button type="button" onClick={onUploadFolder}><FolderOpen size={15}/>上传文件夹</button>
-          <button type="button" onClick={onUploadArchive}><Archive size={15}/>上传 ZIP 并解压</button>
+          <button type="button" title={`支持 ${ARCHIVE_FORMAT_LABEL}`} onClick={onUploadArchive}><Archive size={15}/>上传压缩包并解压</button>
         </ExplorerMenu>
         <IconButton title="新建文件夹" disabled={!project} onClick={onNewFolder}><FolderPlus size={15}/></IconButton>
         <IconButton title="刷新文件树" disabled={!project || filesLoading} onClick={onRefresh}><RefreshCw size={15} className={filesLoading ? 'spin' : ''}/></IconButton>
@@ -93,7 +94,7 @@ export default function ProjectFiles({ project, files, filesLoading, tabs, selec
       {fileBusy ? <LoadingPlaceholder label="正在读取文件内容…" variant="code" rows={9}/> : tab ? <>
         <FileBreadcrumbs project={project} path={tab.path}/>
         {tab.kind === 'image' ? <FileImage key={`${project.id}/${tab.path}/${tab.modified}`} file={tab} focusRequested={focusFile === tab.path} onFocused={onFocused}/> : <div className="monaco-container"><Suspense fallback={<LoadingPlaceholder label="正在加载编辑器…" variant="code" rows={9}/>}><CodeEditor focusRequested={focusFile === tab.path} onFocused={onFocused} file={`${project.id}/${tab.path}`} content={tab.content} dirty={dirty} onChange={onCodeChange} onSave={onEditorSave} notify={notify} theme={theme}/></Suspense></div>}
-      </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><p className="editor-drop-hint">拖入文件、文件夹或 ZIP 即可上传</p><div><kbd>Ctrl</kbd> + <kbd>P</kbd><span>查找文件</span></div><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
+      </> : <div className="editor-placeholder"><Code2 size={36} strokeWidth={1}/><h3>让代码与对话在一起</h3><p>从左侧选择一个文件来查看和编辑。</p><p className="editor-drop-hint">拖入文件、文件夹或压缩包即可上传</p><div><kbd>Ctrl</kbd> + <kbd>P</kbd><span>查找文件</span></div><div><kbd>Ctrl</kbd> + <kbd>S</kbd><span>保存更改</span></div></div>}
     </div>
     {dropActive&&<div className="editor-drop-overlay"><div><Upload size={32}/><strong>松开即可上传到项目</strong><span>文件夹将先压缩，再上传解压</span></div></div>}
     {uploadProgress&&<UploadProgress progress={uploadProgress} onCancel={onCancelUpload} inline/>}

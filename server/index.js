@@ -16,7 +16,8 @@ import { createResources } from './resources.js';
 import { ROLES, isAdministrator, executionTarget, projectCwd } from './execution.js';
 import { fail, safePath, relativePath, makeParents, walk, openSafe, etag, atomicWrite, anchored, safeRename, safeRemove } from './files.js';
 import { attachmentRoot, attachmentRel, attachmentPublic, attachmentName, imageMime, attachmentInputs } from './attachments.js';
-import { stageZip, publishZip, uploadPlan } from './archives.js';
+import { stageArchive, publishZip, uploadPlan } from './archives.js';
+import { isArchive, ARCHIVE_FORMAT_LABEL } from '../shared/archive-formats.js';
 import { imageResult, readMedia, mediaLocation } from './chat-media.js';
 import { attachmentHeader, downloadFile, downloadSelected } from './downloads.js';
 import { createTurnChanges } from './turn-changes.js';
@@ -554,7 +555,7 @@ export async function createApp(options = {}) {
     if (!Number.isSafeInteger(size) || size < 0 || size > config.maxFile) fail(413, '文件大小超过上限');
     if (attachment && size > 20 * MB) fail(413, '聊天附件大小上限为 20 MB');
     if (attachment && store.get('SELECT COUNT(*) AS n FROM attachments WHERE user_id=? AND thread_id=? AND turn_id IS NULL', u.id, thread.id).n >= 10) fail(413, '每轮最多 10 个附件');
-    if (params.extract && (attachment || !rel.toLowerCase().endsWith('.zip'))) fail(400, '自动解压只支持项目 ZIP 文件');
+    if (params.extract && (attachment || wallpaper || !isArchive(rel))) fail(400, `项目自动解压支持 ${ARCHIVE_FORMAT_LABEL}`);
     if ([...uploads.values()].filter(x => x.uid === u.id).length >= 10) fail(429, '上传任务过多，请先完成或取消');
     const key = `${u.id}:${wallpaper ? `wallpaper:${params.device}` : attachment ? `attachment:${randomUUID()}` : p.id}:${rel}`; if (uploadLocks.has(key)) fail(409, '该文件正在上传');
     if (!attachment && !wallpaper) await safePath(root(u, p), rel, { missing: true }); await quota(u, size); await userDirs(u);
@@ -619,7 +620,7 @@ export async function createApp(options = {}) {
           const reserved = [...uploads.values()].filter(x => x.uid === u.id && x.id !== item.id && !x.avatar).reduce((sum,x)=>sum+x.size,0);
           const limit = storageLimit(u, config.quota);
           let lastProgress = 0;
-          const { entries } = await stageZip(item.temp, staging, {maxFile:config.maxFile,maxBytes:limit ?? Infinity,maxEntries:fileEntryLimit(u),onProgress:(done,total)=>{
+          const { entries } = await stageArchive(item.temp, staging, {name:item.path,maxFile:config.maxFile,maxBytes:limit ?? Infinity,maxEntries:fileEntryLimit(u),onProgress:(done,total)=>{
             if (done === total || Date.now() - lastProgress > 80) { lastProgress = Date.now(); send(ws, {type:'upload/progress',uploadId:item.id,phase:'extracting',done,total}); }
           }});
           const result = await publishZip(root(u, item.project), staging, entries, {policy:params.conflictPolicy || 'ask',beforePublish:async plan=>{

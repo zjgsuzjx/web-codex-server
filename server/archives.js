@@ -1,12 +1,118 @@
 import yauzl from 'yauzl';
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import tar from 'tar-stream';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
-import { crc32 } from 'node:zlib';
+import { crc32, createGunzip, createZstdDecompress } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 import { fail, relativePath, safePath, makeParents, anchored } from './files.js';
 import { USER_FILE_ENTRY_LIMIT, fileEntryLimitMessage } from '../shared/file-limits.js';
+import { archiveExtension } from '../shared/archive-formats.js';
+
+const invalidArchive = '压缩包无效、损坏、加密或使用了不支持的压缩方式';
+
+// TAR is parsed directly; bsdcat only decompresses TAR filters, never interprets
+// archive entries. Restrict bsdtar conversion to signed 7Z/RAR input: its generic
+// @archive reader also accepts formats such as mtree that can read local files.
+export async function stageArchive(filename, staging, { name, ...options }) {
+  const extension = archiveExtension(name);
+  if (!extension) fail(400, '不支持此压缩包格式');
+  if (extension === '.zip') return stageZip(filename, staging, options);
+  if (extension === '.tar') return stageTar(createReadStream(filename), staging, options);
+  // Node validates gzip CRCs (libarchive's gzip filter does not validate them).
+  if (['.tar.gz', '.tgz', '.tar.zst', '.tzst'].includes(extension)) {
+    return stageTar(createReadStream(filename), staging, options, [extension === '.tar.gz' || extension === '.tgz' ? createGunzip() : createZstdDecompress()]);
+  }
+  const converted = extension === '.7z' || extension === '.rar';
+  const handle = await fs.open(filename, 'r');
+  try {
+    const signature = Buffer.alloc(8); await handle.read(signature, 0, 8, 0);
+    let valid;
+    if (extension === '.7z') valid = signature.subarray(0, 6).equals(Buffer.from('377abcaf271c', 'hex'));
+    else if (extension === '.rar') valid = signature.subarray(0, 7).equals(Buffer.from('526172211a0700', 'hex')) || signature.equals(Buffer.from('526172211a070100', 'hex'));
+    else if (['.tar.bz2', '.tbz2', '.tbz'].includes(extension)) valid = /^BZh[1-9]$/.test(signature.subarray(0, 4).toString('ascii'));
+    else valid = signature.subarray(0, 6).equals(Buffer.from('fd377a585a00', 'hex'));
+    if (!valid) fail(400, invalidArchive);
+  } finally { await handle.close(); }
+  const command = converted ? (process.platform === 'win32' ? 'tar.exe' : 'bsdtar') : 'bsdcat';
+  // -P preserves unsafe names for our own validator; no native tool writes files.
+  const args = converted ? ['-c', '-f', '-', '--format=pax', '-P', `@${path.resolve(filename)}`] : ['--', path.resolve(filename)];
+  // No stdin or controlling terminal: encrypted input must fail without prompting.
+  const child = spawn(command, args, { cwd: staging, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TAR_READER_OPTIONS: '', TAR_WRITER_OPTIONS: '' } });
+  let diagnostic = '', timedOut = false;
+  child.stderr.on('data', chunk => { if (diagnostic.length < 4096) diagnostic += chunk.toString().slice(0, 4096 - diagnostic.length); });
+  const completion = new Promise(resolve => {
+    child.once('error', error => resolve({ error }));
+    child.once('close', (code, signal) => resolve({ code, signal }));
+  });
+  const timeout = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, 120000);
+  try {
+    let result, failure;
+    try { result = await stageTar(child.stdout, staging, options); }
+    catch (error) { failure = error; child.kill('SIGKILL'); }
+    const status = await completion;
+    if (status.error?.code === 'ENOENT') fail(503, '服务器缺少解压工具，请安装 libarchive-tools（bsdtar、bsdcat）');
+    if (timedOut) fail(408, '解压超时，请拆分压缩包后重试');
+    if (failure?.status) throw failure;
+    if (status.error || status.code !== 0 || diagnostic || failure) {
+      if (/passphrase|password|encrypted|encryption/i.test(diagnostic)) fail(400, '不支持加密压缩包，请先解密后上传');
+      fail(400, invalidArchive);
+    }
+    options.onProgress?.(result.entries.length, result.entries.length);
+    return result;
+  } finally { clearTimeout(timeout); child.kill('SIGKILL'); await completion; }
+}
+
+async function stageTar(input, staging, { maxFile, maxBytes, maxEntries = USER_FILE_ENTRY_LIMIT, onProgress }, filters = []) {
+  const extract = tar.extract(), entries = [], names = new Set();
+  let total = 0, actual = 0, inputBytes = 0, pendingEntry;
+  const measure = new Transform({ transform(chunk, encoding, callback) { inputBytes += chunk.length; callback(null, chunk); } });
+  extract.on('entry', (header, stream, next) => {
+    // Parser/input errors can arrive while parent directories are being opened.
+    stream.on('error', () => {});
+    pendingEntry = (async () => {
+      const directory = header.type === 'directory';
+      if (!directory && header.type !== 'file' || header.linkname) fail(400, '压缩包不能包含链接或特殊文件');
+      if (Object.keys(header.pax || {}).some(key => key.startsWith('GNU.sparse.') || key === 'SCHILY.realsize')) fail(400, '暂不支持 TAR 稀疏文件，请使用普通文件重新打包');
+      if (!Number.isSafeInteger(header.size) || header.size < 0 || directory && header.size !== 0) fail(400, invalidArchive);
+      // GNU/BSD tar commonly include a harmless ./ root and ./ path prefix.
+      if (directory && (header.name === '.' || /^(\.\/)+$/.test(header.name))) { stream.resume(); return next(); }
+      let name = header.name.replace(/^(\.\/)+/, '');
+      if (directory) name = name.replace(/\/$/, '');
+      const rel = relativePath(name, false);
+      if (names.has(rel)) fail(400, `压缩包中包含重复路径：${rel}`);
+      if (maxEntries != null && names.size >= maxEntries) fail(413, fileEntryLimitMessage(maxEntries));
+      names.add(rel);
+      if (header.size > maxFile || (total += header.size) > maxBytes) fail(413, '解压后文件大小超过存储配额或单文件上限');
+      await makeParents(staging, rel + (directory ? '/placeholder' : ''));
+      if (directory) stream.resume();
+      else {
+        let count = 0;
+        const limit = new Transform({ transform(chunk, encoding, callback) {
+          count += chunk.length; actual += chunk.length;
+          callback(count > maxFile || actual > maxBytes ? Object.assign(new Error('解压后文件大小超过存储配额或单文件上限'), { status: 413 }) : null, chunk);
+        } });
+        const handle = await fs.open(path.join(staging, rel), 'wx', 0o600);
+        try {
+          if (extract.destroying) fail(400, invalidArchive);
+          await pipeline(stream, limit, handle.createWriteStream());
+        } finally { await handle.close().catch(() => {}); }
+        if (count !== header.size) fail(400, invalidArchive);
+      }
+      entries.push({ path: rel, directory, size: header.size });
+      onProgress?.(entries.length, 0); next();
+    })().catch(error => { extract.destroy(error); });
+  });
+  try { await pipeline(input, ...filters, measure, extract); }
+  catch (error) { if (error.status) throw error; fail(400, invalidArchive); }
+  finally { await pendingEntry; }
+  if (inputBytes < 512 || inputBytes % 512 !== 0) fail(400, invalidArchive);
+  onProgress?.(entries.length, entries.length);
+  return { entries, total };
+}
 
 // Extract into a private spool first. Validate the entire archive before publishing.
 export async function stageZip(filename, staging, { maxFile, maxBytes, maxEntries = USER_FILE_ENTRY_LIMIT, onProgress }) {
