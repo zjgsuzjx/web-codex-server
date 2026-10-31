@@ -85,7 +85,7 @@ docker compose up -d --wait
 
 ### 把文件带进来，把成果带回去
 
-上传文件、文件夹或 ZIP 到项目。所有上传使用带确认的 WebSocket 二进制分块，同一页面内断线后可恢复，文件夹保留目录结构。单文件按原格式下载，文件夹和整个项目导出为 ZIP。
+上传文件、文件夹或 ZIP、7Z、RAR、TAR 压缩包到项目。自动解压还支持 TAR.GZ/TGZ、TAR.BZ2/TBZ2/TBZ、TAR.XZ/TXZ 和 TAR.ZST/TZST，后缀不区分大小写。使用“上传压缩包并解压”，或拖入一组压缩包即可自动解压；“上传文件”保留压缩包原始内容。暂不支持加密包和分卷包。所有上传使用带确认的 WebSocket 二进制分块，同一页面内断线后可恢复，文件夹保留目录结构。单文件按原格式下载，文件夹和整个项目导出为 ZIP。
 
 对话附件与项目文件分开管理。可以附上文档、代码或粘贴截图，在对话中预览支持的图片和文本。模型与账号支持生图时，生成结果也可以预览和下载。
 
@@ -146,7 +146,7 @@ React 前端连接 Node.js 网关。网关检查账号与项目归属，用 SQLi
 
 ## 开发与贡献
 
-安装 Node.js 24+ 后：
+安装 Node.js 24+ 和 libarchive 工具后（`bsdtar`、`bsdcat` 需在 PATH 中；Windows 使用系统 `tar.exe` 替代 `bsdtar`）。Debian/Ubuntu 可安装 `libarchive-tools`，Docker 镜像已内置：
 
 ```bash
 npm ci

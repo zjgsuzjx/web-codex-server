@@ -8,6 +8,7 @@ import { WebSocket } from 'ws';
 import { createApp } from '../server/index.js';
 import { relativePath, safePath, anchored, safeRemove } from '../server/files.js';
 import { zipSync, unzipSync } from 'fflate';
+import { archiveBuffer, rarStored } from './helpers/archive-fixtures.js';
 
 function mockCodex(config, emit) {
   const threads = new Map(), calls = [];
@@ -233,6 +234,32 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       const conflict=await s2.call('upload/begin',{projectId:p.id,path:'again.zip',size:data.length,extract:true});await s2.chunk(data);await assert.rejects(s2.call('upload/finish',{uploadId:conflict.uploadId}),/已存在/);
       await s2.call('upload/cancel',{uploadId:conflict.uploadId});
       const bomb=Buffer.from(zipSync({'too-large.txt':new Uint8Array(30001)}));const bad=await s2.call('upload/begin',{projectId:p.id,path:'big.zip',size:bomb.length,extract:true});await s2.chunk(bomb);await assert.rejects(s2.call('upload/finish',{uploadId:bad.uploadId}),/上限/);
+    });
+    await t.test('archive formats import through binary WebSocket and keep conflict retries and failed batches safe',async()=>{
+      for (const extension of ['.tar','.tgz','.tar.bz2','.tar.xz','.tar.zst','.7z','.rar']) {
+        const rel=`multi/${extension.slice(1)}/hello.txt`;
+        const data=extension==='.rar'?rarStored:await archiveBuffer(dir,extension,[{name:rel,data:'archive content'},{name:`multi/${extension.slice(1)}/empty/`,type:'directory'}]);
+        const task=await s2.call('upload/begin',{projectId:p.id,path:'PROJECT'+extension.toUpperCase(),size:data.length,extract:true});
+        await s2.chunk(data);
+        const result=await s2.call('upload/finish',{uploadId:task.uploadId});assert.equal(result.uploaded,1);
+        const file=extension==='.rar'?'helloworld.txt':rel;
+        assert.equal((await request(`/projects/${p.id}/file?path=${file}`,'GET',null,a)).data.content,extension==='.rar'?'hello libarchive test suite!\n':'archive content');
+        await assert.rejects(s2.call('upload/resume',{uploadId:task.uploadId}),/过期/);
+      }
+      for(const extension of ['.7z','.tgz']) {
+        const data=await archiveBuffer(dir,extension,[{name:`multi/${extension.slice(1)}/hello.txt`,data:'replacement'},{name:`multi/${extension.slice(1)}/new.txt`,data:'new'}]);
+        const task=await s2.call('upload/begin',{projectId:p.id,path:'conflict'+extension,size:data.length,extract:true});await s2.chunk(data);
+        await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}),e=>e.code==='UPLOAD_CONFLICT'&&e.conflictCount===1);
+        const done=await s2.call('upload/finish',{uploadId:task.uploadId,conflictPolicy:'overwrite'});assert.equal(done.overwritten,1);assert.equal(done.uploaded,2);
+      }
+      const bad=await archiveBuffer(dir,'.tgz',[{name:'should-not-publish.txt',data:'safe'},{name:'../outside.txt',data:'unsafe'}]);
+      const task=await s2.call('upload/begin',{projectId:p.id,path:'unsafe.tgz',size:bad.length,extract:true});await s2.chunk(bad);
+      await assert.rejects(s2.call('upload/finish',{uploadId:task.uploadId}),e=>e.status===400);
+      assert.equal((await request(`/projects/${p.id}/file?path=should-not-publish.txt`,'GET',null,a)).status,404);
+      await assert.rejects(s2.call('upload/resume',{uploadId:task.uploadId}),/过期/);
+      for(const name of ['unsupported.gz','split.7z.001','file.exe']) await assert.rejects(s2.call('upload/begin',{projectId:p.id,path:name,size:1,extract:true}),e=>e.status===400);
+      const raw=Buffer.from('keep archive bytes');const plain=await s2.call('upload/begin',{projectId:p.id,path:'kept.7z',size:raw.length});await s2.chunk(raw);await s2.call('upload/finish',{uploadId:plain.uploadId});
+      const download=await fetch(base+`/api/projects/${p.id}/download?path=kept.7z`,{headers:{Cookie:a.cookie}});assert.equal(await download.text(),'keep archive bytes');
     });
     await t.test('ZIP conflict decisions reuse binary data and cancellation never publishes the batch',async()=>{
       const data=Buffer.from(zipSync({'import/readme.txt':Buffer.from('replaced'),'import/fresh.txt':Buffer.from('fresh')}));

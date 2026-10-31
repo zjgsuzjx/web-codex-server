@@ -191,11 +191,12 @@ Keep local `AGENTS.md` and `MEMORY.md` out of Git, server uploads, deployment ar
 | Projects | 50 per user |
 | Chat attachments | Up to 10 per turn, 20 MB each, counted against storage quota |
 | In-browser folder compression | Up to 128 MB; prepare a ZIP locally for larger folders |
+| Archive import | ZIP, 7Z, RAR, TAR, TAR.GZ/TGZ, TAR.BZ2/TBZ2/TBZ, TAR.XZ/TXZ, TAR.ZST/TZST; no encrypted or split archives |
 | Interrupted uploads | Resume within the same page; expire after 30 minutes; service restart requires reupload |
 
 Storage usage includes projects, chat attachments, and Codex state. The old `USER_QUOTA_MB` environment setting is no longer used; limits follow the current role. The cleanup tool analyzes a bounded inventory of the user’s projects using their existing Codex connection. It never includes credentials or other users’ data. A second model request submits the user-approved manifest, then the gateway validates IDs and file changes before deleting. Physical disk exhaustion may prevent Codex from starting; manual file deletion remains the recovery path.
 
-Codex and terminal writes are not constrained by application storage quotas. Monitor host disk space and use filesystem quotas if you need a hard disk limit. Text attachments are inlined with bounded sizes; binary documents require model tools to read or parse them. ZIP extraction validates paths and sizes and rejects overwriting existing project files.
+Codex and terminal writes are not constrained by application storage quotas. Monitor host disk space and use filesystem quotas if you need a hard disk limit. Text attachments are inlined with bounded sizes; binary documents require model tools to read or parse them. Archive imports validate paths, entry types, counts and expanded sizes in private staging before publication; links and special files are rejected. Same-path files prompt for skip/overwrite/cancel, and failed publication restores overwritten files. Unsupported compression methods and sparse TAR files report an error. Standalone GZ/BZ2/XZ/ZST streams and self-extracting executables are not archive imports. Native decompression has a 120-second timeout.
 
 Turning worker network access off recreates the worker with `NetworkMode=none`, which also blocks model/API access. Stop tasks and close terminals before switching.
 
@@ -263,6 +264,8 @@ For an **existing installation upgrading from the previous deployment scripts**,
 ## Local development
 
 Use Node.js 24+. Without a production `.env`, the backend defaults to `http://localhost:3100` with local `./data`. Do not reuse container-specific `DATA_DIR=/data` for host development.
+
+Install `libarchive-tools` for 7Z/RAR and BZip2/XZ TAR imports (`apt-get install libarchive-tools` on Debian/Ubuntu). `bsdtar` and `bsdcat` must be on PATH; on Windows, the application uses the system `tar.exe` and needs `bsdcat` from a libarchive installation. ZIP, TAR, gzip TAR and Zstandard TAR use Node libraries. Docker installs the native tools in the web runtime image; no worker-image change is needed. Rebuild the web image when upgrading.
 
 ```bash
 npm ci

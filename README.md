@@ -85,7 +85,7 @@ Each task shows changed files and added/deleted line counts. Open the review pan
 
 ### Bring your files; take your work with you
 
-Upload files, folders, or ZIP archives into a project. All uploads use acknowledged binary WebSocket chunks, with reconnect recovery within the same page. Folders preserve their structure. Download individual files in their original format, or export folders and whole projects as ZIP archives.
+Upload files, folders, or ZIP, 7Z, RAR and TAR archives into a project. Automatic extraction also supports TAR.GZ/TGZ, TAR.BZ2/TBZ2/TBZ, TAR.XZ/TXZ and TAR.ZST/TZST (case-insensitive). Use **上传压缩包并解压** or drop a selection consisting of archives; **上传文件** preserves the original archive bytes. Encrypted and split archives are not supported. All uploads use acknowledged binary WebSocket chunks, with reconnect recovery within the same page. Folders preserve their structure. Download individual files in their original format, or export folders and whole projects as ZIP archives.
 
 Chat attachments stay separate from project files. Add documents, code, or pasted screenshots; preview supported images and text in the conversation. Generated images can be previewed and downloaded when the selected model and account support them.
 
@@ -146,7 +146,7 @@ Application storage quotas apply to web uploads and editor saves; Codex and term
 
 ## Development and contributing
 
-With Node.js 24+:
+With Node.js 24+ and libarchive tools (`bsdtar` and `bsdcat` on PATH; Windows uses the built-in `tar.exe` in place of `bsdtar`). On Debian/Ubuntu, install `libarchive-tools`. The Docker image includes these tools:
 
 ```bash
 npm ci

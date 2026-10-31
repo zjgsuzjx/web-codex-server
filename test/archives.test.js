@@ -4,8 +4,88 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { zipSync } from 'fflate';
-import { stageZip, publishZip, uploadPlan } from '../server/archives.js';
+import { stageArchive, stageZip, publishZip, uploadPlan } from '../server/archives.js';
 import { fileEntryLimit } from '../shared/file-limits.js';
+import { ARCHIVE_EXTENSIONS, ARCHIVE_ACCEPT, archiveExtension, isArchive } from '../shared/archive-formats.js';
+import { archiveBuffer, tarBuffer, rarStored, encryptedRar } from './helpers/archive-fixtures.js';
+import { gzipSync } from 'node:zlib';
+
+test('archive formats match picker and server names including uppercase and compound suffixes', () => {
+  for (const extension of ARCHIVE_EXTENSIONS) {
+    assert.equal(archiveExtension('项目' + extension.toUpperCase()), extension);
+    assert.ok(ARCHIVE_ACCEPT.split(',').includes(extension));
+  }
+  for (const name of ['a.zip.exe', 'a.gz', 'a.7z.001', 'a.rar.part', 'a.tar.gz.txt', '', null]) assert.equal(isArchive(name), false);
+});
+
+test('mainstream archives preserve Unicode, nested files, empty files and directories', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sv-formats-'));
+  try {
+    for (const extension of ARCHIVE_EXTENSIONS.filter(ext => !['.zip', '.rar'].includes(ext))) await t.test(extension, async () => {
+      const entries = [{name:'./',type:'directory'}, {name:'./中文/' ,type:'directory'}, {name:'./中文/hello.txt',data:'hello 中文'}, {name:'empty/',type:'directory'}, {name:'empty.txt'}];
+      const filename = path.join(dir, 'input' + extension), staging = await fs.mkdtemp(path.join(dir, 'stage-')), root = await fs.mkdtemp(path.join(dir, 'root-'));
+      await fs.writeFile(filename, await archiveBuffer(dir, extension, entries));
+      const progress = [], result = await stageArchive(filename, staging, {name:'INPUT' + extension.toUpperCase(),maxFile:100,maxBytes:200,onProgress:(done,total)=>progress.push([done,total])});
+      assert.equal(result.entries.length, 4); assert.equal(result.total, Buffer.byteLength('hello 中文'));
+      assert.equal((await publishZip(root, staging, result.entries)).uploaded, 2);
+      assert.equal(await fs.readFile(path.join(root, '中文/hello.txt'), 'utf8'), 'hello 中文');
+      assert.ok((await fs.stat(path.join(root, 'empty'))).isDirectory());
+      assert.equal((await fs.stat(path.join(root, 'empty.txt'))).size, 0);
+      assert.equal(progress.at(-1)[0], 4);
+    });
+    const filename = path.join(dir, 'stored.rar'), staging = await fs.mkdtemp(path.join(dir, 'stage-'));
+    await fs.writeFile(filename, rarStored);
+    const result = await stageArchive(filename, staging, {name:'STORED.RAR',maxFile:100,maxBytes:100});
+    assert.equal(result.entries.length, 1);
+    assert.equal(await fs.readFile(path.join(staging, 'helloworld.txt'), 'utf8'), 'hello libarchive test suite!\n');
+  } finally { await fs.rm(dir, { recursive:true, force:true }); }
+});
+
+test('TAR, compressed TAR and 7Z validate paths, links, duplicates and quotas before publication', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sv-archive-reject-'));
+  try {
+    for (const extension of ['.tar', '.tgz', '.7z']) await t.test(extension, async () => {
+      async function stage(entries, limits = {}) {
+        const filename = path.join(dir, 'bad' + extension), staging = await fs.mkdtemp(path.join(dir, 'stage-'));
+        await fs.writeFile(filename, await archiveBuffer(dir, extension, entries));
+        return stageArchive(filename, staging, {name:'bad' + extension,maxFile:100,maxBytes:150,maxEntries:3,...limits});
+      }
+      for (const name of ['../escape', '/absolute', './nested/../../escape', 'C:/absolute', ...(extension === '.7z' ? [] : ['bad\\path'])]) await assert.rejects(stage([{name,data:'unsafe'}]), error => error.status === 400);
+      for (const type of ['symlink', 'link']) await assert.rejects(stage([{name:'target',data:'safe'}, {name:'linked',type,linkname:'target'}]), /链接|压缩包/);
+      // Some formats cannot represent duplicate paths or special TAR entry types.
+      if (extension !== '.7z') {
+        await assert.rejects(stage([{name:'dup',data:'one'}, {name:'./dup',data:'two'}]), /重复路径/);
+        for (const type of ['fifo','block-device','character-device']) await assert.rejects(stage([{name:'special',type}]), /链接或特殊文件/);
+      }
+      await assert.rejects(stage([{name:'large',data:'x'.repeat(101)}]), error => error.status === 413);
+      await assert.rejects(stage([{name:'a',data:'x'.repeat(80)}, {name:'b',data:'x'.repeat(80)}]), error => error.status === 413);
+      await assert.rejects(stage(Array.from({length:4},(_,i)=>({name:'d'+i,type:'directory'}))), error => error.status === 413);
+      assert.equal((await stage(Array.from({length:4},(_,i)=>({name:'d'+i,type:'directory'})), {maxEntries:null})).entries.length, 4);
+    });
+    async function raw(name, data) {
+      const filename = path.join(dir, 'raw'), staging = await fs.mkdtemp(path.join(dir, 'stage-'));
+      await fs.writeFile(filename, data);
+      return stageArchive(filename, staging, {name,maxFile:100,maxBytes:200});
+    }
+    for (const name of ['bad.tar','bad.tgz','bad.7z','bad.rar']) await assert.rejects(raw(name, Buffer.from('not an archive')), error => error.status === 400);
+    await assert.rejects(raw('bad.tar', Buffer.alloc(0)), error => error.status === 400);
+    const valid = await tarBuffer([{name:'data',data:'ok'}]);
+    await assert.rejects(raw('truncated.tar', valid.subarray(0, 513)), error => error.status === 400);
+    const gzip = gzipSync(valid); gzip[gzip.length-8] ^= 0xff;
+    await assert.rejects(raw('corrupt.tgz', gzip), error => error.status === 400);
+    await assert.rejects(raw('truncated.rar', rarStored.subarray(0, 75)), error => error.status === 400);
+    await assert.rejects(raw('encrypted.rar', await encryptedRar()), error => error.status === 400);
+    for (const extension of ['.7z','.tar.bz2','.tar.xz']) {
+      const corrupted = await archiveBuffer(dir,extension,[{name:'file',data:'content'}]);
+      corrupted[corrupted.length-6] ^= 0xff;
+      await assert.rejects(raw('corrupt'+extension,corrupted), error => error.status === 400);
+    }
+    // Renaming an mtree manifest must never make the converter read host files.
+    const mtree = Buffer.from('#mtree\nsecret type=file contents=/etc/passwd\n');
+    for (const name of ['spoof.7z','spoof.rar','spoof.tar']) await assert.rejects(raw(name,mtree), error => error.status === 400);
+    await assert.rejects(raw('spoof.tgz',gzipSync(mtree)), error => error.status === 400);
+  } finally { await fs.rm(dir, { recursive:true, force:true }); }
+});
 
 test('ZIP entry counts support an unlimited role policy without disabling path or byte checks',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'sv-zip-count-')),filename=path.join(dir,'input.zip');
