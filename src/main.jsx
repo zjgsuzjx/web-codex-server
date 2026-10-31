@@ -28,6 +28,9 @@ import './workspace-toolbar.css';
 import PermissionPicker from './PermissionPicker';
 import UsageOverview from './UsageOverview';
 import { createDeltaBuffer, applyDeltas, applyLifecycle, mergeTurns } from './deltas';
+import { mergeHistoryPage, historyPause } from './conversation-history';
+import { recentTurnLimit, olderTurnLimit } from '../shared/history.js';
+import useConversationScroll from './useConversationScroll';
 import { AttachmentList, AttachmentPreview } from './Attachments';
 import ContextUsage from './ContextUsage';
 import ChangeSummary from './ChangeSummary';
@@ -107,6 +110,8 @@ function Workspace({ user, setUser, theme, setTheme }) {
   const [activity, setActivity] = useState({});
   const openReview = useCallback(target => { setReview({ ...target, projectId: projectRef.current?.id }); setEditor(true); }, []);
   const [listsLoading, setListsLoading] = useState(true), [threadLoading, setThreadLoading] = useState(false), [filesLoading, setFilesLoading] = useState(false), [toolBusy, setToolBusy] = useState(null), [commandBusy, setCommandBusy] = useState(false);
+  const [historyStatus, setHistoryStatus] = useState({}), [visibleFrom, setVisibleFrom] = useState(null);
+  const historyAbort = useRef(), historyRetry = useRef(), messagesRef = useRef();
   const filesRequest = useRef(0), fileRequest = useRef(0), threadRequest = useRef(0), toolPending = useRef(false), commandPending = useRef(false), sidebarToggle = useRef(), sidebarRoot = useRef(), editorToggle = useRef();
   const mobile = useMediaQuery('(max-width: 800px)');
   const editorPresent = usePresence(editor), scrimPresent = usePresence(sidebar);
@@ -177,9 +182,43 @@ function Workspace({ user, setUser, theme, setTheme }) {
     try { const list = await api(`/projects/${p.id}/files`); if (projectRef.current?.id === p.id && request === filesRequest.current) setFiles(list); }
     finally { if (request === filesRequest.current) setFilesLoading(false); }
   }
-  async function syncThread(t = threadRef.current) {
+  async function syncThread(t = threadRef.current, initial = false) {
     if (!t) return; const request = ++threadRequest.current; setThreadLoading(true);
-    try { const r = await api(`/threads/${t.id}`); if (threadRef.current?.id === t.id && request === threadRequest.current) { setActivity(prev => mergeActivity(prev, (r.thread.turns || []).map(turn => ({ threadId: t.id, turn })))); setTurns(prev=>mergeTurns(prev,r.thread.turns||[])); setThread(prev=>({...prev,title:r.thread.title||prev.title,tokenUsage:r.thread.tokenUsage||prev.tokenUsage})); setActiveTurn(current => { const running=r.thread.turns?.find(x=>x.status==='inProgress'&&!completedTurns.current.has(x.id))?.id; if(running)return running; return current&&!completedTurns.current.has(current)&&!r.thread.turns?.some(x=>x.id===current&&x.status!=='inProgress')?current:null; }); } }
+    historyAbort.current?.abort();
+    const controller = new AbortController(), signal = controller.signal;
+    historyAbort.current = controller; historyRetry.current = null; setHistoryStatus({});
+    const current = () => !signal.aborted && threadRef.current?.id === t.id && request === threadRequest.current;
+    async function loadOlder(startCursor) {
+      if (!current()) return;
+      historyRetry.current = null;
+      setHistoryStatus({ loading: true });
+      let cursor = startCursor;
+      try {
+        while (cursor && current()) {
+          await historyPause(signal);
+          if (!current()) return;
+          const r = await api(`/threads/${t.id}?limit=${olderTurnLimit}&cursor=${encodeURIComponent(cursor)}`, { signal });
+          if (!current()) return;
+          if (r.nextCursor === cursor) throw new Error('历史记录分页未前进，请重试');
+          setTurns(prev => mergeHistoryPage(prev, r.thread.turns || [], true));
+          cursor = r.nextCursor;
+        }
+        if (current()) { historyRetry.current = null; setHistoryStatus({}); }
+      } catch {
+        if (current()) { historyRetry.current = () => loadOlder(cursor); setHistoryStatus({ error: '较早记录加载失败，已显示的对话可继续使用。' }); }
+      }
+    }
+    try {
+      const r = await api(`/threads/${t.id}?limit=${recentTurnLimit}`, { signal });
+      if (!current()) return;
+      const recent = r.thread.turns || [];
+      setActivity(prev => mergeActivity(prev, recent.map(turn => ({ threadId: t.id, turn }))));
+      setTurns(prev => mergeHistoryPage(prev, recent, initial));
+      if (initial) setVisibleFrom(recent[0]?.id || null);
+      setThread(prev => ({ ...prev, title: r.thread.title || prev.title, tokenUsage: r.thread.tokenUsage || prev.tokenUsage }));
+      setActiveTurn(active => { const running = recent.find(turn => turn.status === 'inProgress' && !completedTurns.current.has(turn.id))?.id; return running || (active && !completedTurns.current.has(active) && !recent.some(turn => turn.id === active && turn.status !== 'inProgress') ? active : null); });
+      if (r.nextCursor) void loadOlder(r.nextCursor);
+    } catch (e) { if (current()) throw e; }
     finally { if (request === threadRequest.current) setThreadLoading(false); }
   }
   function event(msg) {
@@ -217,7 +256,7 @@ function Workspace({ user, setUser, theme, setTheme }) {
   useEffect(() => {
     socket.current = new LiveSocket(user, event, setStatus, setLatency);
     refreshLists().then(r => { if (r.projects.length) setProject(r.projects[0]); }).catch(e => { setWelcomeError(e.message); notify(e.message, true); }).finally(() => setListsLoading(false));
-    return () => { deltaBuffer.current.clear(); socket.current.close(); };
+    return () => { historyAbort.current?.abort(); deltaBuffer.current.clear(); socket.current.close(); };
   }, [user.id, user.csrf]);
   useEffect(() => { if (status === 'expired') { notify('登录已过期，请重新登录', true); setUser(null); } }, [status]);
   useEffect(() => { if (toast) { const timer = setTimeout(() => setToast(null), 7000); return () => clearTimeout(timer); } }, [toast]);
@@ -249,7 +288,10 @@ function Workspace({ user, setUser, theme, setTheme }) {
     return () => document.removeEventListener('keydown', keydown);
   }, [editor, editorFullscreen]);
   useEffect(() => { if (project) refreshFiles(project).catch(e => notify(e.message, true)); }, [project?.id]);
-  useEffect(() => { if (autoScroll.current) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'instant' }); }, [turns, activeTurn, requests.length]);
+  const visibleStart = visibleFrom ? Math.max(0, turns.findIndex(turn => turn.id === visibleFrom)) : Math.max(0, turns.length - recentTurnLimit);
+  useEffect(() => { if (!visibleFrom && turns.length) setVisibleFrom(turns[0].id); }, [visibleFrom, turns]);
+  const rememberScroll = useConversationScroll(scrollRef, messagesRef, autoScroll, [thread?.id, turns, visibleFrom, activeTurn, requests.length, threadLoading, historyStatus]);
+  function showOlder() { rememberScroll(); setVisibleFrom(turns[Math.max(0, visibleStart - recentTurnLimit)]?.id || null); }
   useEffect(() => { const fn = e => { if (e.defaultPrevented) return; if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (!review && !document.querySelector('.modal-backdrop')) saveFileRef.current(); } }; window.addEventListener('keydown', fn); return () => window.removeEventListener('keydown', fn); }, [review]);
   async function loadCapabilities(force = false) {
     const cache = capabilityCache.current;
@@ -260,7 +302,7 @@ function Workspace({ user, setUser, theme, setTheme }) {
   }
   async function newProject(name) { const p = await api('/projects', { method: 'POST', body: { name } }); setProjects(prev => [p, ...prev]); await chooseProject(p); setModal(null); notify('项目已创建'); }
   function hasDirtyTabs() { return tabs.some(t => t.content !== t.original); }
-  function resetConversation() { setReview(null); deltaBuffer.current.clear(); threadRef.current = null; ++threadRequest.current; setThreadLoading(false); setThread(null); setTurns([]); setActiveTurn(null); setDragging(false); }
+  function resetConversation() { historyAbort.current?.abort(); historyRetry.current = null; setHistoryStatus({}); setVisibleFrom(null); setReview(null); deltaBuffer.current.clear(); threadRef.current = null; ++threadRequest.current; setThreadLoading(false); setThread(null); setTurns([]); setActiveTurn(null); setDragging(false); }
   function closeSidebar() { setSidebar(false); requestAnimationFrame(() => sidebarToggle.current?.focus()); }
   function closeEditor() { setEditor(false); requestAnimationFrame(() => editorToggle.current?.focus()); }
   async function chooseProject(p) { if (p.id !== projectRef.current?.id && hasDirtyTabs() && !await dialogs.confirm({ key: 'switch-project', title: '切换到另一个项目？', description: '当前项目有未保存的修改，切换后这些修改会被丢弃。你可以取消并先保存文件。', detail: p.name, confirmLabel: '丢弃并切换', cancelLabel: '继续编辑', danger: true })) return; projectRef.current = p; setProject(p); resetConversation(); ++fileRequest.current; setFileBusy(false); setTabs([]); setSelectedFile(null); setFiles([]); setContextFile(null); if (mobile) closeSidebar(); }
@@ -268,9 +310,9 @@ function Workspace({ user, setUser, theme, setTheme }) {
     const p = projects.find(x => x.id === t.project_id); if (!p) return;
     if (p.id !== project?.id && hasDirtyTabs() && !await dialogs.confirm({ key: 'switch-thread-project', title: '切换对话所在的项目？', description: '当前项目有未保存的修改，切换会丢弃这些修改。', detail: t.title, confirmLabel: '丢弃并切换', cancelLabel: '继续编辑', danger: true })) return;
     if (p.id !== project?.id) { projectRef.current = p; setProject(p); ++fileRequest.current; setFileBusy(false); setTabs([]); setSelectedFile(null); setFiles([]); }
-    setReview(null); deltaBuffer.current.clear(); setThread(t); threadRef.current = t; setTurns([]); setActiveTurn(null); autoScroll.current = true;
+    setVisibleFrom(null); setReview(null); deltaBuffer.current.clear(); setThread(t); threadRef.current = t; setTurns([]); setActiveTurn(null); autoScroll.current = true;
     if (mobile) closeSidebar();
-    try { await syncThread(t); } catch (e) { notify(e.message, true); }
+    try { await syncThread(t, true); } catch (e) { notify(e.message, true); }
   }
   async function sendMessage(e) {
     e?.preventDefault(); if ((!input.trim()&&!attachments.length) || sendPending.current || progress || activeTurn || modelPending.current || threadLoading || toolPending.current || commandPending.current) return; if (!project) { setModal('project'); return; }
@@ -417,8 +459,8 @@ function Workspace({ user, setUser, theme, setTheme }) {
       <SidebarUser user={user} status={status} disabled={modelSaving} onOpenProfile={()=>setModal('profile')} onOpenSettings={()=>{setModal('settings');loadCapabilities();}}/>
     </div></aside>
     <main className="main" inert={mobile&&sidebar&&!editorFullscreen} aria-hidden={mobile&&sidebar&&!editorFullscreen}><header className="topbar"><div className="topbar-left"><IconButton title={sidebar ? "收起侧栏" : "展开侧栏"} buttonRef={sidebarToggle} aria-expanded={sidebar} aria-controls="workspace-sidebar" onClick={()=>setSidebar(!sidebar)}><PanelLeft size={19}/></IconButton><span className="workspace-name">{project?.name||'个人工作区'}</span><ChevronRight size={14} className="muted"/><span className="breadcrumb">{thread?.title||'新对话'}</span></div><WorkspaceToolbar theme={theme} customSkin={!!appearance.current} status={status} latency={latency} hasProject={!!project} terminalOpen={modal==='liveTerminal'} editor={editor} editorToggle={editorToggle} settingsDisabled={modelSaving} onAppearance={()=>setModal('appearance')} onTheme={next=>setTheme(next)} onRetry={()=>socket.current?.retry()} onTerminal={()=>setModal(current=>current==='liveTerminal'?null:'liveTerminal')} onEditor={()=>setEditor(!editor)} onSettings={()=>{setModal('settings');loadCapabilities();}}/></header>
-      <div className="work-body"><section className="chat-panel">{!welcomeVisible && <BrowserGraphicsNotice/>}<div className="chat-scroll" ref={scrollRef} onScroll={e=>{autoScroll.current=e.target.scrollHeight-e.target.scrollTop-e.target.clientHeight<100;}}>
-        {threadLoading&&!turns.length?<div className="messages conversation-loading"><LoadingPlaceholder label="正在读取对话…" variant="conversation" rows={6}/></div>:!thread||!turns.length?<div className="welcome"><div className="welcome-symbol"><BrandMark size={64} className="brand-mark"/></div><h1>今天，想创造些什么？</h1><p>{project?`在 ${project.name} 中，和 Codex 一起把想法写成代码。`:'创建一个项目，开始你的下一次创作。'}</p><div className="suggestion-grid">{[{icon:Code2,title:'从一个想法开始',text:'帮我梳理项目需求，并制定一个可执行的开发计划。'},{icon:Search,title:'读懂现有代码',text:'请分析项目结构，介绍关键模块及其工作方式。'},{icon:ShieldCheck,title:'发现并修复问题',text:'请检查项目代码中可能存在的 bug，说明原因并给出修复。'},{icon:Sparkles,title:'把体验再打磨一下',text:'请检查项目的用户体验，提出并实现最有价值的改进。'}].map(s=><button type="button" key={s.title} onClick={()=>setInput(s.text)}><s.icon size={18} className="suggestion-icon" aria-hidden="true"/><span className="suggestion-copy"><strong>{s.title}</strong><span className="suggestion-description">{s.text}</span></span><ArrowRight size={14} className="suggestion-arrow" aria-hidden="true"/></button>)}</div>{!project&&<button className="primary welcome-create" onClick={()=>setModal('project')}><Plus size={16}/>创建项目</button>}</div>:<div className="messages" key={thread?.id}>{turns.map(turn=><div key={turn.id} className="turn"><TurnMessages threadId={thread?.id} turn={turn} onFile={messageFile} notify={notify} onAttachment={setAttachmentPreview} onReview={openReview}/><ThinkingStatus turn={turn} waitingForInput={requests.some(r=>isUserInput(r)&&r.params?.isBlocking!==false&&r.params?.threadId===thread?.id&&(!r.params.turnId||r.params.turnId===turn.id))}/>{turn.status==='failed'&&<p className="turn-error">{turn.error?.message||'本轮执行失败'}</p>}</div>)}{sending&&!activeTurn&&<ThinkingStatus sending/>}{threadLoading&&<LoadingPlaceholder label="正在同步对话…" variant="list" rows={2}/>}</div>}
+      <div className="work-body"><section className="chat-panel">{!welcomeVisible && <BrowserGraphicsNotice/>}<div className="chat-scroll" ref={scrollRef} onScroll={e=>{autoScroll.current=e.target.scrollHeight-e.target.scrollTop-e.target.clientHeight<100;rememberScroll();if(!autoScroll.current&&e.target.scrollTop<160&&visibleStart>0)showOlder();}}>
+        {threadLoading&&!turns.length?<div className="messages conversation-loading"><LoadingPlaceholder label="正在读取对话…" variant="conversation" rows={6}/></div>:!thread||!turns.length?<div className="welcome"><div className="welcome-symbol"><BrandMark size={64} className="brand-mark"/></div><h1>今天，想创造些什么？</h1><p>{project?`在 ${project.name} 中，和 Codex 一起把想法写成代码。`:'创建一个项目，开始你的下一次创作。'}</p><div className="suggestion-grid">{[{icon:Code2,title:'从一个想法开始',text:'帮我梳理项目需求，并制定一个可执行的开发计划。'},{icon:Search,title:'读懂现有代码',text:'请分析项目结构，介绍关键模块及其工作方式。'},{icon:ShieldCheck,title:'发现并修复问题',text:'请检查项目代码中可能存在的 bug，说明原因并给出修复。'},{icon:Sparkles,title:'把体验再打磨一下',text:'请检查项目的用户体验，提出并实现最有价值的改进。'}].map(s=><button type="button" key={s.title} onClick={()=>setInput(s.text)}><s.icon size={18} className="suggestion-icon" aria-hidden="true"/><span className="suggestion-copy"><strong>{s.title}</strong><span className="suggestion-description">{s.text}</span></span><ArrowRight size={14} className="suggestion-arrow" aria-hidden="true"/></button>)}</div>{!project&&<button className="primary welcome-create" onClick={()=>setModal('project')}><Plus size={16}/>创建项目</button>}</div>:<div className="messages" ref={messagesRef} key={thread?.id}><div className="history-status">{visibleStart>0&&<button type="button" onClick={showOlder}>查看更早记录</button>}{historyStatus.loading&&<span role="status"><LoaderCircle size={13} className="spin"/>正在后台加载较早记录…</span>}{historyStatus.error&&<span role="status">{historyStatus.error}<button type="button" onClick={()=>historyRetry.current?.()}>重试</button></span>}</div>{turns.slice(visibleStart).map(turn=><div key={turn.id} className="turn" data-turn-id={turn.id}><TurnMessages threadId={thread?.id} turn={turn} onFile={messageFile} notify={notify} onAttachment={setAttachmentPreview} onReview={openReview}/><ThinkingStatus turn={turn} waitingForInput={requests.some(r=>isUserInput(r)&&r.params?.isBlocking!==false&&r.params?.threadId===thread?.id&&(!r.params.turnId||r.params.turnId===turn.id))}/>{turn.status==='failed'&&<p className="turn-error">{turn.error?.message||'本轮执行失败'}</p>}</div>)}{sending&&!activeTurn&&<ThinkingStatus sending/>}{threadLoading&&<LoadingPlaceholder label="正在同步对话…" variant="list" rows={2}/>}</div>}
       </div>
       <div className="composer-zone"><div className="request-stack"><UserInputRequests requests={requests.filter(isUserInput)} socket={socket.current} status={status} drafts={answerDrafts} threads={threads} enabled={!welcomeVisible} onDraft={(id,draft)=>setAnswerDrafts(prev=>({...prev,[id]:draft}))} onDone={id=>{setRequests(prev=>prev.filter(x=>String(x.id)!==String(id)));setAnswerDrafts(prev=>{const next={...prev};delete next[id];return next;});}}/><ApprovalRequests requests={requests.filter(r=>!isUserInput(r))} socket={socket.current} status={status} threads={threads} onDone={id=>setRequests(prev=>prev.filter(r=>String(r.id)!==String(id)))}/></div><div className="composer-toolbar">{thread&&<ConversationTools thread={thread} busy={toolBusy} disabledReason={threadLoading ? "正在读取对话，请稍候。" : sending || activeTurn ? "请等待当前任务结束后再操作。" : commandBusy ? "终端命令正在执行，请稍候。" : status!=="connected" ? "连接恢复后即可使用对话工具。" : ""} onAction={threadAction} onTerminal={()=>setModal("terminal")}/>}
         <div className="composer-meters">{thread&&<ContextUsage usage={thread.tokenUsage}/>}<StorageManager api={api} Dialog={Modal} userId={user.id} onFiles={()=>{setReview(null);setEditor(true);}} onDeleted={cleanupDeleted} beforeDelete={beforeCleanupDelete}/><UsageOverview api={api} socket={socket.current} Dialog={Modal}/></div></div>

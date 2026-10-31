@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { WebSocketServer, WebSocket } from 'ws';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { recentTurnLimit } from '../shared/history.js';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import archiver from 'archiver';
@@ -88,7 +89,7 @@ export async function createApp(options = {}) {
     if (t && msg.params?.item) msg = { ...msg, params: { ...msg.params, item: decorateItem(uid, tid, msg.params.turnId, msg.params.item) } };
     if (t && msg.params?.turn) msg = { ...msg, params: { ...msg.params, turn: decorateTurn(uid, tid, msg.params.turn) } };
     if (t && msg.method === 'thread/name/updated' && msg.params.threadName && t.title_state !== 'manual') setTitle(uid, tid, msg.params.threadName);
-    // Codex owns durable conversation history; reconnect re-reads it via thread/read.
+    // Codex owns durable conversation history; reconnect pages it from app-server.
     // Keeping output deltas out of SQLite avoids duplicate unbounded history storage.
     const seq=(eventCounters.get(uid)||0)+1;eventCounters.set(uid,seq);
     if (msg.method === 'thread/archived' && tid) store.run('UPDATE threads SET archived=1 WHERE id=? AND user_id=?', tid, uid);
@@ -128,9 +129,15 @@ export async function createApp(options = {}) {
     if (titleJobs.has(tid) || store.thread({id:uid}, tid).title_state !== 'pending') return;
     const job = (async () => {
       try {
-        const user = store.user(uid), r = await codex.call(user, 'thread/read', { threadId: tid, includeTurns: true });
+        const user = store.user(uid), r = await codex.call(user, 'thread/read', { threadId: tid, includeTurns: false });
         if (r.thread.name) { setTitle(uid, tid, r.thread.name); return; }
-        const first = r.thread.turns?.find(turn => turn.status === 'completed' && turn.items?.some(i => i.type === 'userMessage'));
+        let first, cursor;
+        do {
+          const page = await codex.call(user, 'thread/turns/list', { threadId: tid, limit: recentTurnLimit, sortDirection: 'asc', itemsView: 'full', ...(cursor ? { cursor } : {}) });
+          first = page.data.find(turn => turn.status === 'completed' && turn.items?.some(i => i.type === 'userMessage'));
+          if (!page.nextCursor || page.nextCursor === cursor) break;
+          cursor = page.nextCursor;
+        } while (!first);
         if (!first || !codex.generateTitle) return;
         const exchange = decorateTurn(uid, tid, first).items.filter(i => ['userMessage','agentMessage'].includes(i.type)).map(i => i.type === 'userMessage' ? `User: ${i.content?.filter(c=>c.type==='text').map(c=>c.text).join('\n') || i.text || ''}` : `Assistant: ${i.text || ''}`).join('\n').slice(0,12000);
         const title = await codex.generateTitle(user, exchange);
@@ -377,11 +384,19 @@ export async function createApp(options = {}) {
     store.run("INSERT INTO threads(id,user_id,project_id,title,created,title_state) VALUES(?,?,?,?,?,'pending')", t.id, t.user_id, t.project_id, t.title, t.created); codex.instances.get(req.user.id)?.loaded.add(t.id); res.status(201).json(t);
   });
   app.get('/api/threads/:id', async (req, res) => {
-    const t = store.thread(req.user, req.params.id), s = settings(JSON.parse(req.user.settings)); await codex.resume(req.user, t, threadSettings(s));
-    const result = await codex.call(req.user, 'thread/read', { threadId: t.id, includeTurns: true });
+    const t = store.thread(req.user, req.params.id), s = settings(JSON.parse(req.user.settings));
+    const limit = req.query.limit == null ? recentTurnLimit : Number(req.query.limit), cursor = req.query.cursor;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 32) fail(400, '对话分页大小无效');
+    if (cursor != null && (typeof cursor !== 'string' || !cursor.length || cursor.length > 4096)) fail(400, '对话分页游标无效');
+    await codex.resume(req.user, t, threadSettings(s));
+    const [result, page] = await Promise.all([
+      cursor ? { thread: { id: t.id } } : codex.call(req.user, 'thread/read', { threadId: t.id, includeTurns: false }),
+      codex.call(req.user, 'thread/turns/list', { threadId: t.id, limit, sortDirection: 'desc', itemsView: 'full', ...(cursor ? { cursor } : {}) })
+    ]);
     if (result.thread.name && t.title_state !== 'manual') setTitle(req.user.id, t.id, result.thread.name);
-    res.json({ ...result, thread: { ...result.thread, title: store.thread(req.user, t.id).title, tokenUsage: t.token_usage ? JSON.parse(t.token_usage) : result.thread.tokenUsage, turns: result.thread.turns?.map(turn => decorateTurn(req.user.id, t.id, turn)) || [] } });
-    if (t.title_state === 'pending' && result.thread.turns?.some(turn => turn.status === 'completed')) void autoTitle(req.user.id, t.id);
+    const turns = [...page.data].reverse().map(turn => decorateTurn(req.user.id, t.id, turn));
+    res.json({ ...result, nextCursor: page.nextCursor || null, thread: { ...result.thread, title: store.thread(req.user, t.id).title, tokenUsage: t.token_usage ? JSON.parse(t.token_usage) : result.thread.tokenUsage, turns } });
+    if (!cursor && t.title_state === 'pending' && turns.some(turn => turn.status === 'completed')) void autoTitle(req.user.id, t.id);
   });
   app.get('/api/threads/:id/turns/:turnId/changes', async (req, res) => {
     const thread = store.thread(req.user, req.params.id);
