@@ -9,7 +9,9 @@ import {
   Sparkles,
   Terminal,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
+import UserMessage from './UserMessage.tsx';
+import type { UserMessageProps } from './UserMessage.tsx';
 import {
   contentImage,
   isProcessItem,
@@ -19,7 +21,6 @@ import {
 import type { ChatItem, ProtocolCallback, Turn } from '../../../../shared/contracts/protocol.ts';
 import chatgptLogo from '../../../assets/chatgpt-logo.svg';
 import IconButton from '../../../components/ui/IconButton.tsx';
-import { AttachmentList } from './Attachments.tsx';
 import { GeneratedImage, Markdown, ToolOutput } from './ChatOutput.tsx';
 export interface MessageProps {
   item: ChatItem;
@@ -27,6 +28,7 @@ export interface MessageProps {
   notify: (message: string, error?: boolean) => void;
   onAttachment: ProtocolCallback;
   threadId: string;
+  userMessage?: Omit<UserMessageProps, 'item' | 'notify' | 'onAttachment'>;
 }
 export interface TurnMessagesProps {
   turn: Turn;
@@ -35,6 +37,10 @@ export interface TurnMessagesProps {
   onAttachment: ProtocolCallback;
   threadId: string;
   onReview: ProtocolCallback;
+  latestTurnId?: string;
+  editDisabled?: boolean;
+  onEdit?: UserMessageProps['onEdit'];
+  onEditStart?: () => void;
 }
 
 const Message = memo(function Message({
@@ -43,37 +49,21 @@ const Message = memo(function Message({
   notify,
   onAttachment,
   threadId,
+  userMessage,
 }: MessageProps) {
-  const [expanded, setExpanded] = useState(false);
-  if (item.type === 'userMessage') {
-    const text =
-      item.content
-        ?.filter((x) => x.type === 'text')
-        .map((x) => x.text)
-        .join('\n') ||
-      item.text ||
-      '';
-    const long = text.length > 700 || text.split('\n').length > 10;
+  if (item.type === 'userMessage')
     return (
-      <div className="user-message">
-        <div>
-          <div className={long && !expanded ? 'user-text is-collapsed' : 'user-text'}>{text}</div>
-          {long && (
-            <button
-              type="button"
-              className="expand-message"
-              aria-expanded={expanded}
-              onClick={() => setExpanded(!expanded)}
-            >
-              {expanded ? '收起' : '展开全部'}
-              <ChevronDown size={13} />
-            </button>
-          )}
-          <AttachmentList items={item.attachments} onPreview={onAttachment} />
-        </div>
-      </div>
+      <UserMessage
+        item={item}
+        turn={userMessage?.turn || { id: '', status: 'completed' }}
+        latestTurnId={userMessage?.latestTurnId}
+        editDisabled={userMessage?.editDisabled}
+        onEdit={userMessage?.onEdit}
+        onEditStart={userMessage?.onEditStart}
+        notify={notify}
+        onAttachment={onAttachment}
+      />
     );
-  }
   if (item.type === 'agentMessage')
     return (
       <article className="agent-message">
@@ -267,6 +257,10 @@ export const TurnMessages = memo(function TurnMessages({
   onAttachment,
   threadId,
   onReview,
+  latestTurnId,
+  editDisabled,
+  onEdit,
+  onEditStart,
 }: TurnMessagesProps) {
   const items = turn.items || [],
     done = turn.status !== 'inProgress';
@@ -280,6 +274,7 @@ export const TurnMessages = memo(function TurnMessages({
       notify={notify}
       onAttachment={onAttachment}
       threadId={threadId}
+      userMessage={{ turn, latestTurnId, editDisabled, onEdit, onEditStart }}
     />
   );
   if (!done)

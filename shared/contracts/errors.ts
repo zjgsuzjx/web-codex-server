@@ -5,4 +5,5 @@ export interface AppError extends Error {
   statusCode?: number;
   conflictCount?: number;
   conflicts?: { path: string }[];
+  editDraft?: { text: string; attachments: import('./domain.ts').Attachment[] };
 }

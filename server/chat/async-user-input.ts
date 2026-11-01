@@ -29,11 +29,17 @@ export class AsyncUserInputs {
       return;
     }
     if (
-      ['turn/started', 'turn/completed', 'thread/archived', 'thread/deleted'].includes(event.method)
+      [
+        'turn/started',
+        'turn/completed',
+        'thread/archived',
+        'thread/deleted',
+        'thread/history/reverted',
+      ].includes(event.method)
     ) {
       for (const request of this.requests.values())
         if (
-          ['thread/archived', 'thread/deleted'].includes(event.method)
+          ['thread/archived', 'thread/deleted', 'thread/history/reverted'].includes(event.method)
             ? request.params.threadId === event.params?.threadId
             : !keepRequestOnTurn(request, event)
         )

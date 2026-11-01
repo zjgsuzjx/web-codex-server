@@ -24,6 +24,7 @@ import { WALLPAPER_MAX_BYTES, skinDevice } from '../shared/settings/skins.ts';
 import { validateAvatar } from './appearance/avatar.ts';
 import { createSkins } from './appearance/skins.ts';
 import { AsyncUserInputs } from './chat/async-user-input.ts';
+import { editableTurn } from './chat/edit-turn.ts';
 import {
   attachmentInputs,
   attachmentName,
@@ -177,7 +178,11 @@ export async function createApp(options: AppOptions = {}) {
                 uid,
               )
             )
-              await rpc(null, u, 'turn/start', { threadId: request.params.threadId, text });
+              await rpc(null, u, 'turn/start', {
+                threadId: request.params.threadId,
+                text,
+                asyncRequestId: request.id,
+              });
             // Child-thread events are authenticated by the owning CLI connection,
             // even when that child is absent from the web conversation list.
             else
@@ -262,6 +267,15 @@ export async function createApp(options: AppOptions = {}) {
   });
   function bindAttachments(uid: string, tid: string, turnId: string) {
     const pending = attachmentSends.get(`${uid}:${tid}`);
+    if (pending)
+      store.run(
+        'INSERT OR IGNORE INTO turn_messages(thread_id,turn_id,text,attachment_ids,sent_at) VALUES(?,?,?,?,?)',
+        tid,
+        turnId,
+        pending.ids.length ? pending.text : '',
+        JSON.stringify(pending.ids),
+        pending.sentAt,
+      );
     for (const [index, id] of (pending?.ids || []).entries())
       store.run(
         'UPDATE attachments SET turn_id=?,message_text=? WHERE id=? AND user_id=? AND thread_id=? AND turn_id IS NULL',
@@ -287,18 +301,27 @@ export async function createApp(options: AppOptions = {}) {
     }
     if (item.type !== 'userMessage') return item;
     // Forked turns retain their IDs and attachment references in Codex history.
-    const attachments = store.all(
-      'SELECT * FROM attachments WHERE user_id=? AND turn_id=?',
-      uid,
+    const message = store.get(
+      'SELECT * FROM turn_messages WHERE thread_id=? AND turn_id=?',
+      tid,
       turnId,
     );
-    const original = attachments.find(
-      (attachment) => attachment.message_text != null,
-    )?.message_text;
+    const attachments = message
+      ? JSON.parse(message.attachment_ids)
+          .map((id: string) =>
+            store.get('SELECT * FROM attachments WHERE id=? AND user_id=?', id, uid),
+          )
+          .filter(Boolean)
+      : store.all('SELECT * FROM attachments WHERE user_id=? AND turn_id=?', uid, turnId);
+    const original =
+      message?.text ||
+      attachments.find((attachment: ProtocolRecord) => attachment.message_text != null)
+        ?.message_text;
     // CLI history includes model-only attachment context. Keep the user's
     // original question and attachment chips in the browser, including forks.
     return {
       ...item,
+      ...(message ? { sentAt: message.sent_at } : {}),
       ...(original != null
         ? {
             text: original,
@@ -317,6 +340,19 @@ export async function createApp(options: AppOptions = {}) {
       ...turnActivity.decorate(thread, turn),
       changes: turnChanges.summary(thread, turn),
       items: (turn.items || []).map((i: any) => decorateItem(uid, tid, turn.id, i)),
+    };
+  }
+  function editDraft(uid: string, tid: string): AppError['editDraft'] {
+    const row = store.get("SELECT * FROM turn_messages WHERE thread_id=? AND turn_id='retry'", tid);
+    if (!row) return undefined;
+    return {
+      text: row.text,
+      attachments: JSON.parse(row.attachment_ids)
+        .map((id: string) =>
+          store.get('SELECT * FROM attachments WHERE id=? AND user_id=?', id, uid),
+        )
+        .filter(Boolean)
+        .map(attachmentPublic),
     };
   }
   function setTitle(uid: string, tid: string, title: string) {
@@ -1017,6 +1053,7 @@ export async function createApp(options: AppOptions = {}) {
     const turns = [...page.data].reverse().map((turn) => decorateTurn(req.user.id, t.id, turn));
     res.json({
       ...result,
+      editDraft: editDraft(req.user.id, t.id),
       nextCursor: page.nextCursor || null,
       thread: {
         ...result.thread,
@@ -1691,11 +1728,31 @@ export async function createApp(options: AppOptions = {}) {
       await codex.restart(u);
       return { ok: true };
     }
-    if (method === 'turn/start')
+    if (method === 'turn/start' || method === 'turn/edit')
       return mutation(u, async () => {
         const t = store.thread(u, params.threadId),
           s = settings(JSON.parse(store.user(u.id)!.settings));
-        const ids = params.attachments || [];
+        if (params.asyncRequestId && !asyncInputs.get(u.id)?.requests.has(params.asyncRequestId))
+          fail(404, '该请求已失效');
+        const editing = method === 'turn/edit';
+        let originalTurn;
+        if (editing) {
+          if (turnActivity.active(u.id).some((entry) => entry.threadId === t.id))
+            fail(409, '请等待当前回复结束后再编辑');
+          await codex.resume(u, t, threadSettings(s));
+          originalTurn = await editableTurn(
+            (name, args) => codex.call(u, name, args),
+            t.id,
+            params,
+          );
+        }
+        const originalItem = originalTurn?.items?.find((item) => item.id === params.itemId);
+        const originalAttachments = originalItem
+          ? decorateItem(u.id, t.id, originalTurn!.id, originalItem).attachments
+          : [];
+        const ids = editing
+          ? originalAttachments.map((item: ProtocolRecord) => item.id)
+          : params.attachments || [];
         if (
           !Array.isArray(ids) ||
           ids.length > 10 ||
@@ -1709,9 +1766,15 @@ export async function createApp(options: AppOptions = {}) {
           params.text.length > 100000
         )
           fail(400, '请输入消息或选择附件，消息上限 100000 个字符');
+        const recovery = store.get(
+          "SELECT * FROM turn_messages WHERE thread_id=? AND turn_id='retry'",
+          t.id,
+        );
+        const recoveryIds: string[] = recovery ? JSON.parse(recovery.attachment_ids) : [];
         const attachments = ids.map((id: any) => {
           const a = getAttachment(u, id);
-          if (a.thread_id !== t.id || a.turn_id) fail(400, '附件不属于当前草稿');
+          if (!editing && !recoveryIds.includes(id) && (a.thread_id !== t.id || a.turn_id))
+            fail(400, '附件不属于当前草稿');
           return a;
         });
         const account = await codex.call(u, 'account/read', { refreshToken: false });
@@ -1719,13 +1782,21 @@ export async function createApp(options: AppOptions = {}) {
           fail(409, '请先在设置 → Codex 账号中完成登录');
         await codex.resume(u, t, threadSettings(s));
         const displayText = params.text.trim() || '请查看这些附件。';
-        const input = [
+        const input: ProtocolRecord[] = [
           { type: 'text', text: displayText },
           ...(await attachmentInputs(config, u, attachments)),
         ];
+        // Native image inputs without web attachment metadata must survive edits.
+        if (editing && !attachments.length)
+          for (const block of originalItem?.content || []) {
+            if (block.type === 'image') input.push({ type: 'image', url: block.url });
+            else if (block.type === 'localImage')
+              input.push({ type: 'localImage', path: block.path });
+            else if (block.type !== 'text') fail(400, '此消息含暂不支持重新发送的输入类型');
+          }
         const cwd = projectCwd(config, u, t.project_id),
           target = executionTarget(u);
-        for (const image of params.images || []) {
+        for (const image of editing ? [] : params.images || []) {
           if (typeof image !== 'string') fail(400, '图片路径无效');
           const rel = relativePath(image, false);
           await safePath(root(u, store.project(u, t.project_id)), rel);
@@ -1763,14 +1834,40 @@ export async function createApp(options: AppOptions = {}) {
         }
         const key = `${u.id}:${t.id}`;
         if (attachmentSends.has(key)) fail(409, '消息正在发送，请稍候');
-        attachmentSends.set(key, { ids, text: displayText });
+        attachmentSends.set(key, { ids, text: displayText, sentAt: Date.now() });
+        let reverted = false;
         try {
           await turnChanges.begin(u, t);
-          const result = await codex.call(u, method, args);
+          if (editing) {
+            await codex.call(u, 'thread/revert', { threadId: t.id, beforeTurnId: params.turnId });
+            reverted = true;
+            codex.instances.get(u.id)?.requestQueue?.clearThread(t.id);
+            store.run(
+              "INSERT OR REPLACE INTO turn_messages(thread_id,turn_id,text,attachment_ids,sent_at) VALUES(?,'retry',?,?,?)",
+              t.id,
+              displayText,
+              JSON.stringify(ids),
+              Date.now(),
+            );
+            store.run('UPDATE threads SET token_usage=NULL WHERE id=?', t.id);
+            emit(u.id, {
+              method: 'thread/history/reverted',
+              params: { threadId: t.id, beforeTurnId: params.turnId },
+            });
+          }
+          const result = await codex.call(u, 'turn/start', args);
           turnChanges.bind(u, t, result.turn.id);
           turnActivity.observe(t, result.turn);
           bindAttachments(u.id, t.id, result.turn.id);
+          store.run("DELETE FROM turn_messages WHERE thread_id=? AND turn_id='retry'", t.id);
           return { ...result, turn: decorateTurn(u.id, t.id, result.turn) };
+        } catch (caughtError) {
+          const error = caughtError as AppError;
+          if (reverted) {
+            error.message = `对话已从原消息处重置，重新发送失败，内容及附件已保留为草稿：${error.message}`;
+            error.editDraft = editDraft(u.id, t.id);
+          }
+          throw error;
         } finally {
           attachmentSends.delete(key);
           turnChanges.cancel(u, t);
@@ -1808,6 +1905,11 @@ export async function createApp(options: AppOptions = {}) {
         );
         turnChanges.fork(t.id, result.thread.id);
         turnActivity.fork(t.id, result.thread.id);
+        store.run(
+          "INSERT INTO turn_messages(thread_id,turn_id,text,attachment_ids,sent_at) SELECT ?,turn_id,text,attachment_ids,sent_at FROM turn_messages WHERE thread_id=? AND turn_id!='retry'",
+          result.thread.id,
+          t.id,
+        );
       }
       return result;
     }
@@ -1964,6 +2066,7 @@ export async function createApp(options: AppOptions = {}) {
                   ...(e.code === 'UPLOAD_CONFLICT'
                     ? { code: e.code, conflicts: e.conflicts, conflictCount: e.conflictCount }
                     : {}),
+                  ...(e.editDraft ? { editDraft: e.editDraft } : {}),
                 },
               });
             }

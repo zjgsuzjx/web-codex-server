@@ -155,7 +155,8 @@ export interface TokenUsage {
 }
 
 export interface DraftAttachment extends Omit<Attachment, 'mime'> {
-  file: UploadFile;
+  file?: UploadFile;
+  retained?: boolean;
   mime?: string;
   saved?: Attachment;
 }
