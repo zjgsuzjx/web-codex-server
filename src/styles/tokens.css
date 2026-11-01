@@ -45,6 +45,7 @@
   --ui-press: color-mix(in srgb, var(--text) 10%, transparent);
   --ui-selected: color-mix(in srgb, var(--accent) 10%, transparent);
   --ui-field: color-mix(in srgb, var(--text) 3%, var(--bg));
+  --user-message-bg: #e8f2ff;
   --ui-border-hover: color-mix(in srgb, var(--text) 20%, var(--bg));
   --ui-focus: color-mix(in srgb, var(--accent) 18%, transparent);
   --ui-radius-sm: 6px;
@@ -78,6 +79,7 @@
 }
 
 :root[data-theme='dark'] {
+  --user-message-bg: color-mix(in srgb, var(--accent) 14%, var(--bg));
   color-scheme: dark;
   --bg: #11151c;
   --side: #0d1117;
@@ -150,6 +152,7 @@
   --composer-accent-ink: #102349;
 }
 :root[data-skin='custom'] {
+  --user-message-bg: color-mix(in srgb, var(--accent) 12%, var(--bg));
   --composer-bg: var(--bg);
   --composer-panel: var(--panel);
   --composer-hover: var(--hover);

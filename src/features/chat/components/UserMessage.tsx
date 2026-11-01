@@ -60,9 +60,9 @@ export default function UserMessage({
   }
   return (
     <div className={`user-message${editing ? ' is-editing' : ''}`}>
-      <div>
+      <div className="user-message-content">
         {editing ? (
-          <>
+          <div className="user-message-bubble">
             <textarea
               aria-label="编辑消息内容"
               className="user-message-editor"
@@ -110,22 +110,26 @@ export default function UserMessage({
                 {pending && <LoaderCircle size={14} className="spin" />}发送
               </button>
             </div>
-          </>
+          </div>
         ) : (
           <>
-            <div className={long && !expanded ? 'user-text is-collapsed' : 'user-text'}>{text}</div>
-            {long && (
-              <button
-                type="button"
-                className="expand-message"
-                aria-expanded={expanded}
-                onClick={() => setExpanded(!expanded)}
-              >
-                {expanded ? '收起' : '展开全部'}
-                <ChevronDown size={13} />
-              </button>
-            )}
-            <AttachmentList items={item.attachments} onPreview={onAttachment} />
+            <div className="user-message-bubble">
+              <div className={long && !expanded ? 'user-text is-collapsed' : 'user-text'}>
+                {text}
+              </div>
+              {long && (
+                <button
+                  type="button"
+                  className="expand-message"
+                  aria-expanded={expanded}
+                  onClick={() => setExpanded(!expanded)}
+                >
+                  {expanded ? '收起' : '展开全部'}
+                  <ChevronDown size={13} />
+                </button>
+              )}
+              <AttachmentList items={item.attachments} onPreview={onAttachment} />
+            </div>
             {done && (
               <div className="user-message-footer">
                 {timestamp ? (
@@ -134,8 +138,6 @@ export default function UserMessage({
                     title={new Date(timestamp).toLocaleString('zh-CN', { hour12: false })}
                   >
                     {new Date(timestamp).toLocaleString('zh-CN', {
-                      month: '2-digit',
-                      day: '2-digit',
                       hour: '2-digit',
                       minute: '2-digit',
                       hour12: false,

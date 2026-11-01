@@ -1,8 +1,8 @@
 # Editing sent messages / 编辑已发送消息
 
-After a turn ends, the user message shows its send time, Copy, and Edit. Edit opens a textarea inside the original bubble. Cancel (or Escape) discards the draft; Send (or Ctrl/Cmd+Enter) replaces that turn and every later turn and starts a new response. Existing attachments are included again. A running conversation cannot be edited. Turns containing multiple user inputs cannot currently be edited individually.
+After a turn ends, hovering a user message reveals its send time, Copy, and Edit below the pale blue bubble. Keyboard focus also reveals these controls; touch devices show them without requiring hover. The controls reserve space so revealing them does not move the conversation. Edit opens a textarea inside the original bubble. Cancel (or Escape) discards the draft; Send (or Ctrl/Cmd+Enter) replaces that turn and every later turn and starts a new response. Existing attachments are included again. A running conversation cannot be edited. Turns containing multiple user inputs cannot currently be edited individually.
 
-每轮结束后，用户消息底部显示发送时间、复制和编辑按钮。编辑在原气泡内进行；取消或 Escape 放弃修改，发送或 Ctrl/Cmd+Enter 会替换本轮及后续记录并重新回答，原附件会保留。运行中的对话不可编辑；一轮中包含多条用户输入时，暂不支持单独编辑其中一条。
+每轮结束后，鼠标悬停用户消息时，在淡蓝色气泡下方显示发送时间、复制和编辑按钮；键盘聚焦时也会显示，触屏设备无需悬停即可操作。操作行预留空间，显隐不会推动对话内容。编辑在原气泡内进行；取消或 Escape 放弃修改，发送或 Ctrl/Cmd+Enter 会替换本轮及后续记录并重新回答，原附件会保留。运行中的对话不可编辑；一轮中包含多条用户输入时，暂不支持单独编辑其中一条。
 
 This uses native Codex app-server `thread/revert`, followed by `turn/start`. The project's pinned CLI 0.162.1 supports this protocol. It changes model context and saved conversation history, **without reverting project files or commands already executed**. See the [official app-server documentation](https://learn.chatgpt.com/docs/app-server#revert-thread-history). Legacy non-paginated history may be rejected by the CLI; no transcript files are rewritten by the web server.
 

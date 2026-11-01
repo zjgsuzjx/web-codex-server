@@ -862,24 +862,51 @@
 }
 .user-message > div {
   max-width: 87%;
-  background: var(--ui-field);
-  padding: 12px 16px;
-  border-radius: 16px 16px 6px 16px;
+  min-width: 0;
+  position: relative;
+  padding-bottom: 36px;
   font-size: 14px;
   line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  border: 1px solid var(--line);
+}
+.user-message-bubble {
+  background: var(--user-message-bg);
+  padding: 12px 16px;
+  border-radius: 22px;
 }
 .user-message-footer {
+  position: absolute;
+  right: 6px;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  margin-top: 8px;
+  height: 28px;
+  width: max-content;
   white-space: normal;
   color: var(--muted);
   font: 11px var(--font-ui);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ui-duration);
+}
+.user-message-content:hover .user-message-footer,
+.user-message-content:has(:focus-visible) .user-message-footer {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .user-message-footer {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .user-message-footer {
+    transition: none;
+  }
 }
 .user-message-footer time,
 .user-time-unknown {
@@ -892,6 +919,7 @@
 .user-message.is-editing > div {
   width: 680px;
   min-width: 0;
+  padding-bottom: 0;
 }
 .user-message-editor {
   display: block;
