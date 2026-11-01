@@ -1,5 +1,4 @@
 import {
-  StickyNote,
   Code,
   Moon,
   MoreHorizontal,
@@ -17,6 +16,7 @@ import type { FocusableElement } from '../../../types/dom.ts';
 import ConnectionSignal from './ConnectionSignal.tsx';
 import NotificationCenter from '../../notifications/components/NotificationCenter.tsx';
 import type { ApiClient } from '../../../../shared/contracts/api.ts';
+import MemoIcon from '../../memo/components/MemoIcon.tsx';
 export interface ToolButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'onChange' | 'children'> {
   label: string;
@@ -343,7 +343,8 @@ export default function WorkspaceToolbar({
         />
         <ToolButton
           label="备忘录"
-          icon={StickyNote}
+          icon={MemoIcon}
+          className="workspace-tool workspace-memo-tool"
           aria-pressed={memoOpen}
           aria-expanded={memoOpen}
           aria-controls="workspace-memo"

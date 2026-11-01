@@ -1,4 +1,9 @@
 /* Small personal tools share the workspace's semantic palette and soft surfaces. */
+.workspace-tool.workspace-memo-tool[aria-pressed='true'] {
+  background: var(--ui-hover);
+  color: var(--text);
+  border-radius: 12px;
+}
 .memo-panel {
   position: fixed;
   z-index: 60;

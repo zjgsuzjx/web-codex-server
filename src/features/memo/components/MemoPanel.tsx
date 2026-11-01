@@ -7,7 +7,6 @@ import {
   Italic,
   LoaderCircle,
   RotateCcw,
-  StickyNote,
   Underline,
   X,
 } from 'lucide-react';
@@ -20,6 +19,7 @@ import {
   type MemoNode,
 } from '../../../../shared/workspace/memo.ts';
 import { readMemo, renderMemo, taskButton } from '../lib/memo-dom.ts';
+import MemoIcon from './MemoIcon.tsx';
 
 interface Props {
   api: ApiClient;
@@ -288,7 +288,7 @@ export default function MemoPanel({ api, userId, open, onClose }: Props) {
     >
       <header className="memo-heading" onPointerDown={gesture}>
         <span className="memo-emblem">
-          <StickyNote size={17} />
+          <MemoIcon size={17} />
         </span>
         <div>
           <h3>备忘录</h3>
