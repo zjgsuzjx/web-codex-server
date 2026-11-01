@@ -1,5 +1,5 @@
 import { ChevronDown, Copy, LoaderCircle, Pencil } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { userMessageText, userMessageTime } from '../../../../shared/chat/user-message.ts';
 import type { ChatItem, Turn } from '../../../../shared/contracts/protocol.ts';
 import IconButton from '../../../components/ui/IconButton.tsx';
@@ -38,6 +38,7 @@ export default function UserMessage({
   const [pending, setPending] = useState(false);
   const expectedLast = useRef('');
   const editButton = useRef<HTMLButtonElement>(null);
+  const editHintId = useId();
   const long = text.length > 700 || text.split('\n').length > 10;
   const timestamp = userMessageTime(item, turn);
   const done = turn.status !== 'inProgress';
@@ -65,6 +66,7 @@ export default function UserMessage({
           <div className="user-message-bubble">
             <textarea
               aria-label="编辑消息内容"
+              aria-describedby={editHintId}
               className="user-message-editor"
               autoFocus
               value={draft}
@@ -94,7 +96,7 @@ export default function UserMessage({
               }}
             />
             <AttachmentList items={item.attachments} onPreview={onAttachment} />
-            <p className="user-edit-hint">
+            <p className="user-edit-hint" id={editHintId}>
               发送后将从此处重新开始，替换本轮及后续对话。已修改的项目文件不会撤销。
             </p>
             <div className="user-edit-actions">
