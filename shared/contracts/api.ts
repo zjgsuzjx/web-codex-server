@@ -8,6 +8,7 @@ export interface ApiOptions extends Omit<RequestInit, 'body'> {
 export interface ApiResponseMap {
   '/session': { user: SessionUser | null; inviteRequired: boolean };
   '/settings': Settings;
+  '/memo': import('../workspace/memo.ts').MemoDocument;
 }
 
 /** Legacy/provider endpoints can be narrowed at each call using api<T>(). */

@@ -59,6 +59,7 @@ import {
 import { createResources } from './resources/resources.ts';
 import { createCleanup, measure } from './resources/storage.ts';
 import type { AppOptions, ClientSocket, ServerConfig } from './types.ts';
+import { workspaceRoutes } from './workspace/routes.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -721,6 +722,7 @@ export async function createApp(options: AppOptions = {}) {
       return res.status(403).json({ error: '安全令牌失效，请刷新页面' });
     next();
   });
+  workspaceRoutes(app, store);
   app.post('/api/logout', (req, res) => {
     store.run('DELETE FROM sessions WHERE hash=?', req.user.session_hash!);
     for (const ws of clients.get(req.user.id) || [])

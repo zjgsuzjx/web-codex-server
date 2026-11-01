@@ -93,6 +93,11 @@ Chat attachments stay separate from project files. Add documents, code, or paste
 
 In **Settings → Personal account**, upload a JPG, PNG, or WebP image (up to 5 MB, 16 million pixels, and 8192 pixels per side). Drag and zoom to crop it; the avatar is saved to your account as a 256 × 256 PNG, up to 256 KB. You can restore the default avatar at any time. Signing in or reloading shows your avatar, a personal welcome, and the workspace connection status, with reduced-motion support.
 
+### Capture ideas
+
+The **备忘录** (Memo) button beside the code editor opens an independent floating panel alongside chat and code. It stays open until explicitly closed. Drag its header to move it or its bottom-right corner to resize it. Basic tools include bold, italic, underline, three font sizes, and circular task checkboxes. Changes automatically save to the user's account with a browser draft, and notes export as Markdown. Conflicting edits from another page preserve the local draft and offer a version choice.
+
+
 ### Keep an eye on work from your phone
 
 The mobile layout keeps chat and task controls accessible, with a collapsible sidebar and light/dark themes. Usage details show available Codex quota windows, reset times, storage, and server capacity. Connection bars report the browser-to-server WebSocket latency. A tab badge indicates completed tasks while the page remains connected in the background.

@@ -1,0 +1,242 @@
+/* Small personal tools share the workspace's semantic palette and soft surfaces. */
+.memo-panel {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, var(--muted));
+  border-radius: 18px;
+  background: var(--bg);
+  box-shadow:
+    0 20px 70px color-mix(in srgb, var(--text) 13%, transparent),
+    0 3px 12px var(--shadow);
+  color: var(--text);
+}
+.memo-panel[hidden] {
+  display: none;
+}
+.memo-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 14px 14px 18px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.memo-heading:active {
+  cursor: grabbing;
+}
+.memo-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+.memo-heading > div {
+  flex: 1;
+}
+.memo-heading > div > span {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--subtle);
+}
+.memo-emblem {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--ui-selected);
+  color: var(--accent);
+}
+.memo-drag-hint {
+  color: var(--subtle);
+  opacity: 0.6;
+}
+.memo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  padding: 0;
+  color: var(--muted);
+}
+.memo-icon:hover:not(:disabled) {
+  background: var(--ui-hover);
+  color: var(--text);
+}
+.memo-icon:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.memo-format {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0 16px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.memo-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 6px;
+}
+.memo-format select {
+  width: 64px;
+  min-height: 28px;
+  padding: 3px 5px;
+  font-size: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+}
+.memo-format-clear {
+  margin-left: auto;
+}
+.memo-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px 28px;
+  font: 14px/1.85 var(--font-content);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+.memo-editor:empty::before {
+  content: attr(data-placeholder);
+  pointer-events: none;
+  color: var(--subtle);
+  font-size: 13px;
+}
+.memo-editor div,
+.memo-editor p {
+  min-height: 1.85em;
+  margin: 0;
+}
+.memo-editor ul,
+.memo-editor ol {
+  margin: 0;
+  padding-left: 22px;
+}
+.memo-editor [data-task] {
+  position: relative;
+  padding-left: 27px;
+}
+.memo-task-toggle {
+  position: absolute;
+  left: 0;
+  top: 0.36em;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid var(--subtle);
+  border-radius: 50%;
+  background: transparent;
+}
+.memo-task-toggle:hover {
+  border-color: var(--accent);
+  background: var(--ui-selected);
+}
+.memo-task-toggle[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.memo-task-toggle[aria-checked='true']::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 4px;
+  left: 3px;
+  top: 3px;
+  border-left: 1.5px solid var(--accent-ink);
+  border-bottom: 1.5px solid var(--accent-ink);
+  transform: rotate(-45deg);
+}
+.memo-editor [data-checked='true'] {
+  color: var(--subtle);
+  text-decoration: line-through;
+}
+.memo-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0 18px;
+  padding: 11px 0 13px;
+  border-top: 1px solid var(--line);
+  color: var(--subtle);
+  font-size: 10px;
+}
+.memo-footer > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.memo-footer > span:last-child {
+  font-size: 9px;
+}
+.memo-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(
+    135deg,
+    transparent 55%,
+    var(--subtle) 56%,
+    var(--subtle) 60%,
+    transparent 61%,
+    transparent 72%,
+    var(--subtle) 73%,
+    var(--subtle) 77%,
+    transparent 78%
+  );
+  background-size: 10px 10px;
+  background-position: 5px 5px;
+  background-repeat: no-repeat;
+  opacity: 0.65;
+}
+.memo-error {
+  margin: 8px 16px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, var(--bg));
+  font-size: 11px;
+  line-height: 1.6;
+}
+.memo-error button {
+  color: var(--accent);
+  padding: 3px 6px;
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .memo-heading {
+    padding: 12px;
+    gap: 7px;
+  }
+  .memo-drag-hint {
+    display: none;
+  }
+  .memo-format {
+    margin: 0 12px;
+  }
+  .memo-editor {
+    padding: 16px;
+  }
+}

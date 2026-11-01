@@ -19,6 +19,7 @@ src/
     files/                  # 文件树、编辑器、差异、上传与搜索
     resources/              # 存储与额度
     settings/               # 设置、用户与邀请管理
+    memo/                   # 私人备忘录
     terminal/               # 按需加载的终端
     workspace/              # 工具栏、侧栏与连接状态
   hooks/                    # 通用交互钩子
@@ -28,10 +29,10 @@ src/
 server/
   index.ts                  # 监听端口、关闭生命周期
   app.ts                    # 可注入依赖的应用工厂与 HTTP/WS 协调
-  appearance/ chat/ codex/ db/ files/ resources/
+  appearance/ chat/ codex/ db/ files/ resources/ workspace/
 shared/
   contracts/                # 领域、接口、协议及错误类型
-  chat/ files/ platform/ resources/ settings/
+  chat/ files/ platform/ resources/ settings/ workspace/
 test/                       # 行为回归与类型契约测试
 scripts/                    # 开发检查与运维入口
 ```

@@ -97,6 +97,7 @@ import UsageOverview from '../features/resources/components/UsageOverview.tsx';
 import SettingsPanel from '../features/settings/components/SettingsPanel.tsx';
 import SidebarUser from '../features/workspace/components/SidebarUser.tsx';
 import WorkspaceToolbar from '../features/workspace/components/WorkspaceToolbar.tsx';
+import MemoPanel from '../features/memo/components/MemoPanel.tsx';
 import WorkspaceWelcome from '../features/workspace/components/WorkspaceWelcome.tsx';
 import useConversationScroll from '../hooks/useConversationScroll.ts';
 import { LiveSocket } from '../lib/socket.ts';
@@ -153,6 +154,21 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
     [fileBusy, setFileBusy] = useState(false);
   const [review, setReview] = useState<ProtocolRecord | null | undefined>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [memoOpen, setMemoOpen] = useState(() => {
+      try {
+        return localStorage.getItem(`workspace:memo:${user.id}:open`) === 'true';
+      } catch {
+        return false;
+      }
+    }),
+    [memoMounted, setMemoMounted] = useState(memoOpen);
+  useEffect(() => {
+    try {
+      localStorage.setItem(`workspace:memo:${user.id}:open`, String(memoOpen));
+    } catch {
+      /* Opening the panel does not require browser storage. */
+    }
+  }, [memoOpen, user.id]);
   const [quickOpenFocus, setQuickOpenFocus] = useState<string | null>(null);
   const [editorFullscreen, setEditorFullscreen] = useState(false);
   const editorFullscreenToggle = useRef<HTMLButtonElement>(undefined!);
@@ -1660,6 +1676,11 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
               <span className="breadcrumb">{thread?.title || '新对话'}</span>
             </div>
             <WorkspaceToolbar
+              memoOpen={memoOpen}
+              onMemo={() => {
+                setMemoMounted(true);
+                setMemoOpen(true);
+              }}
               theme={theme}
               customSkin={!!appearance.current}
               status={status}
@@ -2336,6 +2357,9 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
         )}
       </div>
       {dialogs.element}
+      {memoMounted && (
+        <MemoPanel api={api} userId={user.id} open={memoOpen} onClose={() => setMemoOpen(false)} />
+      )}
       {welcomeVisible && (
         <WorkspaceWelcome
           user={user}

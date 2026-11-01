@@ -1,4 +1,5 @@
 import {
+  StickyNote,
   CircleAlert,
   Code,
   Moon,
@@ -37,6 +38,8 @@ export interface MoreToolsProps {
   hasProject: boolean;
 }
 export interface WorkspaceToolbarProps {
+  memoOpen: boolean;
+  onMemo: () => void;
   theme: Theme;
   customSkin: boolean;
   status: import('../../../../shared/contracts/domain.ts').ConnectionStatus;
@@ -275,6 +278,8 @@ function MoreTools({
 }
 
 export default function WorkspaceToolbar({
+  memoOpen,
+  onMemo,
   theme,
   customSkin,
   status,
@@ -332,6 +337,14 @@ export default function WorkspaceToolbar({
           aria-expanded={editor}
           aria-controls="workspace-editor"
           onClick={onEditor}
+        />
+        <ToolButton
+          label="备忘录"
+          icon={StickyNote}
+          aria-pressed={memoOpen}
+          aria-expanded={memoOpen}
+          aria-controls="workspace-memo"
+          onClick={onMemo}
         />
       </div>
       <span className="workspace-tool-separator" aria-hidden="true" />

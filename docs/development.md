@@ -10,14 +10,14 @@ Application modules use TypeScript/TSX while retaining React, Vite, Node 24, Exp
 | --- | --- |
 | `src/main.tsx`, `src/app/` | React entry, session and workspace coordination |
 | `src/components/ui/`, `src/components/brand/` | Reusable UI primitives and branding |
-| `src/features/<feature>/components/` | Auth, appearance, chat, files, resources, settings, terminal and workspace UI |
+| `src/features/<feature>/components/` | Auth, appearance, chat, files, memos, resources, settings, terminal and workspace UI |
 | `src/features/<feature>/lib/` | Feature-specific pure logic |
 | `src/hooks/`, `src/lib/`, `src/types/` | Shared browser hooks, transports and environment types |
 | `src/styles/` | Global styles and design variables |
 | `server/index.ts`, `server/app.ts` | Process lifecycle and injectable HTTP/WS application factory |
-| `server/{appearance,chat,codex,db,files,resources}/` | Gateway domain adapters |
+| `server/{appearance,chat,codex,db,files,resources,workspace}/` | Gateway domain adapters |
 | `shared/contracts/` | Domain, API, protocol and error types |
-| `shared/{chat,files,platform,resources,settings}/` | Browser/server shared logic |
+| `shared/{chat,files,platform,resources,settings,workspace}/` | Browser/server shared logic |
 | `test/`, `scripts/` | Behavioral/type regressions and development/operations tooling |
 
 Shared modules must not import browser or gateway application layers. The gateway must not import browser modules. UI primitives must not import business features. `check:architecture` enforces these boundaries, explicit relative module paths and TS/TSX application sources.
