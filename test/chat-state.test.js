@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyLifecycle, applyDeltas, mergeTurns } from '../src/deltas.js';
-import { contextUsage } from '../shared/context.js';
+import { applyLifecycle, applyDeltas, mergeTurns } from '../src/features/chat/lib/deltas.ts';
+import { contextUsage } from '../shared/chat/context.ts';
 
 test('partial completion and empty item snapshots keep user messages and streamed reasoning',()=>{
   let turns=[{id:'turn',status:'inProgress',items:[{id:'user',type:'userMessage',content:[{type:'text',text:'hello'}]}]}];

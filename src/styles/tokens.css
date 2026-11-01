@@ -1,6 +1,8 @@
 /* Shared foundations. Custom wallpaper themes replace the semantic colors below. */
 :root {
-  --font-ui: 'Segoe UI', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --font-ui:
+    'Segoe UI', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
   --font-content: 'OpenAI Sans', var(--font-ui);
   --font-code: Consolas, 'SFMono-Regular', 'SF Mono', Menlo, 'Liberation Mono', monospace;
   font-family: var(--font-ui);
@@ -24,18 +26,18 @@
   --success: #16803d;
   --warning: #94620b;
   --editor: var(--bg);
-  --editor-foreground: color-mix(in srgb,var(--text) 85%,var(--muted));
-  --editor-keyword: color-mix(in srgb,var(--accent) 85%,var(--text));
-  --editor-type: color-mix(in srgb,var(--success) 65%,var(--accent));
-  --editor-string: color-mix(in srgb,var(--warning) 80%,var(--danger));
-  --editor-number: color-mix(in srgb,var(--warning) 55%,var(--danger));
+  --editor-foreground: color-mix(in srgb, var(--text) 85%, var(--muted));
+  --editor-keyword: color-mix(in srgb, var(--accent) 85%, var(--text));
+  --editor-type: color-mix(in srgb, var(--success) 65%, var(--accent));
+  --editor-string: color-mix(in srgb, var(--warning) 80%, var(--danger));
+  --editor-number: color-mix(in srgb, var(--warning) 55%, var(--danger));
   --editor-comment: var(--subtle);
-  --editor-line-number: color-mix(in srgb,var(--muted) 60%,var(--editor));
-  --editor-line-number-active: color-mix(in srgb,var(--muted) 65%,var(--text));
-  --editor-current-line: color-mix(in srgb,var(--text) 4%,var(--editor));
-  --editor-indent: color-mix(in srgb,var(--line) 75%,var(--editor));
-  --editor-indent-active: color-mix(in srgb,var(--text) 18%,var(--editor));
-  --editor-selection: color-mix(in srgb,var(--accent) 20%,transparent);
+  --editor-line-number: color-mix(in srgb, var(--muted) 60%, var(--editor));
+  --editor-line-number-active: color-mix(in srgb, var(--muted) 65%, var(--text));
+  --editor-current-line: color-mix(in srgb, var(--text) 4%, var(--editor));
+  --editor-indent: color-mix(in srgb, var(--line) 75%, var(--editor));
+  --editor-indent-active: color-mix(in srgb, var(--text) 18%, var(--editor));
+  --editor-selection: color-mix(in srgb, var(--accent) 20%, transparent);
   --hover: color-mix(in srgb, var(--text) 6%, transparent);
   --shadow: #18223014;
 
@@ -61,8 +63,8 @@
   --ui-shadow-sm: 0 1px 3px var(--shadow);
   --ui-shadow-popover: 0 8px 24px var(--shadow), 0 1px 3px var(--shadow);
   --ui-shadow-dialog: 0 24px 80px color-mix(in srgb, var(--text) 16%, transparent);
-  --ui-duration: .15s;
-  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+  --ui-duration: 0.15s;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --scroll-thumb: color-mix(in srgb, var(--muted) 30%, transparent);
   --scroll-hover: color-mix(in srgb, var(--muted) 55%, transparent);
   --scroll-active: var(--accent);
@@ -75,7 +77,7 @@
   --permission-full-line: color-mix(in srgb, var(--warning) 26%, var(--bg));
 }
 
-:root[data-theme=dark] {
+:root[data-theme='dark'] {
   color-scheme: dark;
   --bg: #11151c;
   --side: #0d1117;
@@ -136,7 +138,7 @@
   --composer-server-border: #fde68a;
   --composer-server-bg: #fffbeb;
 }
-:root[data-theme=dark] {
+:root[data-theme='dark'] {
   --composer-bg: #101b30;
   --composer-panel: #14223a;
   --composer-hover: #203556;
@@ -147,7 +149,7 @@
   --composer-accent: #86afff;
   --composer-accent-ink: #102349;
 }
-:root[data-skin=custom] {
+:root[data-skin='custom'] {
   --composer-bg: var(--bg);
   --composer-panel: var(--panel);
   --composer-hover: var(--hover);
@@ -157,33 +159,33 @@
   --composer-line: var(--line);
   --composer-accent: var(--accent);
   --composer-accent-ink: var(--accent-ink);
-  --composer-shadow: color-mix(in srgb,var(--text) 3.13%,transparent);
-  --composer-popover-shadow: color-mix(in srgb,var(--accent) 12.54%,transparent);
-  --composer-permission-shadow: color-mix(in srgb,var(--accent) 14.11%,transparent);
-  --composer-soft-shadow: color-mix(in srgb,var(--accent) 3.13%,transparent);
-  --composer-hover-shadow: color-mix(in srgb,var(--accent) 4.70%,transparent);
-  --composer-drag-ring: color-mix(in srgb,var(--accent) 14.11%,transparent);
+  --composer-shadow: color-mix(in srgb, var(--text) 3.13%, transparent);
+  --composer-popover-shadow: color-mix(in srgb, var(--accent) 12.54%, transparent);
+  --composer-permission-shadow: color-mix(in srgb, var(--accent) 14.11%, transparent);
+  --composer-soft-shadow: color-mix(in srgb, var(--accent) 3.13%, transparent);
+  --composer-hover-shadow: color-mix(in srgb, var(--accent) 4.7%, transparent);
+  --composer-drag-ring: color-mix(in srgb, var(--accent) 14.11%, transparent);
   --composer-glow-high: var(--accent);
-  --composer-shadow-high: color-mix(in srgb,var(--accent) 7.05%,transparent);
+  --composer-shadow-high: color-mix(in srgb, var(--accent) 7.05%, transparent);
   --composer-focus-border: var(--accent);
   --composer-glow-xhigh: var(--accent);
-  --composer-shadow-xhigh: color-mix(in srgb,var(--accent) 10.98%,transparent);
+  --composer-shadow-xhigh: color-mix(in srgb, var(--accent) 10.98%, transparent);
   --composer-glow-max: var(--accent);
-  --composer-shadow-max: color-mix(in srgb,var(--accent) 14.50%,transparent);
+  --composer-shadow-max: color-mix(in srgb, var(--accent) 14.5%, transparent);
   --composer-server-text: var(--warning);
   --composer-storage-warning-text: var(--warning);
   --composer-context-warning: var(--warning);
   --composer-storage-critical-text: var(--danger);
-  --composer-storage-warning-border: color-mix(in srgb,var(--warning) 26.66%,transparent);
-  --composer-storage-critical-bg: color-mix(in srgb,var(--danger) 7.05%,transparent);
-  --composer-storage-critical-dark-bg: color-mix(in srgb,var(--danger) 9.41%,transparent);
-  --composer-storage-critical-border: color-mix(in srgb,var(--danger) 26.66%,transparent);
-  --composer-storage-warning-dark-border: color-mix(in srgb,var(--warning) 31.37%,transparent);
-  --composer-storage-critical-dark-border: color-mix(in srgb,var(--danger) 31.37%,transparent);
-  --composer-storage-warning-bg: color-mix(in srgb,var(--warning) 7.45%,transparent);
-  --composer-storage-warning-dark-bg: color-mix(in srgb,var(--warning) 9.41%,transparent);
+  --composer-storage-warning-border: color-mix(in srgb, var(--warning) 26.66%, transparent);
+  --composer-storage-critical-bg: color-mix(in srgb, var(--danger) 7.05%, transparent);
+  --composer-storage-critical-dark-bg: color-mix(in srgb, var(--danger) 9.41%, transparent);
+  --composer-storage-critical-border: color-mix(in srgb, var(--danger) 26.66%, transparent);
+  --composer-storage-warning-dark-border: color-mix(in srgb, var(--warning) 31.37%, transparent);
+  --composer-storage-critical-dark-border: color-mix(in srgb, var(--danger) 31.37%, transparent);
+  --composer-storage-warning-bg: color-mix(in srgb, var(--warning) 7.45%, transparent);
+  --composer-storage-warning-dark-bg: color-mix(in srgb, var(--warning) 9.41%, transparent);
   --composer-storage-warning-dark-text: var(--warning);
   --composer-storage-critical-dark-text: var(--danger);
-  --composer-server-border: color-mix(in srgb,var(--warning) 26%,var(--line));
-  --composer-server-bg: color-mix(in srgb,var(--warning) 10%,var(--bg));
+  --composer-server-border: color-mix(in srgb, var(--warning) 26%, var(--line));
+  --composer-server-bg: color-mix(in srgb, var(--warning) 10%, var(--bg));
 }

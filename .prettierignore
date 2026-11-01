@@ -1,0 +1,9 @@
+node_modules
+dist
+data
+.deploy
+.deploy-state
+.deploy-releases
+MEMORY.md
+AGENTS.md
+package-lock.json

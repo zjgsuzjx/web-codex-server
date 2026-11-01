@@ -223,7 +223,7 @@ else exec /usr/bin/awk "$@"; fi
       const tested = calls.findIndex(call => call.startsWith('run --rm --network none'));
       const promoted = calls.findIndex(call => call.startsWith('tag starvalley-codex-web:'));
       assert.ok(tested >= 0 && promoted > tested, result.calls);
-      assert.ok(calls[tested].endsWith('npm run check'),result.calls);
+      assert.ok(calls[tested].endsWith('npm run check:runtime'),result.calls);
       assert.ok(!/npm test|node --test/.test(result.calls),'Production deployment must not run the test suite');
       const built = calls.findLastIndex(call => call.startsWith('buildx build '));
       const pruned = calls.indexOf('buildx prune --builder sv-codex-bounded-20261016 --all --force');

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createCompletionNotice } from '../src/completion-notice.js';
-import { isFileLineLink, websiteInfo } from '../src/link-info.js';
+import { createCompletionNotice } from '../src/features/chat/lib/completion-notice.ts';
+import { isFileLineLink, websiteInfo } from '../src/features/chat/lib/link-info.ts';
 
 function fakePage() {
   const events = new EventTarget(), view = new EventTarget();

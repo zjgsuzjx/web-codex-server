@@ -4,11 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch server/index.js",
-    "start": "node server/index.js",
+    "dev": "node --watch server/index.ts",
+    "start": "node server/index.ts",
     "build": "vite build",
     "test": "node --test test/*.test.js",
-    "check": "node --check server/index.js && node --check server/codex.js && node --check server/files.js && node --check server/attachments.js && node --check server/archives.js && node --check server/chat-media.js && node --check server/turn-changes.js && node --check server/change-files.js && node --check server/downloads.js && node --check server/pending-requests.js && node --check server/storage.js && node --check server/file-images.js && node --check server/avatar.js && node --check server/skins.js && node --check shared/skins.js"
+    "check": "npm run typecheck && npm run check:architecture && npm run check:runtime",
+    "typecheck": "tsc --noEmit",
+    "check:runtime": "node scripts/check-runtime.mjs",
+    "format": "prettier --write src server shared vite.config.ts",
+    "format:check": "prettier --check src server shared vite.config.ts",
+    "validate": "npm run format:check && npm run check && npm run test:types && npm test && npm run build",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "test:types": "tsc --project tsconfig.type-tests.json",
+    "dev:web": "vite"
   },
   "engines": {
     "node": ">=24"
@@ -31,15 +39,26 @@
   },
   "devDependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "@types/archiver": "6.0.4",
+    "@types/dockerode": "3.3.47",
+    "@types/express": "5.0.5",
+    "@types/node": "24.19.2",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "@types/tar-stream": "3.1.4",
+    "@types/ws": "8.18.1",
+    "@types/yauzl": "2.10.3",
     "@vitejs/plugin-react": "^5.0.3",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "lucide-react": "^0.468.0",
     "monaco-editor": "^0.52.2",
+    "prettier": "3.6.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "typescript": "5.9.3",
     "vite": "^7.1.7"
   }
 }

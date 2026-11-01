@@ -30,27 +30,27 @@
 }
 .appearance-mini-sidebar {
   width: 21%;
-  background: color-mix(in srgb,var(--side) 88%,transparent);
+  background: color-mix(in srgb, var(--side) 88%, transparent);
   padding: 19px 12px;
   display: flex;
   flex-direction: column;
   gap: 13px;
   border-right: 1px solid var(--line);
 }
-.appearance-mini-sidebar>span {
+.appearance-mini-sidebar > span {
   width: 21px;
   height: 21px;
   background: var(--accent);
   border-radius: var(--ui-radius-sm);
   margin-bottom: 12px;
 }
-.appearance-mini-sidebar>i {
+.appearance-mini-sidebar > i {
   width: 85%;
   height: 5px;
   border-radius: 3px;
   background: var(--line);
 }
-.appearance-mini-sidebar>b {
+.appearance-mini-sidebar > b {
   margin-top: auto;
   width: 15px;
   height: 15px;
@@ -71,7 +71,7 @@
   align-items: center;
   gap: 5px;
 }
-.appearance-mini-bar>i {
+.appearance-mini-bar > i {
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -83,11 +83,11 @@
   align-items: center;
   gap: 9px;
   padding: 14px;
-  background: color-mix(in srgb,var(--panel) 94%,transparent);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   border-radius: var(--ui-radius-lg);
   border: 1px solid var(--line);
 }
-.appearance-mini-message>svg {
+.appearance-mini-message > svg {
   color: var(--accent);
   flex-shrink: 0;
 }
@@ -163,7 +163,7 @@
   object-fit: cover;
   border: 1px solid var(--line);
 }
-.appearance-draft-image>div {
+.appearance-draft-image > div {
   min-width: 0;
 }
 .appearance-draft-image strong {
@@ -186,7 +186,7 @@
   color: var(--subtle);
   margin-left: 3px;
 }
-.appearance-panel input:not([type=range]) {
+.appearance-panel input:not([type='range']) {
   font-size: 11px;
   padding: 10px;
 }
@@ -199,13 +199,13 @@
   gap: 5px;
   margin: 17px 0;
 }
-.appearance-swatches>span:not(:last-child) {
+.appearance-swatches > span:not(:last-child) {
   width: 23px;
   height: 23px;
   border: 1px solid var(--line);
   border-radius: 50%;
 }
-.appearance-swatches>span:last-child {
+.appearance-swatches > span:last-child {
   font-size: 10px;
   color: var(--muted);
   margin-left: 5px;
@@ -215,7 +215,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
-.appearance-controls input[type=range] {
+.appearance-controls input[type='range'] {
   width: 100%;
   accent-color: var(--accent);
   padding: 0;
@@ -229,7 +229,7 @@
   gap: 8px;
   justify-content: flex-end;
 }
-.appearance-actions>button {
+.appearance-actions > button {
   margin-top: 12px;
   font-size: 11px;
 }
@@ -294,16 +294,16 @@
   font-size: 12px !important;
   margin: 0 !important;
 }
-.appearance-section-title>span {
+.appearance-section-title > span {
   font-size: 10px;
   color: var(--muted);
 }
 .appearance-presets {
   display: grid;
-  grid-template-columns: repeat(3,minmax(0,1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
-.appearance-preset>button:first-child {
+.appearance-preset > button:first-child {
   display: block;
   width: 100%;
   text-align: left;
@@ -313,7 +313,8 @@
 .appearance-default {
   padding-bottom: 12px;
 }
-.appearance-default>svg,.appearance-preset>svg {
+.appearance-default > svg,
+.appearance-preset > svg {
   position: absolute;
   right: 7px;
   top: 7px;
@@ -341,49 +342,58 @@
   margin: 16px 0 0;
 }
 /* A fixed wallpaper layer follows the viewport; image proportions never stretch. */
-:root[data-skin=custom] body {
+:root[data-skin='custom'] body {
   background: var(--bg);
 }
-:root[data-skin=custom] .workspace {
+:root[data-skin='custom'] .workspace {
   background: transparent;
   isolation: isolate;
 }
-:root[data-skin=custom] .workspace::before {
+:root[data-skin='custom'] .workspace::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background-color: var(--bg);
-  background-image: linear-gradient(color-mix(in srgb,var(--bg) calc(var(--wallpaper-shade)*100%),transparent),color-mix(in srgb,var(--bg) calc(var(--wallpaper-shade)*100%),transparent)),var(--wallpaper);
-  background-size: 100% 100%,var(--wallpaper-fit);
-  background-position: center,var(--wallpaper-position);
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--bg) calc(var(--wallpaper-shade) * 100%), transparent),
+      color-mix(in srgb, var(--bg) calc(var(--wallpaper-shade) * 100%), transparent)
+    ),
+    var(--wallpaper);
+  background-size:
+    100% 100%,
+    var(--wallpaper-fit);
+  background-position: center, var(--wallpaper-position);
   background-repeat: no-repeat;
 }
-:root[data-skin=custom] .main,:root[data-skin=custom] .work-body,:root[data-skin=custom] .chat-panel {
+:root[data-skin='custom'] .main,
+:root[data-skin='custom'] .work-body,
+:root[data-skin='custom'] .chat-panel {
   background: transparent;
 }
-:root[data-skin=custom] .sidebar {
-  background: color-mix(in srgb,var(--side) 94%,transparent);
+:root[data-skin='custom'] .sidebar {
+  background: color-mix(in srgb, var(--side) 94%, transparent);
   backdrop-filter: blur(18px);
 }
-:root[data-skin=custom] .topbar {
-  background: color-mix(in srgb,var(--bg) 93%,transparent);
+:root[data-skin='custom'] .topbar {
+  background: color-mix(in srgb, var(--bg) 93%, transparent);
   backdrop-filter: blur(18px);
 }
-:root[data-skin=custom] .message-avatar {
+:root[data-skin='custom'] .message-avatar {
   background: var(--panel);
   border-radius: 50%;
   align-self: flex-start;
 }
-:root[data-skin=custom] .composer-area {
+:root[data-skin='custom'] .composer-area {
   background: transparent;
 }
-:root[data-skin=custom] .suggestion-grid>button {
+:root[data-skin='custom'] .suggestion-grid > button {
   background: var(--bg);
 }
 /* Nested modal keeps keyboard focus in the preview bar while revealing the page. */
-body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal)) {
+body:has(.appearance-full-modal) > .modal-backdrop:not(:has(.appearance-full-modal)) {
   visibility: hidden;
 }
 .modal-backdrop:has(.appearance-full-modal) {
@@ -392,9 +402,9 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
 }
 .modal.appearance-full-modal {
   position: fixed;
-  bottom: max(18px,env(safe-area-inset-bottom));
+  bottom: max(18px, env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: minmax(0,1fr) auto 28px;
+  grid-template-columns: minmax(0, 1fr) auto 28px;
   align-items: center;
   gap: 12px;
   width: 720px;
@@ -404,7 +414,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   box-shadow: 0 12px 50px var(--shadow);
 }
 /* Scope these rules above the shared modal styles, regardless of import order. */
-.modal.appearance-full-modal>header {
+.modal.appearance-full-modal > header {
   display: contents;
 }
 .modal.appearance-full-modal .modal-heading {
@@ -425,18 +435,18 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   background: var(--hover);
   color: var(--accent);
 }
-.modal.appearance-full-modal>header h2 {
+.modal.appearance-full-modal > header h2 {
   font-size: 13px;
   line-height: 20px;
   margin: 0;
 }
-.modal.appearance-full-modal>header p {
+.modal.appearance-full-modal > header p {
   font-size: 10px;
   line-height: 16px;
   margin: 3px 0 0;
   color: var(--muted);
 }
-.modal.appearance-full-modal>header>.icon-button {
+.modal.appearance-full-modal > header > .icon-button {
   grid-column: 3;
   grid-row: 1;
   width: 28px;
@@ -453,7 +463,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   gap: 8px;
   padding: 0;
 }
-.modal.appearance-full-modal .appearance-full-actions>button {
+.modal.appearance-full-modal .appearance-full-actions > button {
   flex: 0 0 auto;
   min-height: 36px;
   height: 36px;
@@ -463,7 +473,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   line-height: 18px;
   white-space: nowrap;
 }
-.modal.appearance-full-modal>.form-error {
+.modal.appearance-full-modal > .form-error {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 11px;
@@ -481,7 +491,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
 }
 .appearance-heading h3 {
   font-size: 18px;
-  letter-spacing: -.4px;
+  letter-spacing: -0.4px;
   margin: 0 0 7px !important;
 }
 .appearance-heading p {
@@ -499,7 +509,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   border-radius: var(--ui-radius-lg);
   margin-bottom: 18px;
 }
-.appearance-devices>button {
+.appearance-devices > button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -511,7 +521,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   color: var(--muted);
   min-height: 40px;
 }
-.appearance-devices>button[aria-pressed=true] {
+.appearance-devices > button[aria-pressed='true'] {
   background: var(--bg);
   color: var(--text);
   box-shadow: var(--ui-shadow-sm);
@@ -563,7 +573,8 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   background: var(--ui-selected);
   color: var(--accent);
 }
-.appearance-default,.appearance-preset {
+.appearance-default,
+.appearance-preset {
   position: relative;
   min-width: 0;
   border: 1px solid var(--line);
@@ -572,7 +583,8 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   background: var(--bg);
   text-align: left;
 }
-.appearance-default.selected,.appearance-preset.selected {
+.appearance-default.selected,
+.appearance-preset.selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--ui-focus);
 }
@@ -591,35 +603,37 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   align-items: center;
   margin-bottom: 24px;
 }
-:root[data-skin=custom] .message-body,:root[data-skin=custom] .thought-group,:root[data-skin=custom] .welcome {
+:root[data-skin='custom'] .message-body,
+:root[data-skin='custom'] .thought-group,
+:root[data-skin='custom'] .welcome {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-xl);
   padding: 20px;
 }
-@media (max-width:640px) {
+@media (max-width: 640px) {
   .modal.appearance-full-modal {
-    bottom: max(12px,env(safe-area-inset-bottom));
-    grid-template-columns: minmax(0,1fr) 28px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr) 28px;
     max-width: calc(100% - 24px);
     padding: 14px;
     gap: 14px;
   }
-  .modal.appearance-full-modal>header>.icon-button {
+  .modal.appearance-full-modal > header > .icon-button {
     grid-column: 2;
   }
   .modal.appearance-full-modal .appearance-full-actions {
     grid-column: 1 / -1;
     grid-row: 2;
   }
-  .modal.appearance-full-modal .appearance-full-actions>button {
+  .modal.appearance-full-modal .appearance-full-actions > button {
     flex: 1;
     min-height: 44px;
     height: 44px;
     font-size: 12px;
   }
 }
-@media (max-width:600px) {
+@media (max-width: 600px) {
   .appearance-heading {
     align-items: flex-start;
     gap: 10px;
@@ -627,7 +641,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   .appearance-heading h3 {
     font-size: 16px !important;
   }
-  .appearance-devices>button {
+  .appearance-devices > button {
     column-gap: 5px;
     row-gap: 4px;
   }
@@ -682,21 +696,21 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
   .appearance-actions {
     flex-wrap: wrap;
   }
-  .appearance-actions>button {
+  .appearance-actions > button {
     flex: 1;
     justify-content: center;
     white-space: nowrap;
   }
   .appearance-presets {
-    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .appearance-mini-input {
     font-size: 8px;
   }
-  :root[data-skin=custom] .message-body {
+  :root[data-skin='custom'] .message-body {
     padding: 13px;
   }
-  :root[data-skin=custom] .welcome {
+  :root[data-skin='custom'] .welcome {
     padding: 22px 15px;
     width: calc(100% - 24px);
   }
@@ -714,7 +728,7 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
-  .appearance-settings .settings-nav>button {
+  .appearance-settings .settings-nav > button {
     width: auto;
     white-space: nowrap;
     flex-shrink: 0;
@@ -726,6 +740,6 @@ body:has(.appearance-full-modal)>.modal-backdrop:not(:has(.appearance-full-modal
     padding: 20px 16px;
   }
   .appearance-settings .appearance-presets {
-    grid-template-columns: repeat(3,minmax(0,1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

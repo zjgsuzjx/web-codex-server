@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeHistoryPage, historyPause } from '../src/conversation-history.js';
-import { CodexManager } from '../server/codex.js';
+import { mergeHistoryPage, historyPause } from '../src/features/chat/lib/conversation-history.ts';
+import { CodexManager } from '../server/codex/codex.ts';
 
 const turn = (id, text = id, status = 'completed') => ({ id, status, items: [{ id: `${id}-answer`, type: 'agentMessage', text }] });
 

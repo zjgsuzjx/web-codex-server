@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createStore } from '../server/store.js';
-import { createTurnActivity } from '../server/turn-activity.js';
-import { currentThought } from '../shared/thinking.js';
-import { reasoningText } from '../shared/chat-content.js';
-import { elapsedTime, formatDuration, mergeActivity } from '../shared/turn-activity.js';
-import { applyDeltas, applyLifecycle, mergeTurns } from '../src/deltas.js';
+import { createStore } from '../server/db/store.ts';
+import { createTurnActivity } from '../server/chat/turn-activity.ts';
+import { currentThought } from '../shared/chat/thinking.ts';
+import { reasoningText } from '../shared/chat/chat-content.ts';
+import { elapsedTime, formatDuration, mergeActivity } from '../shared/chat/turn-activity.ts';
+import { applyDeltas, applyLifecycle, mergeTurns } from '../src/features/chat/lib/deltas.ts';
 
 test('thinking status avoids duplicating process text while keeping active tool labels', () => {
   let turns = [{ id: 'turn', status: 'inProgress', items: [] }];

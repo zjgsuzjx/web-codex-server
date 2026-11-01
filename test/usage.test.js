@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { remainingPercent, quotaBuckets, mergeQuota, windowLabel } from '../shared/usage.js';
-import { createDeltaBuffer, applyDeltas } from '../src/deltas.js';
+import { remainingPercent, quotaBuckets, mergeQuota, windowLabel } from '../shared/resources/usage.ts';
+import { createDeltaBuffer, applyDeltas } from '../src/features/chat/lib/deltas.ts';
 
 test('remaining quota preserves unknown values and clamps returned percentages', () => {
   assert.equal(remainingPercent({ usedPercent: 25 }), 75);

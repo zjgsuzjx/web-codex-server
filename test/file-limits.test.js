@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { unzipSync } from 'fflate';
-import { walk } from '../server/files.js';
-import { downloadSelected } from '../server/downloads.js';
+import { walk } from '../server/files/files.ts';
+import { downloadSelected } from '../server/files/downloads.ts';
 
 test('tree and grouped ZIP downloads respect finite and unlimited entry budgets',async()=>{
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'sv-file-limits-'));

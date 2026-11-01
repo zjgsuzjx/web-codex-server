@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { codeLanguage, MAX_HIGHLIGHT_LENGTH } from '../src/code-language.js';
-import { highlightCode } from '../src/code-highlight.js';
+import { codeLanguage, MAX_HIGHLIGHT_LENGTH } from '../src/features/chat/lib/code-language.ts';
+import { highlightCode } from '../src/features/chat/lib/code-highlight.ts';
 
 const text = node => node.type === 'text' ? node.value : (node.children || []).map(text).join('');
 const classes = node => [...(node.properties?.className || []), ...(node.children || []).flatMap(classes)];

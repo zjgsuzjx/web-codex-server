@@ -6,10 +6,10 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createTurnChanges, projectSnapshot, compareSnapshots } from '../server/turn-changes.js';
-import { changesSummary, historicalChanges, hunkRows, projectFilePath, unifiedChanges } from '../shared/file-changes.js';
-import { createStore } from '../server/store.js';
-import { applyLifecycle, mergeTurns } from '../src/deltas.js';
+import { createTurnChanges, projectSnapshot, compareSnapshots } from '../server/chat/turn-changes.ts';
+import { changesSummary, historicalChanges, hunkRows, projectFilePath, unifiedChanges } from '../shared/files/file-changes.ts';
+import { createStore } from '../server/db/store.ts';
+import { applyLifecycle, mergeTurns } from '../src/features/chat/lib/deltas.ts';
 
 const execute = promisify(execFile);
 async function git(root, ...args) {

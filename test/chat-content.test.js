@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isProcessItem, reasoningText, mediaUrl, toolContent, contentImage } from '../shared/chat-content.js';
-import { applyDeltas, applyLifecycle, createDeltaBuffer } from '../src/deltas.js';
-import { imageResult, mediaLocation } from '../server/chat-media.js';
+import { isProcessItem, reasoningText, mediaUrl, toolContent, contentImage } from '../shared/chat/chat-content.ts';
+import { applyDeltas, applyLifecycle, createDeltaBuffer } from '../src/features/chat/lib/deltas.ts';
+import { imageResult, mediaLocation } from '../server/chat/chat-media.ts';
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aNioAAAAASUVORK5CYII=';
 test('generated images and tool images remain visible after completion, including failures', () => {

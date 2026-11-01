@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { connectionIndicator } from '../src/connection-state.js';
+import { connectionIndicator } from '../src/features/workspace/lib/connection-state.ts';
 
 test('transport states override stale latency and remain distinct from one another', () => {
   for (const state of ['connecting', 'reconnecting', 'disconnected', 'expired']) {

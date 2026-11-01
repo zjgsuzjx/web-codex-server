@@ -1,15 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PendingRequests } from '../server/pending-requests.js';
-import { answerResult, hasAnswer, keepRequestOnTurn } from '../shared/user-input.js';
-import { AsyncUserInputs } from '../server/async-user-input.js';
-import { CodexManager } from '../server/codex.js';
+import { PendingRequests } from '../server/chat/pending-requests.ts';
+import { answerResult, hasAnswer, keepRequestOnTurn } from '../shared/chat/user-input.ts';
+import { AsyncUserInputs } from '../server/chat/async-user-input.ts';
+import { CodexManager } from '../server/codex/codex.ts';
 import { Duplex } from 'node:stream';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
-import { createApp } from '../server/index.js';
+import { createApp } from '../server/app.ts';
 
 const request = (id = 42, ms = null, threadId = 'thread') => ({ id, method: 'item/tool/requestUserInput', params: { threadId, turnId: 'turn', autoResolutionMs: ms, questions: [{ id: 'choice', options: [{ label: 'A' }, { label: 'B' }], isOther: true }, { id: 'text', options: null, isSecret: true }] } });
 const asyncQuestion = (threadId = 'thread', turnId = 'turn', id = 'async-call') => ({ method: 'item/completed', params: { threadId, turnId, item: { id, type: 'agentMessage', delivery: 'async', text: 'Rendered question text', questions: [{ title: 'Which environment reproduces this?', options: ['Editor', 'Build'] }, { title: 'Additional details?' }] } } });

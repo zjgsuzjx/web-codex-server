@@ -1,6 +1,6 @@
 /* requests: shared semantic colors and control geometry live in tokens.css. */
 .approval {
-  border: 1px solid color-mix(in srgb,var(--warning) 33.3%,transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 33.3%, transparent);
   border-radius: var(--ui-radius);
   background: var(--panel);
   padding: 14px;
@@ -36,7 +36,9 @@
   font-size: 11px;
   line-height: 1.7;
 }
-.approval input,.approval select,.approval textarea {
+.approval input,
+.approval select,
+.approval textarea {
   font-size: 11px;
   width: 100%;
 }
@@ -46,15 +48,16 @@
   justify-content: flex-end;
   margin-top: 10px;
 }
-.approval-actions>button {
+.approval-actions > button {
   font-size: 11px;
   padding: 7px 13px;
   border-radius: var(--ui-radius-sm);
 }
-.approval-actions>button:not(.primary) {
+.approval-actions > button:not(.primary) {
   background: var(--hover);
 }
-.approval .select-trigger,.approval .select-option {
+.approval .select-trigger,
+.approval .select-option {
   font-size: 11px;
 }
 .request-stack {
@@ -66,7 +69,9 @@
 .request-stack:empty {
   display: none;
 }
-.user-input-request>header,.user-input-request>.question-steps,.user-input-request>footer {
+.user-input-request > header,
+.user-input-request > .question-steps,
+.user-input-request > footer {
   flex-shrink: 0;
 }
 .question-content {
@@ -74,7 +79,7 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
-.user-input-request>header {
+.user-input-request > header {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -91,17 +96,17 @@
   border-radius: var(--ui-radius);
   flex-shrink: 0;
 }
-.user-input-request>header>div {
+.user-input-request > header > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
-.user-input-request>header strong {
+.user-input-request > header strong {
   font-size: 12px;
   font-weight: 600;
 }
-.user-input-request>header>div>span {
+.user-input-request > header > div > span {
   font-size: 10px;
   color: var(--muted);
 }
@@ -133,7 +138,7 @@
   padding: 4px 7px;
   border-radius: var(--ui-radius-sm);
 }
-.question-steps button>span {
+.question-steps button > span {
   width: 17px;
   height: 17px;
   border: 1px solid var(--line);
@@ -146,7 +151,7 @@
   background: var(--hover);
   color: var(--accent);
 }
-.question-steps .active>span {
+.question-steps .active > span {
   border-color: currentColor;
 }
 .question-content {
@@ -181,7 +186,9 @@
   border-radius: var(--ui-radius);
   cursor: pointer;
   margin: 0;
-  transition: border-color .15s,background .15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .question-option:hover {
   background: var(--hover);
@@ -190,7 +197,7 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.question-option>input {
+.question-option > input {
   position: absolute;
   opacity: 0;
   width: 1px;
@@ -223,19 +230,19 @@
   font-size: 11px;
   font-weight: 550;
 }
-.option-copy>span {
+.option-copy > span {
   font-size: 10px;
   color: var(--muted);
   line-height: 1.5;
 }
-.question-option>svg {
+.question-option > svg {
   color: var(--accent);
   flex-shrink: 0;
 }
 .question-custom {
   margin-top: 10px;
 }
-.question-custom>label {
+.question-custom > label {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -244,13 +251,14 @@
   color: var(--muted);
   margin-bottom: 7px;
 }
-.question-custom input[type=radio] {
+.question-custom input[type='radio'] {
   width: 13px;
   height: 13px;
   margin: 0;
   accent-color: var(--accent);
 }
-.question-custom textarea,.question-custom input[type=password] {
+.question-custom textarea,
+.question-custom input[type='password'] {
   width: 100%;
   font-size: 12px;
   resize: vertical;
@@ -261,7 +269,7 @@
   color: var(--danger);
   padding: 0 16px 10px;
 }
-.user-input-request>footer {
+.user-input-request > footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -269,17 +277,17 @@
   padding: 11px 16px;
   border-top: 1px solid var(--line);
 }
-.user-input-request>footer>span {
+.user-input-request > footer > span {
   font-size: 10px;
   color: var(--muted);
   line-height: 1.5;
 }
-.user-input-request>footer>div {
+.user-input-request > footer > div {
   display: flex;
   gap: 7px;
   flex-shrink: 0;
 }
-.user-input-request>footer button {
+.user-input-request > footer button {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -291,7 +299,7 @@
   background: var(--hover);
   color: var(--muted);
 }
-.approval-notice>span {
+.approval-notice > span {
   flex: 1;
   min-width: 0;
   line-height: 1.6;
@@ -304,7 +312,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.approval-notice>button {
+.approval-notice > button {
   padding: 7px 9px;
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-sm);
@@ -318,7 +326,7 @@
   flex-direction: column;
   overflow: hidden;
 }
-.approval-dialog>header {
+.approval-dialog > header {
   flex-shrink: 0;
 }
 .approval-body {
@@ -329,12 +337,12 @@
   font-size: 12px;
   line-height: 1.8;
 }
-.approval-body>p {
+.approval-body > p {
   color: var(--muted);
   margin-bottom: 12px;
   overflow-wrap: anywhere;
 }
-.approval-body>pre {
+.approval-body > pre {
   background: var(--side);
   border: 1px solid var(--line);
   border-radius: var(--ui-radius);
@@ -368,7 +376,7 @@
   border-top: 1px solid var(--line);
   flex-shrink: 0;
 }
-.approval-dialog-actions>button {
+.approval-dialog-actions > button {
   margin: 0;
   font-size: 12px;
 }
@@ -386,7 +394,7 @@
   margin: 0 0 12px;
   overflow: hidden;
   box-shadow: none;
-  animation: content-in .2s var(--motion-ease);
+  animation: content-in 0.2s var(--motion-ease);
 }
 .user-input-dialog {
   width: 600px;
@@ -394,7 +402,7 @@
   flex-direction: column;
   overflow: hidden;
 }
-.user-input-dialog>header {
+.user-input-dialog > header {
   flex-shrink: 0;
 }
 .user-input-dialog .user-input-request {
@@ -419,8 +427,10 @@
   color: var(--accent);
   font-size: 11px;
 }
-@media (max-width:600px) {
-  .user-input-request>header,.question-content,.user-input-request>footer {
+@media (max-width: 600px) {
+  .user-input-request > header,
+  .question-content,
+  .user-input-request > footer {
     padding-left: 12px;
     padding-right: 12px;
   }
@@ -428,10 +438,10 @@
     padding-left: 12px;
     padding-right: 12px;
   }
-  .user-input-request>footer {
+  .user-input-request > footer {
     flex-wrap: wrap;
   }
-  .user-input-request>footer>div {
+  .user-input-request > footer > div {
     margin-left: auto;
   }
   .question-countdown {
@@ -450,7 +460,7 @@
     padding: 13px 18px;
   }
 }
-@media (forced-colors:active) {
+@media (forced-colors: active) {
   .question-option.selected {
     border: 2px solid Highlight;
   }

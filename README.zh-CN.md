@@ -1,5 +1,7 @@
 [English](README.md) · 简体中文
 
+[开发与工程约定](docs/development.zh-CN.md)
+
 # Starvalley Codex
 
 ### 一台服务器，每个人都有自己的 Codex 开发空间。

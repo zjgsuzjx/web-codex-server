@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeString } from 'micromark-util-decode-string';
-import { remarkReplyFormat } from '../shared/markdown-format.js';
-import { fileLinkInfo, isFileLineLink, rehypeFileReferences } from '../src/link-info.js';
-import { currentThought } from '../shared/thinking.js';
+import { remarkReplyFormat } from '../shared/chat/markdown-format.ts';
+import { fileLinkInfo, isFileLineLink, rehypeFileReferences } from '../src/features/chat/lib/link-info.ts';
+import { currentThought } from '../shared/chat/thinking.ts';
 
 const textNode = (raw, offset = 0) => ({ type: 'text', value: decodeString(raw), position: { start: { offset }, end: { offset: offset + raw.length } } });
 const plain = node => node.value ?? node.children?.map(plain).join('') ?? '';

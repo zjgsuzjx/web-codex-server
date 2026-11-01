@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { browserGraphicsGuide, classifyGraphicsRenderer, detectBrowserGraphics } from '../shared/browser-graphics.js';
+import { browserGraphicsGuide, classifyGraphicsRenderer, detectBrowserGraphics } from '../shared/platform/browser-graphics.ts';
 
 test('graphics hints distinguish CPU renderers, real GPU names and masked information', () => {
   for (const renderer of ['ANGLE (Google, Vulkan SwiftShader Device)', 'Mesa llvmpipe (LLVM 15)', 'softpipe', 'lavapipe', 'Microsoft Basic Render Driver', 'Microsoft WARP', 'NVIDIA software adapter']) {

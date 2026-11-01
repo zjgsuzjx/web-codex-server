@@ -4,9 +4,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { zipSync } from 'fflate';
-import { stageArchive, stageZip, publishZip, uploadPlan } from '../server/archives.js';
-import { fileEntryLimit } from '../shared/file-limits.js';
-import { ARCHIVE_EXTENSIONS, ARCHIVE_ACCEPT, archiveExtension, isArchive } from '../shared/archive-formats.js';
+import { stageArchive, stageZip, publishZip, uploadPlan } from '../server/files/archives.ts';
+import { fileEntryLimit } from '../shared/files/file-limits.ts';
+import { ARCHIVE_EXTENSIONS, ARCHIVE_ACCEPT, archiveExtension, isArchive } from '../shared/files/archive-formats.ts';
 import { archiveBuffer, tarBuffer, rarStored, encryptedRar } from './helpers/archive-fixtures.js';
 import { gzipSync } from 'node:zlib';
 

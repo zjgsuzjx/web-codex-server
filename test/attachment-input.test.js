@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { attachmentInput, attachmentInputs, attachmentRoot, INLINE_ATTACHMENT_BYTES, INLINE_TURN_BYTES } from '../server/attachments.js';
-import { createStore } from '../server/store.js';
+import { attachmentInput, attachmentInputs, attachmentRoot, INLINE_ATTACHMENT_BYTES, INLINE_TURN_BYTES } from '../server/chat/attachments.ts';
+import { createStore } from '../server/db/store.ts';
 
 async function fixture(run) {
   const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'sv-attachment-input-'));

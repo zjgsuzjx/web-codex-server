@@ -28,20 +28,20 @@
   min-width: 0;
   font-weight: 600;
 }
-.code-block-language>span {
+.code-block-language > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.code-block-language>svg {
+.code-block-language > svg {
   color: var(--accent);
-  opacity: .8;
+  opacity: 0.8;
 }
-.code-block-language>small {
+.code-block-language > small {
   font-size: 10px;
   font-weight: 400;
   white-space: nowrap;
-  opacity: .8;
+  opacity: 0.8;
 }
 .code-block-header button {
   display: inline-flex;
@@ -55,7 +55,9 @@
   border-radius: var(--ui-radius-sm);
   color: var(--muted);
   font-size: 11px;
-  transition: color var(--ui-duration), background var(--ui-duration);
+  transition:
+    color var(--ui-duration),
+    background var(--ui-duration);
 }
 .code-block-header button:hover {
   color: var(--text);
@@ -99,28 +101,46 @@
   font-size: 13px;
   line-height: inherit;
 }
-.code-block .hljs-keyword,.code-block .hljs-selector-tag,.code-block .hljs-meta {
+.code-block .hljs-keyword,
+.code-block .hljs-selector-tag,
+.code-block .hljs-meta {
   color: var(--editor-keyword);
 }
-.code-block .hljs-type,.code-block .hljs-title.class_,.code-block .hljs-built_in {
+.code-block .hljs-type,
+.code-block .hljs-title.class_,
+.code-block .hljs-built_in {
   color: var(--editor-type);
 }
-.code-block .hljs-title,.code-block .hljs-title.function_ {
+.code-block .hljs-title,
+.code-block .hljs-title.function_ {
   color: color-mix(in srgb, var(--accent) 80%, var(--text));
 }
-.code-block .hljs-property,.code-block .hljs-attr,.code-block .hljs-attribute {
+.code-block .hljs-property,
+.code-block .hljs-attr,
+.code-block .hljs-attribute {
   color: var(--editor-keyword);
 }
-.code-block .hljs-string,.code-block .hljs-regexp,.code-block .hljs-symbol,.code-block .hljs-bullet {
+.code-block .hljs-string,
+.code-block .hljs-regexp,
+.code-block .hljs-symbol,
+.code-block .hljs-bullet {
   color: var(--editor-string);
 }
-.code-block .hljs-number,.code-block .hljs-literal,.code-block .hljs-variable,.code-block .hljs-template-variable {
+.code-block .hljs-number,
+.code-block .hljs-literal,
+.code-block .hljs-variable,
+.code-block .hljs-template-variable {
   color: var(--editor-number);
 }
-.code-block .hljs-comment,.code-block .hljs-quote,.code-block .hljs-doctag {
+.code-block .hljs-comment,
+.code-block .hljs-quote,
+.code-block .hljs-doctag {
   color: var(--muted);
 }
-.code-block .hljs-tag,.code-block .hljs-name,.code-block .hljs-selector-class,.code-block .hljs-selector-id {
+.code-block .hljs-tag,
+.code-block .hljs-name,
+.code-block .hljs-selector-class,
+.code-block .hljs-selector-id {
   color: var(--editor-type);
 }
 .code-block .hljs-subst {
@@ -134,12 +154,24 @@
   color: var(--diff-remove);
   background: var(--diff-remove-bg);
 }
-.code-block .hljs-section,.code-block .hljs-strong { font-weight: 700; }
-.code-block .hljs-emphasis { font-style: italic; }
-@media (max-width:600px) {
-  .code-block pre { padding: 14px; }
+.code-block .hljs-section,
+.code-block .hljs-strong {
+  font-weight: 700;
 }
-@media (forced-colors:active) {
-  .code-block { border-color: CanvasText; }
-  .code-block pre code span { color: CanvasText; background: Canvas; }
+.code-block .hljs-emphasis {
+  font-style: italic;
+}
+@media (max-width: 600px) {
+  .code-block pre {
+    padding: 14px;
+  }
+}
+@media (forced-colors: active) {
+  .code-block {
+    border-color: CanvasText;
+  }
+  .code-block pre code span {
+    color: CanvasText;
+    background: Canvas;
+  }
 }

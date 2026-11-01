@@ -5,10 +5,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
-import { createApp } from '../server/index.js';
-import { createStore } from '../server/store.js';
-import { pngCrc, validateAvatar } from '../server/avatar.js';
-import { AVATAR_MAX_BYTES, avatarCrop, avatarDimensions } from '../shared/avatar.js';
+import { createApp } from '../server/index.ts';
+import { createStore } from '../server/db/store.ts';
+import { pngCrc, validateAvatar } from '../server/appearance/avatar.ts';
+import { AVATAR_MAX_BYTES, avatarCrop, avatarDimensions } from '../shared/platform/avatar.ts';
 
 function chunk(type, body) {
   const data = Buffer.concat([Buffer.from(type), body]), length = Buffer.alloc(4), crc = Buffer.alloc(4);

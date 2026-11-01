@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { unzipSync } from 'fflate';
-import { zipFolder } from '../src/zip-folder.js';
-import { droppedFiles } from '../src/drop-files.js';
-import { LiveSocket } from '../src/socket.js';
+import { zipFolder } from '../src/features/files/lib/zip-folder.ts';
+import { droppedFiles } from '../src/features/files/lib/drop-files.ts';
+import { LiveSocket } from '../src/lib/socket.ts';
 import yauzl from 'yauzl';
-import { fileEntryLimit, USER_FILE_ENTRY_LIMIT } from '../shared/file-limits.js';
+import { fileEntryLimit, USER_FILE_ENTRY_LIMIT } from '../shared/files/file-limits.ts';
 
 test('client entry limits allow larger member folders and exempt only superadmins',async()=>{
   for(const role of ['user','admin',undefined])assert.equal(fileEntryLimit({role}),100000);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CodexManager } from '../server/codex.js';
+import { CodexManager } from '../server/codex/codex.ts';
 
 test('title generation uses the selected model and a temporary conversation, then unsubscribes',async()=>{
   const manager=new CodexManager({},()=>{}),inst={titles:new Map(),hidden:new Set()},calls=[];
