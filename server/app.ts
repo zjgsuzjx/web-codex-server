@@ -59,6 +59,7 @@ import {
 import { createResources } from './resources/resources.ts';
 import { createCleanup, measure } from './resources/storage.ts';
 import type { AppOptions, ClientSocket, ServerConfig } from './types.ts';
+import { workspaceRoutes } from './workspace/routes.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MB = 1024 * 1024;
@@ -720,6 +721,12 @@ export async function createApp(options: AppOptions = {}) {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers['x-csrf-token'] !== req.user.csrf)
       return res.status(403).json({ error: '安全令牌失效，请刷新页面' });
     next();
+  });
+  const notifications = workspaceRoutes(app, store, (uid) => {
+    for (const id of uid ? [uid] : clients.keys()) {
+      const snapshot = notifications.snapshot(id);
+      for (const ws of clients.get(id) || []) send(ws, { type: 'site/notifications', snapshot });
+    }
   });
   app.post('/api/logout', (req, res) => {
     store.run('DELETE FROM sessions WHERE hash=?', req.user.session_hash!);
@@ -1994,6 +2001,7 @@ export async function createApp(options: AppOptions = {}) {
       ws.alive = true;
     });
     const current = eventCounters.get(u.id) || 0;
+    send(ws, { type: 'site/notifications', snapshot: notifications.snapshot(u.id) });
     send(ws!, {
       type: 'ready',
       seq: current,

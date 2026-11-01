@@ -11,6 +11,7 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
+  LayoutDashboard,
 } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ApiClient } from '../../../../shared/contracts/api.ts';
@@ -28,6 +29,7 @@ import ChatGPTLogin from '../../auth/components/ChatGPTLogin.tsx';
 import ModelControls from '../../chat/components/ModelControls.tsx';
 import InviteManagement from './InviteManagement.tsx';
 import UserManagement from './UserManagement.tsx';
+import NotificationManagement from './NotificationManagement.tsx';
 export interface SettingsHeadingProps {
   page: ProtocolRecord;
 }
@@ -95,6 +97,13 @@ const settingsPages = [
     title: '个人账号',
     description: '让工作区更像你，也更适合你。',
   },
+  {
+    id: 'site',
+    icon: LayoutDashboard,
+    name: '网站管理',
+    title: '网站管理',
+    description: '管理网站消息、账号权限与成员访问。',
+  },
 ];
 function SettingsHeading({ page }: SettingsHeadingProps) {
   const Icon = page.icon;
@@ -128,7 +137,8 @@ export default function SettingsPanel({
   onClose,
   onLogout,
 }: SettingsPanelProps) {
-  const [tab, setTab] = useState(initialTab),
+  const canManage = ['admin', 'superadmin'].includes(user.role);
+  const [tab, setTab] = useState(initialTab === 'site' && !canManage ? 'profile' : initialTab),
     [toml, setToml] = useState(''),
     [loadedConfig, setLoadedConfig] = useState(false),
     [configError, setConfigError] = useState(false),
@@ -194,20 +204,22 @@ export default function SettingsPanel({
     >
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="设置分类">
-          {settingsPages.map((t) => (
-            <button
-              key={t.id}
-              className={tab === t.id ? 'active' : ''}
-              onClick={() => {
-                setTab(t.id);
-                setResult(null);
-              }}
-              aria-current={tab === t.id ? 'page' : undefined}
-            >
-              <t.icon size={16} />
-              {t.name}
-            </button>
-          ))}
+          {settingsPages
+            .filter((page) => page.id !== 'site' || canManage)
+            .map((t) => (
+              <button
+                key={t.id}
+                className={tab === t.id ? 'active' : ''}
+                onClick={() => {
+                  setTab(t.id);
+                  setResult(null);
+                }}
+                aria-current={tab === t.id ? 'page' : undefined}
+              >
+                <t.icon size={16} />
+                {t.name}
+              </button>
+            ))}
         </nav>
         <div className="settings-content" key={tab}>
           {tab !== 'appearance' && (
@@ -480,30 +492,32 @@ export default function SettingsPanel({
                   修改密码
                 </button>
               </form>
-              {['admin', 'superadmin'].includes(user.role) && (
-                <>
-                  <div className="settings-divider" />
-                  <UserManagement api={api} user={user} notify={notify} />
-                  {user.role === 'superadmin' && (
-                    <>
-                      <div className="settings-divider" />
-                      <InviteManagement api={api} notify={notify} />
-                    </>
-                  )}
-                  <button
-                    className="secondary full"
-                    onClick={() => run(async () => setResult(await api('/admin/audit')))}
-                  >
-                    查看操作记录
-                  </button>
-                </>
-              )}
-              {result && <pre className="settings-result">{JSON.stringify(result, null, 2)}</pre>}
               <div className="settings-divider" />
               <button className="secondary full danger-text" onClick={() => run(onLogout)}>
                 <LogOut size={15} />
                 退出登录
               </button>
+            </>
+          )}
+          {tab === 'site' && canManage && (
+            <>
+              <NotificationManagement api={api} notify={notify} />
+              <div className="settings-divider" />
+              <UserManagement api={api} user={user} notify={notify} />
+              {user.role === 'superadmin' && (
+                <>
+                  <div className="settings-divider" />
+                  <InviteManagement api={api} notify={notify} />
+                </>
+              )}
+              <div className="settings-divider" />
+              <button
+                className="secondary full"
+                onClick={() => run(async () => setResult(await api('/admin/audit')))}
+              >
+                查看操作记录
+              </button>
+              {result && <pre className="settings-result">{JSON.stringify(result, null, 2)}</pre>}
             </>
           )}
         </div>

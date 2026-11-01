@@ -1,5 +1,4 @@
 import {
-  CircleAlert,
   Code,
   Moon,
   MoreHorizontal,
@@ -15,6 +14,10 @@ import type { ProtocolCallback } from '../../../../shared/contracts/protocol.ts'
 import Tooltip from '../../../components/ui/Tooltip.tsx';
 import type { FocusableElement } from '../../../types/dom.ts';
 import ConnectionSignal from './ConnectionSignal.tsx';
+import NotificationCenter from '../../notifications/components/NotificationCenter.tsx';
+import type { ApiClient } from '../../../../shared/contracts/api.ts';
+import type { NotificationSnapshot } from '../../../../shared/workspace/notifications.ts';
+import MemoIcon from '../../memo/components/MemoIcon.tsx';
 export interface ToolButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'onChange' | 'children'> {
   label: string;
@@ -37,6 +40,10 @@ export interface MoreToolsProps {
   hasProject: boolean;
 }
 export interface WorkspaceToolbarProps {
+  api: ApiClient;
+  notifications: NotificationSnapshot | null;
+  memoOpen: boolean;
+  onMemo: () => void;
   theme: Theme;
   customSkin: boolean;
   status: import('../../../../shared/contracts/domain.ts').ConnectionStatus;
@@ -275,6 +282,10 @@ function MoreTools({
 }
 
 export default function WorkspaceToolbar({
+  api,
+  notifications,
+  memoOpen,
+  onMemo,
   theme,
   customSkin,
   status,
@@ -333,16 +344,20 @@ export default function WorkspaceToolbar({
           aria-controls="workspace-editor"
           onClick={onEditor}
         />
+        <ToolButton
+          label="备忘录"
+          icon={MemoIcon}
+          className="workspace-tool workspace-memo-tool"
+          aria-pressed={memoOpen}
+          aria-expanded={memoOpen}
+          aria-controls="workspace-memo"
+          onClick={onMemo}
+        />
       </div>
       <span className="workspace-tool-separator" aria-hidden="true" />
       <div className="workspace-tool-group" role="group" aria-label="状态与设置">
         <ConnectionSignal status={status} latency={latency} onRetry={onRetry} />
-        <ToolButton
-          label="提醒"
-          description="功能即将开放"
-          icon={CircleAlert}
-          aria-disabled="true"
-        />
+        <NotificationCenter api={api} snapshot={notifications} />
         <ToolButton
           label="设置"
           description={settingsDisabled ? '正在保存配置，请稍候' : undefined}
