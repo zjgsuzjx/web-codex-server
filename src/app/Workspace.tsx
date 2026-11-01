@@ -453,6 +453,21 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       const r = await api(`/threads/${t.id}?limit=${recentTurnLimit}`, { signal });
       if (!current()) return;
       const recent = r.thread.turns || [];
+      if (r.editDraft && !sendPending.current) {
+        setInput((prev) => prev || r.editDraft.text);
+        setDraftAttachments((prev) =>
+          prev[t.id]?.length
+            ? prev
+            : {
+                ...prev,
+                [t.id]: r.editDraft.attachments.map((item: Attachment) => ({
+                  ...item,
+                  saved: item,
+                  retained: true,
+                })),
+              },
+        );
+      }
       setActivity((prev) =>
         mergeActivity(
           prev,
@@ -600,6 +615,24 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       setActivity((prev) => mergeActivity(prev, [{ threadId: p.threadId, turn: p.turn }]));
     const tid = p.threadId || p.thread?.id;
     if (tid !== threadRef.current?.id) return;
+    if (e.method === 'thread/history/reverted') {
+      setRequests((prev) => prev.filter((request) => request.params.threadId !== tid));
+      historyAbort.current?.abort();
+      ++threadRequest.current;
+      historyRetry.current = null;
+      setHistoryStatus({});
+      deltaBuffer.current.clear();
+      setTurns((prev) => {
+        const index = prev.findIndex((turn) => turn.id === p.beforeTurnId);
+        return index < 0 ? [] : prev.slice(0, index);
+      });
+      setVisibleFrom(null);
+      setActiveTurn(null);
+      setReview(null);
+      setThread((prev) => (prev ? { ...prev, tokenUsage: null } : prev));
+      void syncThread().catch((error) => notify(error.message, true));
+      return;
+    }
     if (e.method === 'item/completed' || e.method === 'turn/completed')
       deltaBuffer.current.flush(true);
     if (e.method === 'turn/started') {
@@ -939,6 +972,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       abortUpload.current = new AbortController();
       for (const item of selected) {
         if (item.saved) continue;
+        if (!item.file) throw new Error('附件数据已失效，请重新选择文件');
         const [result] = await socket.current.upload(
           { scope: 'attachment', threadId: t.id },
           [item.file],
@@ -975,6 +1009,67 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       setProgress(null);
     }
   }
+  async function editMessage(
+    turnId: string,
+    itemId: string,
+    text: string,
+    expectedLastTurnId: string,
+  ) {
+    const t = threadRef.current;
+    if (
+      !t ||
+      sendPending.current ||
+      activeTurn ||
+      progress ||
+      threadLoading ||
+      modelPending.current ||
+      toolPending.current ||
+      commandPending.current
+    )
+      throw new Error('请等待当前操作结束后再编辑');
+    sendPending.current = true;
+    setSending(true);
+    try {
+      const result = await socket.current.call('turn/edit', {
+        threadId: t.id,
+        turnId,
+        itemId,
+        text,
+        expectedLastTurnId,
+      });
+      setActivity((prev) => mergeActivity(prev, [{ threadId: t.id, turn: result.turn }]));
+      if (threadRef.current?.id === t.id) {
+        autoScroll.current = true;
+        setTurns((prev) => mergeTurns(prev, [result.turn]));
+        setActiveTurn(
+          result.turn.status === 'inProgress' && !completedTurns.current.has(result.turn.id)
+            ? result.turn.id
+            : null,
+        );
+      }
+    } catch (error) {
+      // Revert and inference are separate native RPCs. Preserve the user's edit
+      // as a composer draft even if a network/provider failure follows revert.
+      const recovery = (error as AppError).editDraft;
+      if (threadRef.current?.id === t.id && recovery) {
+        setInput((prev) => prev || recovery.text);
+        setDraftAttachments((prev) => ({
+          ...prev,
+          [t.id]: [
+            ...(prev[t.id] || []),
+            ...recovery.attachments
+              .filter((item) => !prev[t.id]?.some((draft) => draft.saved?.id === item.id))
+              .map((item) => ({ ...item, saved: item, retained: true })),
+          ],
+        }));
+        setContextFile(null);
+      }
+      throw error;
+    } finally {
+      sendPending.current = false;
+      setSending(false);
+    }
+  }
   function addAttachments(list: any[]) {
     if (sending || progress) return;
     if (list.some((file) => file.size > 20 * 1024 * 1024)) {
@@ -998,9 +1093,10 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       ],
     }));
   }
-  async function removeAttachment(item: { saved: { id: any }; id: string }) {
+  async function removeAttachment(item: { saved: { id: any }; id: string; retained?: boolean }) {
     try {
-      if (item.saved) await api(`/attachments/${item.saved.id}`, { method: 'DELETE' });
+      if (item.saved && !item.retained)
+        await api(`/attachments/${item.saved.id}`, { method: 'DELETE' });
       setDraftAttachments((prev) => ({
         ...prev,
         [draftKey]: (prev[draftKey] || []).filter((x) => x.id !== item.id),
@@ -1697,6 +1793,21 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                           notify={notify}
                           onAttachment={setAttachmentPreview}
                           onReview={openReview}
+                          latestTurnId={turns.at(-1)?.id}
+                          editDisabled={
+                            sending ||
+                            !!activeTurn ||
+                            !!progress ||
+                            threadLoading ||
+                            modelSaving ||
+                            !!toolBusy ||
+                            commandBusy ||
+                            status !== 'connected'
+                          }
+                          onEdit={editMessage}
+                          onEditStart={() => {
+                            autoScroll.current = false;
+                          }}
                         />
                         <ThinkingStatus
                           turn={turn}

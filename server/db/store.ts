@@ -63,6 +63,10 @@ export function createStore(dataDir: string) {
     thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     turn_id TEXT NOT NULL, status TEXT NOT NULL, started_at INTEGER NOT NULL,
     completed_at INTEGER, PRIMARY KEY(thread_id,turn_id));`);
+  db.exec(`CREATE TABLE IF NOT EXISTS turn_messages(
+    thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    turn_id TEXT NOT NULL, text TEXT NOT NULL, attachment_ids TEXT NOT NULL,
+    sent_at INTEGER NOT NULL, PRIMARY KEY(thread_id,turn_id));`);
   db.exec(`CREATE TABLE IF NOT EXISTS user_avatars(
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     image BLOB NOT NULL CHECK(length(image)<=262144), version TEXT NOT NULL);`);

@@ -22,6 +22,7 @@ function mockCodex(config, emit) {
       const data = ordered.slice(start, start + params.limit);
       return { data, nextCursor: start + data.length < turns.length ? data.at(-1).id : null };
     }
+    if (method === 'thread/revert') { const thread=threads.get(params.threadId); const index=thread.turns.findIndex(turn=>turn.id===params.beforeTurnId); if(index<0)throw new Error('missing turn'); thread.turns=thread.turns.slice(0,index); return {thread:{...thread,turns:[]}}; }
     if (method === 'thread/fork') { const thread = { ...structuredClone(threads.get(params.threadId)), id: randomUUID() }; threads.set(thread.id, thread); return { thread }; }
     if (method === 'account/read') return { account: { type: 'chatgpt' }, requiresOpenaiAuth: true };
     if (method === 'account/rateLimits/read') return { rateLimits: { limitId: 'codex', primary: { usedPercent: 25, windowDurationMins: 300, resetsAt: 1800000000 }, secondary: { usedPercent: 7, windowDurationMins: 10080 } } };
@@ -224,6 +225,46 @@ test('authenticated projects, safe files, websocket uploads, and Codex routing',
       const missing=await s2.call('upload/begin',{scope:'attachment',threadId:tr.id,path:'missing.js',size:1});await s2.chunk(Buffer.from('x'));const id=(await s2.call('upload/finish',{uploadId:missing.uploadId})).attachment.id;
       await fs.unlink(path.join(dir,'users','alice','codex','chat-attachments',id,'missing.js'));const turns=instance.codex.calls.filter(c=>c.method==='turn/start').length;
       await assert.rejects(s2.call('turn/start',{threadId:tr.id,text:'read the missing file',attachments:[id]}),/文件不存在/);assert.equal(instance.codex.calls.filter(c=>c.method==='turn/start').length,turns);assert.equal(instance.store.get('SELECT turn_id FROM attachments WHERE id=?',id).turn_id,null);
+    });
+    await t.test('editing a completed message reverts native history, retains attachments and timestamps, and preserves forks', async()=>{
+      const tr=(await request('/threads','POST',{projectId:p.id},a)).data;
+      instance.store.run("UPDATE threads SET title_state='manual' WHERE id=?",tr.id);
+      const task=await s2.call('upload/begin',{scope:'attachment',threadId:tr.id,path:'edit.txt',size:5});await s2.chunk(Buffer.from('hello'));
+      const attachment=(await s2.call('upload/finish',{uploadId:task.uploadId})).attachment;
+      const finish=turn=>{turn.status='completed';instance.codex.emit(a.id,{method:'turn/completed',params:{threadId:tr.id,turn}});};
+      const first=await s2.call('turn/start',{threadId:tr.id,text:'Original',attachments:[attachment.id]});
+      assert.ok(first.turn.items[0].sentAt>0);finish(instance.codex.threads.get(tr.id).turns[0]);
+      const second=await s2.call('turn/start',{threadId:tr.id,text:'Later'});finish(instance.codex.threads.get(tr.id).turns[1]);
+      const fork=await s2.call('thread/fork',{threadId:tr.id});
+      const params={threadId:tr.id,turnId:first.turn.id,itemId:first.turn.items[0].id,expectedLastTurnId:second.turn.id,text:'Edited'};
+      const before=()=>instance.codex.calls.filter(call=>call.method==='thread/revert').length;
+      let count=before();
+      await assert.rejects(s2.call('turn/edit',{...params,expectedLastTurnId:'stale'}),/对话已更新/);assert.equal(before(),count);
+      await assert.rejects(s2.call('turn/edit',{...params,text:'x'.repeat(100001)}),/100000/);assert.equal(before(),count);
+      const otherSocket=await socket(base,b);sockets.push(otherSocket);await assert.rejects(otherSocket.call('turn/edit',params),/不存在/);assert.equal(before(),count);
+      const result=await s2.call('turn/edit',params);assert.equal(before(),count+1);
+      assert.deepEqual(instance.codex.threads.get(tr.id).turns.map(turn=>turn.id),[result.turn.id]);
+      assert.equal(result.turn.items[0].content[0].text,'Edited');assert.equal(result.turn.items[0].attachments[0].id,attachment.id);
+      assert.ok(result.turn.items[0].sentAt>=first.turn.items[0].sentAt);
+      const input=instance.codex.calls.filter(call=>call.method==='turn/start').at(-1).params.input;assert.equal(input[0].text,'Edited');assert.match(input[1].text,/hello/);
+      const history=(await request(`/threads/${tr.id}`,'GET',null,a)).data.thread.turns;
+      assert.equal(history.length,1);assert.equal(history[0].items[0].content[0].text,'Edited');assert.equal(history[0].items[0].sentAt,result.turn.items[0].sentAt);
+      const forkHistory=(await request(`/threads/${fork.thread.id}`,'GET',null,a)).data.thread.turns;
+      assert.equal(forkHistory.length,2);assert.equal(forkHistory[0].items[0].content[0].text,'Original');assert.equal(forkHistory[0].items[0].attachments[0].id,attachment.id);
+      await assert.rejects(s2.call('turn/edit',{...params,turnId:result.turn.id,itemId:result.turn.items[0].id,expectedLastTurnId:result.turn.id}),/回复结束/);
+      finish(instance.codex.threads.get(tr.id).turns[0]);
+      const originalCall=instance.codex.call;let failure;
+      instance.codex.call=async function(user,method,args){if(method==='turn/start')throw Error('synthetic start failure');return originalCall.call(this,user,method,args);};
+      try { await s2.call('turn/edit',{...params,turnId:result.turn.id,itemId:result.turn.items[0].id,expectedLastTurnId:result.turn.id,text:'Retry edited'}); }catch(error){failure=error;}finally{instance.codex.call=originalCall;}
+      assert.match(failure.message,/草稿/);assert.equal(failure.editDraft.text,'Retry edited');assert.equal(failure.editDraft.attachments[0].id,attachment.id);
+      const afterFailure=(await request(`/threads/${tr.id}`,'GET',null,a)).data;assert.equal(afterFailure.thread.turns.length,0);assert.equal(afterFailure.editDraft.text,'Retry edited');
+      const retried=await s2.call('turn/start',{threadId:tr.id,text:failure.editDraft.text,attachments:failure.editDraft.attachments.map(item=>item.id)});
+      assert.equal(retried.turn.items[0].content[0].text,'Retry edited');assert.equal(retried.turn.items[0].attachments[0].id,attachment.id);
+      assert.equal((await request(`/threads/${tr.id}`,'GET',null,a)).data.editDraft,undefined);
+      finish(instance.codex.threads.get(tr.id).turns[0]);
+      await fs.unlink(path.join(dir,'users','alice','codex','chat-attachments',attachment.id,'edit.txt'));count=before();
+      await assert.rejects(s2.call('turn/edit',{...params,turnId:retried.turn.id,itemId:retried.turn.items[0].id,expectedLastTurnId:retried.turn.id}),/文件不存在/);assert.equal(before(),count);
+      await otherSocket.close();
     });
     await t.test('ZIP imports extract safely; single files keep their bytes and directories remain ZIP',async()=>{
       const data=Buffer.from(zipSync({'import/readme.txt':Buffer.from('zipped'),'import/empty/':new Uint8Array()}));
