@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
-import { createApp } from '../server/index.js';
-import { relativePath, safePath, anchored, safeRemove } from '../server/files.js';
+import { createApp } from '../server/index.ts';
+import { relativePath, safePath, anchored, safeRemove } from '../server/files/files.ts';
 import { zipSync, unzipSync } from 'fflate';
 import { archiveBuffer, rarStored } from './helpers/archive-fixtures.js';
 

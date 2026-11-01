@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectPaths, contextPaths, parentPath } from '../src/file-selection.js';
+import { selectPaths, contextPaths, parentPath } from '../src/features/files/lib/file-selection.ts';
 
 test('modifier selection toggles without losing earlier files or mutating the previous selection', () => {
   const visible = ['assets', 'docs', 'src', 'README.md'], initial = new Set(['src']);

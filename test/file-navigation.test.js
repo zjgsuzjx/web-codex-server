@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compareFileEntries, findFiles, indexLazyFiles } from '../src/file-navigation.js';
+import { compareFileEntries, findFiles, indexLazyFiles } from '../src/features/files/lib/file-navigation.ts';
 
 const file = (path, modified = 1, created = 1) => ({ path, name: path.split('/').at(-1), type: 'file', modified, created });
 

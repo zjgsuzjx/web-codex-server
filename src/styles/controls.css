@@ -22,7 +22,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.context-menu>button {
+.context-menu > button {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -32,25 +32,26 @@
   border-radius: var(--ui-radius-sm);
   font-size: 12px;
   text-align: left;
-  transition: background .12s;
+  transition: background 0.12s;
 }
-.context-menu>button>span {
+.context-menu > button > span {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.context-menu>button>svg {
+.context-menu > button > svg {
   color: var(--muted);
 }
-.context-menu>button.danger-text>svg {
+.context-menu > button.danger-text > svg {
   color: inherit;
 }
-.context-menu>button:hover:not(:disabled),.context-menu>button:focus-visible {
+.context-menu > button:hover:not(:disabled),
+.context-menu > button:focus-visible {
   background: var(--ui-hover);
 }
-.context-menu>button:focus-visible {
+.context-menu > button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -65,13 +66,13 @@
   border: 0;
   background: var(--line);
 }
-@media (pointer:coarse) {
-  .context-menu>button {
+@media (pointer: coarse) {
+  .context-menu > button {
     min-height: 38px;
   }
 }
-@media (prefers-reduced-motion:reduce) {
-  .context-menu>button {
+@media (prefers-reduced-motion: reduce) {
+  .context-menu > button {
     transition: none;
   }
 }
@@ -79,7 +80,8 @@
   position: relative;
   flex-shrink: 0;
 }
-.row-menu>div>button:hover,.row-menu>div>a:hover {
+.row-menu > div > button:hover,
+.row-menu > div > a:hover {
   background: var(--hover);
 }
 .custom-select {
@@ -88,7 +90,7 @@
   width: 100%;
   font-weight: 400;
 }
-.select-trigger>span {
+.select-trigger > span {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -96,17 +98,17 @@
 }
 .select-trigger:disabled {
   background: var(--panel);
-  opacity: .6;
+  opacity: 0.6;
 }
 .select-chevron {
   color: var(--subtle);
-  transition: transform .12s;
+  transition: transform 0.12s;
 }
 .select-chevron.open {
   transform: rotate(180deg);
   color: var(--accent);
 }
-.select-option>span:first-child {
+.select-option > span:first-child {
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -114,14 +116,15 @@
   width: 15px;
   flex-shrink: 0;
 }
-.select-option.highlighted:not(:disabled),.select-option:hover:not(:disabled) {
+.select-option.highlighted:not(:disabled),
+.select-option:hover:not(:disabled) {
   background: var(--hover);
 }
 .select-option:focus {
   outline: none;
 }
 .select-option:disabled {
-  opacity: .45;
+  opacity: 0.45;
 }
 .tooltip-trigger {
   display: inline-flex;
@@ -139,8 +142,9 @@
   font-size: 12px;
   font-weight: 600;
 }
-.select-options,.row-menu[open]>div {
-  animation: popover-in .16s var(--motion-ease);
+.select-options,
+.row-menu[open] > div {
+  animation: popover-in 0.16s var(--motion-ease);
 }
 .select-trigger {
   display: flex;
@@ -157,13 +161,17 @@
   text-align: left;
   font-size: 12px;
   line-height: 1.5;
-  transition: border-color .12s,background .12s,box-shadow .12s;
+  transition:
+    border-color 0.12s,
+    background 0.12s,
+    box-shadow 0.12s;
 }
 .select-trigger:hover:not(:disabled) {
   border-color: var(--ui-border-hover);
   background: var(--ui-hover);
 }
-.select-trigger[aria-expanded=true],.select-trigger:focus-visible {
+.select-trigger[aria-expanded='true'],
+.select-trigger:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--ui-focus);
@@ -187,7 +195,7 @@
   font-weight: 500;
   background: var(--ui-selected);
 }
-.row-menu>summary {
+.row-menu > summary {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -198,10 +206,10 @@
   opacity: 0;
   border-radius: var(--ui-radius-sm);
 }
-.row-menu>summary:hover {
+.row-menu > summary:hover {
   background: var(--ui-hover);
 }
-.row-menu>div {
+.row-menu > div {
   position: absolute;
   top: 25px;
   right: 4px;
@@ -213,7 +221,8 @@
   z-index: 40;
   box-shadow: var(--ui-shadow-popover);
 }
-.row-menu>div>button,.row-menu>div>a {
+.row-menu > div > button,
+.row-menu > div > a {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -228,14 +237,14 @@
   position: fixed;
   z-index: 3000;
   width: max-content;
-  max-width: min(280px,calc(100vw - 24px));
+  max-width: min(280px, calc(100vw - 24px));
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-lg);
   background: var(--panel);
   box-shadow: var(--ui-shadow-popover);
   pointer-events: none;
-  animation: tooltip-in .14s var(--motion-ease);
+  animation: tooltip-in 0.14s var(--motion-ease);
   font-size: 12px;
   line-height: 1.6;
   color: var(--muted);
@@ -257,12 +266,14 @@
   box-shadow: var(--ui-shadow-popover);
   font-weight: 400;
 }
-@media (prefers-reduced-motion:reduce) {
-  .select-trigger,.select-chevron,.sidebar-search {
+@media (prefers-reduced-motion: reduce) {
+  .select-trigger,
+  .select-chevron,
+  .sidebar-search {
     transition: none;
   }
 }
-@media (forced-colors:active) {
+@media (forced-colors: active) {
   .tooltip-bubble {
     border: 1px solid ButtonText;
   }

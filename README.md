@@ -1,5 +1,7 @@
 English · [简体中文](README.zh-CN.md)
 
+[Development conventions](docs/development.md)
+
 # Starvalley Codex
 
 ### One server. A private Codex workspace for everyone.

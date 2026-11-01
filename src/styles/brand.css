@@ -6,15 +6,28 @@
   animation: brand-twinkle 3.6s ease-in-out infinite;
 }
 @keyframes brand-twinkle {
-  50% { opacity: .25; }
+  50% {
+    opacity: 0.25;
+  }
 }
 .brand-dew {
   animation: brand-dew 4.2s ease-in-out infinite;
 }
 @keyframes brand-dew {
-  0%,68%,100% { transform: translateY(0); opacity: 1; }
-  84% { transform: translateY(1.6px); opacity: .55; }
+  0%,
+  68%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  84% {
+    transform: translateY(1.6px);
+    opacity: 0.55;
+  }
 }
-@media (prefers-reduced-motion:reduce) {
-  .brand-twinkle,.brand-dew { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .brand-twinkle,
+  .brand-dew {
+    animation: none;
+  }
 }

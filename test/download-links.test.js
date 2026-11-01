@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { downloadLinkInfo, fileLinkInfo } from '../src/link-info.js';
-import { editorLanguage } from '../src/editor-language.js';
-import { signalLevel } from '../shared/connection.js';
+import { downloadLinkInfo, fileLinkInfo } from '../src/features/chat/lib/link-info.ts';
+import { editorLanguage } from '../src/features/files/lib/editor-language.ts';
+import { signalLevel } from '../shared/platform/connection.ts';
 
 test('download links keep decoded paths and bypass viewing; normal code references keep line info', () => {
   for (const [href,label] of [['docs/report%20final.pdf','下载报告'],['artifact.zip','Download archive'],['sandbox:/workspace/p/report.pdf','报告']]) {

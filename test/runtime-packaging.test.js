@@ -3,6 +3,29 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
+import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+test('candidate syntax checks accept erasable TypeScript without the compiler and reject invalid source', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'sv-ts-check-'));
+  const execute = promisify(execFile);
+  try {
+    await fs.mkdir(path.join(directory, 'server'));
+    await fs.mkdir(path.join(directory, 'shared'));
+    const checker = path.join(directory, 'check-runtime.mjs');
+    await fs.copyFile(new URL('../scripts/check-runtime.mjs', import.meta.url), checker);
+    await fs.writeFile(path.join(directory, 'server/index.ts'), 'interface Config { value: number }\nexport const config: Config = {value: 1};\n');
+    await execute(process.execPath, [checker], { cwd: directory });
+    await fs.writeFile(path.join(directory, 'server/index.ts'), 'export const broken: = ;\n');
+    await assert.rejects(execute(process.execPath, [checker], { cwd: directory }));
+  } finally {
+    assert.equal(path.dirname(directory), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(directory).startsWith('sv-ts-check-'));
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('runtime image excludes tests and frontend sources while including server and maintenance modules',async()=>{
   const root=fileURLToPath(new URL('../',import.meta.url));
@@ -27,13 +50,19 @@ test('runtime image excludes tests and frontend sources while including server a
   assert.match(ignored,/^\/?test\/?\s*$/m,'Exclude test/ from the Docker build context');
   for(const name of await fs.readdir(path.join(root,'test')))assert.equal(await included('test/'+name),false,'Test files must not ship in the runtime image');
   assert.ok(copies.every(copy=>!copy.source.startsWith('src/')),'Unbundled frontend modules are not needed by the runtime');
-  const pending=['server/index.js','scripts/smoke.mjs','scripts/role-smoke.mjs'],visited=new Set();
+  const pending=['server/index.ts','scripts/smoke.mjs','scripts/role-smoke.mjs','scripts/check-runtime.mjs'],visited=new Set();
   while(pending.length){
     const relative=pending.pop();if(visited.has(relative))continue;visited.add(relative);
     assert.ok(await included(relative),`Runtime image is missing ${relative}; include it in Dockerfile COPY rules`);
     const source=await fs.readFile(path.join(root,relative),'utf8');
-    for(const match of source.matchAll(/^\s*(?:import\s+(?:[^'"\n]*?\s+from\s*)?|export\s+[^'"\n]*?\s+from\s*)['"](\.[^'"]+)['"]/gm)){
-      const dependency=path.posix.normalize(path.posix.join(path.posix.dirname(relative),match[1]));
+    const ast=ts.createSourceFile(relative,source,ts.ScriptTarget.Latest,true);
+    for(const statement of ast.statements){
+      if(!ts.isImportDeclaration(statement)&&!ts.isExportDeclaration(statement))continue;
+      if(ts.isImportDeclaration(statement)&&statement.importClause?.isTypeOnly)continue;
+      if(ts.isExportDeclaration(statement)&&statement.isTypeOnly)continue;
+      const specifier=statement.moduleSpecifier;
+      if(!specifier||!ts.isStringLiteral(specifier)||!specifier.text.startsWith('.'))continue;
+      const dependency=path.posix.normalize(path.posix.join(path.posix.dirname(relative),specifier.text));
       assert.ok(!dependency.startsWith('../'),`Unexpected external relative import: ${dependency}`);
       pending.push(dependency);
     }

@@ -5,7 +5,7 @@ import {WebSocket} from 'ws';
 import Docker from 'dockerode';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {CodexManager} from '../server/codex.js';
+import {CodexManager} from '../server/codex/codex.ts';
 const base=process.env.SMOKE_BASE||'http://127.0.0.1:3100',origin=process.env.PUBLIC_URL,name='qa_role_'+randomBytes(6).toString('hex'),password=randomBytes(24).toString('hex');
 const db=new DatabaseSync('/data/app.sqlite'),docker=new Docker({socketPath:'/var/run/docker.sock'});let user,cookie,ws,n=1;const pending=new Map(),events=[];
 async function api(url,method='GET',body,expected=200){const r=await fetch(base+'/api'+url,{method,headers:{Origin:origin,'Content-Type':'application/json',...(cookie?{Cookie:cookie,'X-CSRF-Token':user.csrf}:{})},body:body?JSON.stringify(body):undefined});const data=await r.json();assert.equal(r.status,expected,`${method} ${url}: ${data.error}`);if(url==='/register'||url==='/login'){user=data.user;cookie=r.headers.get('set-cookie').split(';')[0];}return data;}

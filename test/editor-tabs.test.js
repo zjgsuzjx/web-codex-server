@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isDirtyTab, tabClosePaths, closeTabState, hasUnapprovedTabChanges } from '../src/editor-tabs.js';
+import { isDirtyTab, tabClosePaths, closeTabState, hasUnapprovedTabChanges, updateTabContent } from '../src/features/files/lib/editor-tabs.ts';
 
 const tabs = [
   { path: 'README.md', content: 'saved', original: 'saved' },
@@ -8,6 +8,18 @@ const tabs = [
   { path: 'photo.png', kind: 'image' },
   { path: 'src/notes.txt', content: 'saved', original: 'saved' },
 ];
+
+test('repeated controlled-editor notifications settle without losing edits or changing other tabs', () => {
+  const updated = updateTabContent(tabs, 'src/app.js', 'new content');
+  assert.notEqual(updated, tabs);
+  assert.equal(updated[1].content, 'new content');
+  assert.equal(updated[1].original, 'original');
+  assert.equal(updated[0], tabs[0]);
+  for (let notification = 0; notification < 100; notification++) {
+    assert.equal(updateTabContent(updated, 'src/app.js', 'new content'), updated);
+  }
+  assert.equal(updateTabContent(updated, 'missing-file', 'late notification'), updated);
+});
 
 test('tab close commands target the clicked tab and preserve list order', () => {
   assert.deepEqual(tabClosePaths(tabs, 'src/app.js', 'single'), ['src/app.js']);

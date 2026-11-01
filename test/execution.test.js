@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {executionTarget,hostCommand,projectCwd,workerSpec} from '../server/execution.js';
-import {CodexManager} from '../server/codex.js';
-import {createStore} from '../server/store.js';
+import {executionTarget,hostCommand,projectCwd,workerSpec} from '../server/codex/execution.ts';
+import {CodexManager} from '../server/codex/codex.ts';
+import {createStore} from '../server/db/store.ts';
 const config={hostDataDir:'/srv/app/data',enableHostExecution:true,hostCodexScript:'/opt/codex.js',workerImage:'worker',workerMemory:384};
 const user=(role,target='workspace')=>({id:'safe-id',username:'alice',role,settings:JSON.stringify({executionTarget:target})});
 test('members and administrators cannot forge host mode; their workers have no host access',()=>{

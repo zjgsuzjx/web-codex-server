@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { availableModels, compatibleEffort, modelOptions, reasoningEfforts, selectedModel } from '../src/model-options.js';
+import { availableModels, compatibleEffort, modelOptions, reasoningEfforts, selectedModel } from '../src/features/chat/lib/model-options.ts';
 
 test('model choices preserve actual capabilities and omit hidden or duplicate models', () => {
   const models = [{ id: 'a', model: 'a', isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'high' }] }, { id: 'duplicate', model: 'a' }, { id: 'hidden', hidden: true }, { displayName: 'invalid' }];

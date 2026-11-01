@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { unzipSync, strFromU8 } from 'fflate';
-import { createApp } from '../server/index.js';
+import { createApp } from '../server/index.ts';
 
 test('selected ZIP downloads preserve paths and empty folders with auth, CSRF and safe file boundaries', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'sv-selected-download-'));

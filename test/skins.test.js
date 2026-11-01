@@ -5,11 +5,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
-import { createApp } from '../server/index.js';
-import { createStore } from '../server/store.js';
-import { CodexManager } from '../server/codex.js';
-import { pngCrc, validatePng } from '../server/avatar.js';
-import { normalizeSkin, skinTokens, contrast, skinDevice, WALLPAPER_MAX_BYTES } from '../shared/skins.js';
+import { createApp } from '../server/index.ts';
+import { createStore } from '../server/db/store.ts';
+import { CodexManager } from '../server/codex/codex.ts';
+import { pngCrc, validatePng } from '../server/appearance/avatar.ts';
+import { normalizeSkin, skinTokens, contrast, skinDevice, WALLPAPER_MAX_BYTES } from '../shared/settings/skins.ts';
 
 const appearance = { name: '林间微光', description: '从森林的松绿中寻找灵感。', mode: 'dark', palette: { background: '#152b24', surface: '#1a352b', accent: '#70b58c' }, wallpaper: { fit: 'cover', x: 63, y: 40, shade: .25 } };
 function chunk(type, body) { const data = Buffer.concat([Buffer.from(type), body]), length = Buffer.alloc(4), crc = Buffer.alloc(4); length.writeUInt32BE(body.length); crc.writeUInt32BE(pngCrc(data)); return Buffer.concat([length, data, crc]); }

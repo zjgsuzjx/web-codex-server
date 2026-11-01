@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LiveSocket } from '../src/socket.js';
+import { LiveSocket } from '../src/lib/socket.ts';
 
 test('connected sockets sample immediately and every minute, clear stale latency, and stop timers on close', async t => {
   t.mock.timers.enable({ apis: ['setTimeout','setInterval'] });

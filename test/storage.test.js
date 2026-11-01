@@ -4,10 +4,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { createApp } from '../server/index.js';
-import { measure, requireCodexQuota } from '../server/storage.js';
-import { GiB, storageLimit, storagePressure, topPaths } from '../shared/storage.js';
-import { CodexManager } from '../server/codex.js';
+import { createApp } from '../server/app.ts';
+import { measure, requireCodexQuota } from '../server/resources/storage.ts';
+import { GiB, storageLimit, storagePressure, topPaths } from '../shared/resources/storage.ts';
+import { CodexManager } from '../server/codex/codex.ts';
 
 test('storage limits and pressure distinguish unlimited, full, server disk and unknown capacity', () => {
   assert.equal(storageLimit({ role: 'superadmin' }), null);
