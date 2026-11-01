@@ -1,5 +1,9 @@
 # Editing sent messages / 编辑已发送消息
 
+The edit state expands to the conversation width, using a neutral gray rounded bubble, a borderless text field, and bottom-right Cancel and Send buttons. Cancel is a light secondary action; Send uses a dark fill in light mode, with matching contrast in dark/custom themes. The history-replacement explanation remains available to assistive technology through the text field description.
+
+编辑状态展开到对话内容宽度，采用浅灰大圆角气泡、无边框输入区，右下角排列浅色取消及深色发送按钮；深色及自定义主题使用对应的对比配色。替换历史的说明通过输入框的辅助描述提供，不占用气泡内的可见正文区域。
+
 After a turn ends, hovering a user message reveals its send time, Copy, and Edit below the pale blue bubble. Keyboard focus also reveals these controls; touch devices show them without requiring hover. The controls reserve space so revealing them does not move the conversation. Edit opens a textarea inside the original bubble. Cancel (or Escape) discards the draft; Send (or Ctrl/Cmd+Enter) replaces that turn and every later turn and starts a new response. Existing attachments are included again. A running conversation cannot be edited. Turns containing multiple user inputs cannot currently be edited individually.
 
 每轮结束后，鼠标悬停用户消息时，在淡蓝色气泡下方显示发送时间、复制和编辑按钮；键盘聚焦时也会显示，触屏设备无需悬停即可操作。操作行预留空间，显隐不会推动对话内容。编辑在原气泡内进行；取消或 Escape 放弃修改，发送或 Ctrl/Cmd+Enter 会替换本轮及后续记录并重新回答，原附件会保留。运行中的对话不可编辑；一轮中包含多条用户输入时，暂不支持单独编辑其中一条。

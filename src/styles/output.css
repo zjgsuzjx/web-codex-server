@@ -917,55 +917,70 @@
   height: 28px;
 }
 .user-message.is-editing > div {
-  width: 680px;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   padding-bottom: 0;
+}
+.user-message.is-editing .user-message-bubble {
+  background: var(--user-message-edit-bg);
+  padding: 16px 18px;
+  border-radius: 28px;
 }
 .user-message-editor {
   display: block;
   width: 100%;
-  min-height: 100px;
+  min-height: 56px;
   max-height: min(420px, 40dvh);
-  resize: vertical;
+  resize: none;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
   background: transparent;
   color: var(--text);
   font: inherit;
-  line-height: 1.8;
-  padding: 2px;
+  line-height: 1.5;
+  padding: 0;
 }
-.user-message-editor:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+.user-message-editor:focus {
+  outline: none;
+  box-shadow: none;
 }
 .user-edit-hint {
-  color: var(--muted);
-  font: 12px/1.6 var(--font-ui);
-  white-space: normal;
-  margin: 12px 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .user-edit-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 16px;
   white-space: normal;
 }
 .user-edit-actions button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
+  min-height: 36px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 13px;
   background: var(--bg);
   color: var(--text);
-  font: 13px var(--font-ui);
+  font: 14px/1.5 var(--font-ui);
 }
 .user-edit-actions .user-edit-send {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-color: var(--accent);
+  background: var(--user-edit-send-bg);
+  color: var(--user-edit-send-ink);
+  border-color: var(--user-edit-send-bg);
 }
 .user-edit-actions button:disabled {
   opacity: 0.5;
