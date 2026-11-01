@@ -7,8 +7,15 @@ export interface SiteNotification {
   read: boolean;
 }
 export interface NotificationPage {
+  version: string;
   items: SiteNotification[];
   unread: number;
   nextCursor: number | null;
   latest: number;
+}
+
+export interface NotificationSnapshot {
+  version: string;
+  all: NotificationPage;
+  unread: NotificationPage;
 }

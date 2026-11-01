@@ -74,7 +74,6 @@ export default function NotificationManagement({
             setBody('');
             notify('网站消息已发布');
             await load();
-            window.dispatchEvent(new Event('site:notifications'));
           } catch (caught) {
             notify((caught as Error).message, true);
           } finally {
@@ -168,7 +167,6 @@ export default function NotificationManagement({
                       await api(`/admin/notifications/${item.id}`, { method: 'DELETE' });
                       setDeleting(null);
                       await load();
-                      window.dispatchEvent(new Event('site:notifications'));
                       notify('消息已删除');
                     } catch (caught) {
                       notify((caught as Error).message, true);

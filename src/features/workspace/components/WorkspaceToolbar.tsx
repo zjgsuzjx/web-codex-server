@@ -16,6 +16,7 @@ import type { FocusableElement } from '../../../types/dom.ts';
 import ConnectionSignal from './ConnectionSignal.tsx';
 import NotificationCenter from '../../notifications/components/NotificationCenter.tsx';
 import type { ApiClient } from '../../../../shared/contracts/api.ts';
+import type { NotificationSnapshot } from '../../../../shared/workspace/notifications.ts';
 import MemoIcon from '../../memo/components/MemoIcon.tsx';
 export interface ToolButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'onChange' | 'children'> {
@@ -40,6 +41,7 @@ export interface MoreToolsProps {
 }
 export interface WorkspaceToolbarProps {
   api: ApiClient;
+  notifications: NotificationSnapshot | null;
   memoOpen: boolean;
   onMemo: () => void;
   theme: Theme;
@@ -281,6 +283,7 @@ function MoreTools({
 
 export default function WorkspaceToolbar({
   api,
+  notifications,
   memoOpen,
   onMemo,
   theme,
@@ -354,7 +357,7 @@ export default function WorkspaceToolbar({
       <span className="workspace-tool-separator" aria-hidden="true" />
       <div className="workspace-tool-group" role="group" aria-label="状态与设置">
         <ConnectionSignal status={status} latency={latency} onRetry={onRetry} />
-        <NotificationCenter api={api} />
+        <NotificationCenter api={api} snapshot={notifications} />
         <ToolButton
           label="设置"
           description={settingsDisabled ? '正在保存配置，请稍候' : undefined}

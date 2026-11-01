@@ -98,6 +98,7 @@ import SettingsPanel from '../features/settings/components/SettingsPanel.tsx';
 import SidebarUser from '../features/workspace/components/SidebarUser.tsx';
 import WorkspaceToolbar from '../features/workspace/components/WorkspaceToolbar.tsx';
 import MemoPanel from '../features/memo/components/MemoPanel.tsx';
+import type { NotificationSnapshot } from '../../shared/workspace/notifications.ts';
 import WorkspaceWelcome from '../features/workspace/components/WorkspaceWelcome.tsx';
 import useConversationScroll from '../hooks/useConversationScroll.ts';
 import { LiveSocket } from '../lib/socket.ts';
@@ -154,6 +155,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
     [fileBusy, setFileBusy] = useState(false);
   const [review, setReview] = useState<ProtocolRecord | null | undefined>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationSnapshot | null>(null);
   const [memoOpen, setMemoOpen] = useState(() => {
       try {
         return localStorage.getItem(`workspace:memo:${user.id}:open`) === 'true';
@@ -519,6 +521,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
     }
   }
   function event(msg: {
+    snapshot?: NotificationSnapshot;
     type: string;
     skins: any;
     avatarUrl: any;
@@ -528,6 +531,10 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
     error: string;
     event: any;
   }) {
+    if (msg.type === 'site/notifications') {
+      if (msg.snapshot) setNotifications(msg.snapshot);
+      return;
+    }
     if (msg.type === 'profile/skins') {
       updateSkins(msg.skins);
       return;
@@ -1677,6 +1684,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
             </div>
             <WorkspaceToolbar
               api={api}
+              notifications={notifications}
               memoOpen={memoOpen}
               onMemo={() => {
                 setMemoMounted(true);

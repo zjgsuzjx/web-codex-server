@@ -1,15 +1,24 @@
 import { Bell, ChevronDown, Inbox, LoaderCircle } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ApiClient } from '../../../../shared/contracts/api.ts';
-import type { NotificationPage } from '../../../../shared/workspace/notifications.ts';
+import type {
+  NotificationPage,
+  NotificationSnapshot,
+} from '../../../../shared/workspace/notifications.ts';
 
-const empty: NotificationPage = { items: [], unread: 0, latest: 0, nextCursor: null };
-export default function NotificationCenter({ api }: { api: ApiClient }) {
+const empty: NotificationPage = { version: '', items: [], unread: 0, latest: 0, nextCursor: null };
+export default function NotificationCenter({
+  api,
+  snapshot,
+}: {
+  api: ApiClient;
+  snapshot: NotificationSnapshot | null;
+}) {
   const [open, setOpen] = useState(false),
     [pinned, setPinned] = useState(false),
-    [filter, setFilter] = useState('unread');
-  const [page, setPage] = useState(empty),
-    [busy, setBusy] = useState(false),
+    [filter, setFilter] = useState<'unread' | 'all'>('unread');
+  const [pages, setPages] = useState({ all: empty, unread: empty }),
+    [busy, setBusy] = useState(true),
     [acting, setActing] = useState(false),
     [error, setError] = useState(''),
     [expanded, setExpanded] = useState<number | null>(null);
@@ -17,25 +26,55 @@ export default function NotificationCenter({ api }: { api: ApiClient }) {
     trigger = useRef<HTMLButtonElement>(null),
     closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
     request = useRef(0),
-    currentPage = useRef(page);
-  currentPage.current = page;
-  const refresh = useCallback(
-    async (cursor?: number) => {
+    version = useRef('');
+  const page = pages[filter];
+  const accept = useCallback((next: NotificationSnapshot) => {
+    if (next.version === version.current) return;
+    version.current = next.version;
+    request.current++;
+    setPages({ all: next.all, unread: next.unread });
+    setBusy(false);
+    setError('');
+  }, []);
+  useEffect(() => {
+    if (snapshot) accept(snapshot);
+  }, [snapshot, accept]);
+  const resync = useCallback(async () => {
+    const epoch = ++request.current;
+    setBusy(true);
+    try {
+      const next = await api('/notifications/snapshot');
+      if (epoch === request.current) accept(next);
+    } catch (caught) {
+      if (epoch === request.current) setError((caught as Error).message);
+    } finally {
+      if (epoch === request.current) setBusy(false);
+    }
+  }, [api, accept]);
+  const loadMore = useCallback(
+    async (cursor: number) => {
       const epoch = ++request.current;
       setBusy(true);
       try {
         const next = await api<NotificationPage>(
-          `/notifications?filter=${filter}${cursor ? `&cursor=${cursor}` : ''}`,
+          `/notifications?filter=${filter}&cursor=${cursor}`,
         );
         if (epoch !== request.current) return;
-        setPage((previous) => ({
-          ...next,
-          items: cursor
-            ? [
-                ...previous.items,
-                ...next.items.filter((item) => !previous.items.some((old) => old.id === item.id)),
-              ]
-            : next.items,
+        if (next.version !== version.current) {
+          await resync();
+          return;
+        }
+        setPages((previous) => ({
+          ...previous,
+          [filter]: {
+            ...next,
+            items: [
+              ...previous[filter].items,
+              ...next.items.filter(
+                (item) => !previous[filter].items.some((old) => old.id === item.id),
+              ),
+            ],
+          },
         }));
         setError('');
       } catch (caught) {
@@ -44,35 +83,14 @@ export default function NotificationCenter({ api }: { api: ApiClient }) {
         if (epoch === request.current) setBusy(false);
       }
     },
-    [api, filter],
+    [api, filter, resync],
   );
-  useEffect(() => {
-    void refresh();
-    const poll = async () => {
-      if (document.visibilityState === 'hidden') return;
-      try {
-        const next = await api('/notifications');
-        setPage((previous) => ({ ...previous, unread: next.unread }));
-        if (open && next.latest !== currentPage.current.latest) void refresh();
-      } catch {
-        /* A foreground refresh reports connection errors. */
-      }
-    };
-    const timer = setInterval(poll, 30000);
-    const foreground = () => {
-      if (document.visibilityState === 'visible') void refresh();
-    };
-    window.addEventListener('focus', foreground);
-    window.addEventListener('site:notifications', foreground);
-    document.addEventListener('visibilitychange', foreground);
-    return () => {
+  useEffect(
+    () => () => {
       request.current++;
-      clearInterval(timer);
-      window.removeEventListener('focus', foreground);
-      window.removeEventListener('site:notifications', foreground);
-      document.removeEventListener('visibilitychange', foreground);
-    };
-  }, [api, refresh, open]);
+    },
+    [],
+  );
   useEffect(() => {
     if (!open) return;
     const outside = (e: Event) => {
@@ -101,9 +119,12 @@ export default function NotificationCenter({ api }: { api: ApiClient }) {
     if (acting) return;
     setActing(true);
     try {
-      await api('/notifications/read', { method: 'POST', body });
-      await refresh();
-      window.dispatchEvent(new Event('site:notifications'));
+      const epoch = request.current;
+      const response = await api<{ snapshot: NotificationSnapshot }>('/notifications/read', {
+        method: 'POST',
+        body,
+      });
+      if (epoch === request.current) accept(response.snapshot);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -180,7 +201,7 @@ export default function NotificationCenter({ api }: { api: ApiClient }) {
           {error && (
             <p className="notification-error" role="alert">
               {error}
-              <button onClick={() => void refresh()}>重试</button>
+              <button onClick={() => void resync()}>重试</button>
             </p>
           )}
           <div className="notification-list" aria-busy={busy}>
@@ -243,7 +264,7 @@ export default function NotificationCenter({ api }: { api: ApiClient }) {
               <button
                 className="notification-load"
                 disabled={busy}
-                onClick={() => void refresh(page.nextCursor!)}
+                onClick={() => void loadMore(page.nextCursor!)}
               >
                 {busy ? '正在加载…' : '查看更早的消息'}
               </button>

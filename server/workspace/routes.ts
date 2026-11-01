@@ -2,8 +2,14 @@ import type { Express } from 'express';
 import type { createStore } from '../db/store.ts';
 import { fail } from '../files/files.ts';
 import { validateMemo } from '../../shared/workspace/memo.ts';
+import { createNotifications } from './notifications.ts';
 
-export function workspaceRoutes(app: Express, store: ReturnType<typeof createStore>) {
+export function workspaceRoutes(
+  app: Express,
+  store: ReturnType<typeof createStore>,
+  notify: (uid?: string) => void = () => {},
+) {
+  const notifications = createNotifications(store);
   app.get('/api/memo', (req, res) => {
     const row = store.get('SELECT * FROM user_memos WHERE user_id=?', req.user.id);
     res.json(
@@ -43,48 +49,42 @@ export function workspaceRoutes(app: Express, store: ReturnType<typeof createSto
       updated,
     });
   });
+  app.get('/api/notifications/snapshot', (req, res) =>
+    res.json(notifications.snapshot(req.user.id)),
+  );
   app.get('/api/notifications', (req, res) => {
     const cursor =
       req.query.cursor === undefined ? Number.MAX_SAFE_INTEGER : Number(req.query.cursor);
     if (!Number.isSafeInteger(cursor) || cursor < 1) fail(400, '消息游标无效');
-    const unreadOnly = req.query.filter === 'unread';
-    const rows = store.all(
-      `SELECT n.id,n.title,n.body,n.created,u.username AS author,CASE WHEN r.notification_id IS NULL THEN 0 ELSE 1 END AS read
-      FROM site_notifications n JOIN users u ON u.id=n.author_id
-      LEFT JOIN notification_reads r ON r.notification_id=n.id AND r.user_id=?
-      WHERE n.id<? ${unreadOnly ? 'AND r.notification_id IS NULL' : ''} ORDER BY n.id DESC LIMIT 31`,
-      req.user.id,
-      cursor,
-    );
-    const unread = store.get(
-      `SELECT COUNT(*) AS n FROM site_notifications n WHERE NOT EXISTS(SELECT 1 FROM notification_reads r WHERE r.notification_id=n.id AND r.user_id=?)`,
-      req.user.id,
-    ).n;
-    res.json({
-      items: rows.slice(0, 30).map((row) => ({ ...row, read: !!row.read })),
-      unread,
-      nextCursor: rows.length > 30 ? rows[29]!.id : null,
-      latest: store.get('SELECT COALESCE(MAX(id),0) AS id FROM site_notifications').id,
-    });
+    res.json(notifications.page(req.user.id, req.query.filter === 'unread', cursor));
   });
   app.post('/api/notifications/read', (req, res) => {
     const { id, through } = req.body || {};
+    let changes = 0;
     if (id !== undefined) {
       if (!Number.isSafeInteger(id) || id < 1) fail(400, '消息无效');
-      store.run(
-        'INSERT OR IGNORE INTO notification_reads(user_id,notification_id) SELECT ?,id FROM site_notifications WHERE id=?',
-        req.user.id,
-        id,
+      changes = Number(
+        store.run(
+          'INSERT OR IGNORE INTO notification_reads(user_id,notification_id) SELECT ?,id FROM site_notifications WHERE id=?',
+          req.user.id,
+          id,
+        ).changes,
       );
     } else {
       if (!Number.isSafeInteger(through) || through < 0) fail(400, '消息范围无效');
-      store.run(
-        'INSERT OR IGNORE INTO notification_reads(user_id,notification_id) SELECT ?,id FROM site_notifications WHERE id<=?',
-        req.user.id,
-        through,
+      changes = Number(
+        store.run(
+          'INSERT OR IGNORE INTO notification_reads(user_id,notification_id) SELECT ?,id FROM site_notifications WHERE id<=?',
+          req.user.id,
+          through,
+        ).changes,
       );
     }
-    res.json({ ok: true });
+    if (changes) {
+      notifications.changed(req.user.id);
+      notify(req.user.id);
+    }
+    res.json({ ok: true, snapshot: notifications.snapshot(req.user.id) });
   });
   app.post('/api/admin/notifications', (req, res) => {
     if (!['admin', 'superadmin'].includes(store.user(req.user.id)?.role || ''))
@@ -109,6 +109,8 @@ export function workspaceRoutes(app: Express, store: ReturnType<typeof createSto
       Date.now(),
     );
     store.audit(req.user.id, `notification:publish:${result.lastInsertRowid}`);
+    notifications.changed();
+    notify();
     res.status(201).json({ id: Number(result.lastInsertRowid) });
   });
   app.delete('/api/admin/notifications/:id', (req, res) => {
@@ -116,8 +118,13 @@ export function workspaceRoutes(app: Express, store: ReturnType<typeof createSto
       fail(403, '需要管理员权限');
     const id = Number(req.params.id);
     if (!Number.isSafeInteger(id) || id < 1) fail(400, '消息无效');
-    store.run('DELETE FROM site_notifications WHERE id=?', id);
+    const result = store.run('DELETE FROM site_notifications WHERE id=?', id);
     store.audit(req.user.id, `notification:delete:${id}`);
+    if (result.changes) {
+      notifications.changed();
+      notify();
+    }
     res.json({ ok: true });
   });
+  return notifications;
 }
