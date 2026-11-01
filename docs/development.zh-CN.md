@@ -18,8 +18,8 @@ src/
     chat/                   # 消息、Markdown、模型、审批与问答
     files/                  # 文件树、编辑器、差异、上传与搜索
     resources/              # 存储与额度
-    settings/               # 设置、用户与邀请管理
-    memo/                   # 私人备忘录
+    settings/               # 设置、网站消息、用户与邀请管理
+    memo/ notifications/    # 私人备忘录与网站通知面板
     terminal/               # 按需加载的终端
     workspace/              # 工具栏、侧栏与连接状态
   hooks/                    # 通用交互钩子

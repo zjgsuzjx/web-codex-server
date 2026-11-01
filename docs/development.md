@@ -10,7 +10,7 @@ Application modules use TypeScript/TSX while retaining React, Vite, Node 24, Exp
 | --- | --- |
 | `src/main.tsx`, `src/app/` | React entry, session and workspace coordination |
 | `src/components/ui/`, `src/components/brand/` | Reusable UI primitives and branding |
-| `src/features/<feature>/components/` | Auth, appearance, chat, files, memos, resources, settings, terminal and workspace UI |
+| `src/features/<feature>/components/` | Auth, appearance, chat, files, memos, notifications, resources, settings, terminal and workspace UI |
 | `src/features/<feature>/lib/` | Feature-specific pure logic |
 | `src/hooks/`, `src/lib/`, `src/types/` | Shared browser hooks, transports and environment types |
 | `src/styles/` | Global styles and design variables |

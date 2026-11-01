@@ -41,7 +41,14 @@ export function createStore(dataDir: string) {
     CREATE TABLE IF NOT EXISTS attachments(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), thread_id TEXT NOT NULL REFERENCES threads(id), turn_id TEXT, name TEXT NOT NULL, size INTEGER NOT NULL, mime TEXT NOT NULL, created INTEGER NOT NULL);`);
   db.exec(`CREATE TABLE IF NOT EXISTS user_memos(
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    content TEXT NOT NULL, version INTEGER NOT NULL, updated INTEGER NOT NULL);`);
+    content TEXT NOT NULL, version INTEGER NOT NULL, updated INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS site_notifications(
+    id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL,
+    author_id TEXT NOT NULL REFERENCES users(id), created INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS notification_reads(
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    notification_id INTEGER NOT NULL REFERENCES site_notifications(id) ON DELETE CASCADE,
+    PRIMARY KEY(user_id,notification_id));`);
   const columns = new Set(
     db
       .prepare('PRAGMA table_info(threads)')

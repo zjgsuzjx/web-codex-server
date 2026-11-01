@@ -93,10 +93,11 @@ Chat attachments stay separate from project files. Add documents, code, or paste
 
 In **Settings → Personal account**, upload a JPG, PNG, or WebP image (up to 5 MB, 16 million pixels, and 8192 pixels per side). Drag and zoom to crop it; the avatar is saved to your account as a 256 × 256 PNG, up to 256 KB. You can restore the default avatar at any time. Signing in or reloading shows your avatar, a personal welcome, and the workspace connection status, with reduced-motion support.
 
-### Capture ideas
+### Capture ideas and follow website announcements
 
 The **备忘录** (Memo) button beside the code editor opens an independent floating panel alongside chat and code. It stays open until explicitly closed. Drag its header to move it or its bottom-right corner to resize it. Basic tools include bold, italic, underline, three font sizes, and circular task checkboxes. Changes automatically save to the user's account with a browser draft, and notes export as Markdown. Conflicting edits from another page preserve the local draft and offer a version choice.
 
+Hover over or click **提醒** (Notifications) to browse unread or all website messages and mark individual messages as read. Administrators and superadministrators publish, review, and delete announcements in **Settings → 网站管理** (Website management). Account roles, invitations, and audit records also live there; changing roles and managing invitations remain restricted to superadministrators. Notifications refresh every 30 seconds, when reopened, and when returning to the page.
 
 ### Keep an eye on work from your phone
 

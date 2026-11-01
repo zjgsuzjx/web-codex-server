@@ -1676,6 +1676,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
               <span className="breadcrumb">{thread?.title || '新对话'}</span>
             </div>
             <WorkspaceToolbar
+              api={api}
               memoOpen={memoOpen}
               onMemo={() => {
                 setMemoMounted(true);

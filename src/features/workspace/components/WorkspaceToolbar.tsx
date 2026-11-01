@@ -1,6 +1,5 @@
 import {
   StickyNote,
-  CircleAlert,
   Code,
   Moon,
   MoreHorizontal,
@@ -16,6 +15,8 @@ import type { ProtocolCallback } from '../../../../shared/contracts/protocol.ts'
 import Tooltip from '../../../components/ui/Tooltip.tsx';
 import type { FocusableElement } from '../../../types/dom.ts';
 import ConnectionSignal from './ConnectionSignal.tsx';
+import NotificationCenter from '../../notifications/components/NotificationCenter.tsx';
+import type { ApiClient } from '../../../../shared/contracts/api.ts';
 export interface ToolButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'title' | 'onChange' | 'children'> {
   label: string;
@@ -38,6 +39,7 @@ export interface MoreToolsProps {
   hasProject: boolean;
 }
 export interface WorkspaceToolbarProps {
+  api: ApiClient;
   memoOpen: boolean;
   onMemo: () => void;
   theme: Theme;
@@ -278,6 +280,7 @@ function MoreTools({
 }
 
 export default function WorkspaceToolbar({
+  api,
   memoOpen,
   onMemo,
   theme,
@@ -350,12 +353,7 @@ export default function WorkspaceToolbar({
       <span className="workspace-tool-separator" aria-hidden="true" />
       <div className="workspace-tool-group" role="group" aria-label="状态与设置">
         <ConnectionSignal status={status} latency={latency} onRetry={onRetry} />
-        <ToolButton
-          label="提醒"
-          description="功能即将开放"
-          icon={CircleAlert}
-          aria-disabled="true"
-        />
+        <NotificationCenter api={api} />
         <ToolButton
           label="设置"
           description={settingsDisabled ? '正在保存配置，请稍候' : undefined}
