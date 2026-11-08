@@ -50,19 +50,41 @@
   flex-direction: column;
   gap: 3px;
 }
-.thread-row > button > span {
+.thread-row > .tooltip-trigger > button > span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.thread-row > button > svg {
+.thread-row > .tooltip-trigger > button > svg {
   color: var(--subtle);
+  flex-shrink: 0;
+}
+.thread-row .thread-favorite {
+  fill: #f6c344;
+  stroke: var(--warning);
+}
+.thread-times {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.thread-times dd {
+  margin: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+@media (forced-colors: active) {
+  .thread-row .thread-favorite {
+    fill: currentColor;
+    stroke: currentColor;
+  }
 }
 .thread-row:hover,
 .thread-row.selected {
   background: var(--hover);
 }
-.thread-row.selected > button {
+.thread-row.selected > .tooltip-trigger > button {
   color: var(--text);
 }
 .thread-row:hover .row-menu > summary,
@@ -142,10 +164,6 @@
   flex-shrink: 0;
   margin-right: 3px;
   color: var(--accent);
-}
-.thread-row > button > span {
-  flex: 1;
-  min-width: 0;
 }
 .workspace {
   height: 100dvh;
@@ -296,7 +314,11 @@
   height: 38px;
   flex-shrink: 0;
 }
-.thread-row > button {
+.thread-row > .tooltip-trigger {
+  flex: 1;
+  min-width: 0;
+}
+.thread-row > .tooltip-trigger > button {
   display: flex;
   align-items: center;
   gap: 9px;

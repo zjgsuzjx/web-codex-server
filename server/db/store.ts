@@ -58,6 +58,8 @@ export function createStore(dataDir: string) {
   if (!columns.has('title_state'))
     db.exec("ALTER TABLE threads ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'");
   if (!columns.has('token_usage')) db.exec('ALTER TABLE threads ADD COLUMN token_usage TEXT');
+  if (!columns.has('favorite'))
+    db.exec('ALTER TABLE threads ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0');
   if (
     !db
       .prepare('PRAGMA table_info(attachments)')
