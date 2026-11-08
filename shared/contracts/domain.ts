@@ -144,6 +144,9 @@ export interface Thread {
   title: string;
   user_id?: string;
   created?: number;
+  favorite?: boolean;
+  firstTurnAt?: number | null;
+  lastTurnAt?: number | null;
   activeTurn?: import('./protocol.ts').Turn | null;
   tokenUsage?: TokenUsage | null;
 }

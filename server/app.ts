@@ -1002,10 +1002,17 @@ export async function createApp(options: AppOptions = {}) {
     res.json(
       store
         .all(
-          'SELECT * FROM threads WHERE user_id=? AND archived=0 ORDER BY created DESC',
+          `SELECT t.*,
+             (SELECT MIN(started_at) FROM turn_activity WHERE thread_id=t.id) AS firstTurnAt,
+             (SELECT MAX(started_at) FROM turn_activity WHERE thread_id=t.id) AS lastTurnAt
+           FROM threads t WHERE t.user_id=? AND t.archived=0 ORDER BY t.created DESC`,
           req.user.id,
         )
-        .map((thread) => ({ ...thread, activeTurn: active.get(thread.id) || null })),
+        .map((thread) => ({
+          ...thread,
+          favorite: Boolean(thread.favorite),
+          activeTurn: active.get(thread.id) || null,
+        })),
     );
   });
   app.post('/api/threads', async (req, res) => {
@@ -1022,6 +1029,7 @@ export async function createApp(options: AppOptions = {}) {
       title: req.body.title?.slice(0, 100) || '新对话',
       created: Date.now(),
       archived: 0,
+      favorite: false,
     };
     store.run(
       "INSERT INTO threads(id,user_id,project_id,title,created,title_state) VALUES(?,?,?,?,?,'pending')",
@@ -1135,6 +1143,18 @@ export async function createApp(options: AppOptions = {}) {
   app.get('/api/threads/:id/media', async (req, res) => {
     const t = store.thread(req.user, req.params.id);
     sendImage(req, res, await readMedia(config, req.user, t, req.query.path as string));
+  });
+  app.put('/api/threads/:id/favorite', (req, res) => {
+    const t = store.thread(req.user, req.params.id);
+    const favorite = req.body?.favorite;
+    if (typeof favorite !== 'boolean') fail(400, '收藏状态无效');
+    store.run(
+      'UPDATE threads SET favorite=? WHERE id=? AND user_id=?',
+      Number(favorite),
+      t.id,
+      req.user.id,
+    );
+    res.json({ favorite });
   });
   app.patch('/api/threads/:id', async (req, res) => {
     store.thread(req.user, req.params.id);

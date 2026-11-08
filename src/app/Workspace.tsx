@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Sparkles,
   Square,
+  Star,
   Terminal,
   Trash2,
   X,
@@ -63,6 +64,7 @@ import IconButton from '../components/ui/IconButton.tsx';
 import LoadingPlaceholder from '../components/ui/LoadingPlaceholder.tsx';
 import Modal from '../components/ui/Modal.tsx';
 import RowMenu, { useRowMenuDismissal } from '../components/ui/RowMenu.tsx';
+import Tooltip from '../components/ui/Tooltip.tsx';
 import { useAppearance } from '../features/appearance/components/Appearance.tsx';
 import { BrowserGraphicsNotice } from '../features/appearance/components/BrowserGraphics.tsx';
 import ApprovalRequests from '../features/chat/components/ApprovalRequests.tsx';
@@ -117,6 +119,16 @@ import usePresence from '../hooks/usePresence.ts';
 import { api, getCsrfToken } from '../lib/api.ts';
 const ChangesReview = lazy(() => import('../features/files/components/ChangesReview.tsx'));
 const TerminalView = lazy(() => import('../features/terminal/components/TerminalView.tsx'));
+const conversationDate = new Intl.DateTimeFormat('zh-CN', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+function conversationTime(timestamp?: number | null) {
+  if (timestamp == null) return '暂无记录';
+  return (
+    <time dateTime={new Date(timestamp).toISOString()}>{conversationDate.format(timestamp)}</time>
+  );
+}
 const bytes = (n: number) =>
   n < 1024
     ? `${n} B`
@@ -131,6 +143,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
   );
   useRowMenuDismissal();
   const dialogs = useActionDialog();
+  const favoritePending = useRef(new Set<string>());
   const [welcomeVisible, setWelcomeVisible] = useState(true),
     [welcomeError, setWelcomeError] = useState('');
   const enterWorkspace = useCallback(() => setWelcomeVisible(false), []);
@@ -634,8 +647,22 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       if (completedTurns.current.size > 100)
         completedTurns.current.delete(completedTurns.current.values().next().value);
     }
-    if (['turn/started', 'turn/completed'].includes(e.method))
+    if (['turn/started', 'turn/completed'].includes(e.method)) {
       setActivity((prev) => mergeActivity(prev, [{ threadId: p.threadId, turn: p.turn }]));
+      const startedAt = p.turn.timing?.startedAt;
+      if (typeof startedAt === 'number')
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === p.threadId
+              ? {
+                  ...t,
+                  firstTurnAt: Math.min(t.firstTurnAt ?? startedAt, startedAt),
+                  lastTurnAt: Math.max(t.lastTurnAt ?? startedAt, startedAt),
+                }
+              : t,
+          ),
+        );
+    }
     const tid = p.threadId || p.thread?.id;
     if (tid !== threadRef.current?.id) return;
     if (e.method === 'thread/history/reverted') {
@@ -1454,6 +1481,22 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
       setToolBusy(action);
     }
     try {
+      if (action === 'favorite') {
+        if (favoritePending.current.has(t.id)) return;
+        favoritePending.current.add(t.id);
+        try {
+          const { favorite } = await api<{ favorite: boolean }>(`/threads/${t.id}/favorite`, {
+            method: 'PUT',
+            body: { favorite: !t.favorite },
+          });
+          setThreads((prev) =>
+            prev.map((item) => (item.id === t.id ? { ...item, favorite } : item)),
+          );
+        } finally {
+          favoritePending.current.delete(t.id);
+        }
+        return;
+      }
       if (action === 'rename') {
         await dialogs.input({
           key: `thread-name:${t.id}`,
@@ -1607,10 +1650,29 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
             <nav className="conversation-list" aria-label="对话列表">
               {visibleThreads.map((t) => (
                 <div key={t.id} className={`thread-row ${t.id === thread?.id ? 'selected' : ''}`}>
-                  <button onClick={() => chooseThread(t)}>
-                    <MessageSquare size={14} />
-                    <span>{t.title}</span>
-                  </button>
+                  <Tooltip
+                    content={
+                      <dl className="thread-times">
+                        <dt>第一次对话</dt>
+                        <dd>{conversationTime(t.firstTurnAt)}</dd>
+                        <dt>最后一次对话</dt>
+                        <dd>{conversationTime(t.lastTurnAt)}</dd>
+                      </dl>
+                    }
+                  >
+                    <button onClick={() => chooseThread(t)}>
+                      <MessageSquare size={14} aria-hidden="true" />
+                      <span>{t.title}</span>
+                      {t.favorite && (
+                        <Star
+                          size={13}
+                          className="thread-favorite"
+                          role="img"
+                          aria-label="已收藏"
+                        />
+                      )}
+                    </button>
+                  </Tooltip>
                   {requests.some((r) => isUserInput(r) && r.params?.threadId === t.id) ? (
                     <span
                       className="thread-question"
@@ -1632,6 +1694,10 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                     )
                   )}
                   <RowMenu label="对话操作">
+                    <button onClick={() => threadAction('favorite', t)}>
+                      <Star size={13} className={t.favorite ? 'thread-favorite' : undefined} />
+                      {t.favorite ? '取消收藏' : '收藏'}
+                    </button>
                     <button onClick={() => threadAction('rename', t)}>
                       <Pencil size={13} />
                       重命名
