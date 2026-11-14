@@ -700,3 +700,93 @@
 .permission-menu label:last-child {
   margin-bottom: 0;
 }
+.prompt-input {
+  position: relative;
+}
+.prompt-menu {
+  position: absolute;
+  bottom: calc(100% + 18px);
+  left: 0;
+  width: min(480px, 100%);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 10px 35px #0002;
+  padding: 6px;
+  z-index: 30;
+}
+.prompt-menu header {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.prompt-menu header small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+}
+.prompt-menu [role='listbox'] {
+  max-height: min(300px, 40dvh);
+  overflow-y: auto;
+}
+.prompt-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}
+.prompt-menu button.active {
+  background: var(--hover);
+}
+.prompt-menu button > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.prompt-menu strong {
+  display: block;
+  font-size: 13px;
+}
+.prompt-menu small {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+.prompt-menu em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+}
+.prompt-symbol {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 4px 9px;
+  color: var(--muted);
+}
+.prompt-menu p {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.shortcut-editor {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.shortcut-editor textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.shortcut-settings {
+  margin-bottom: 24px;
+}
