@@ -1,5 +1,7 @@
-import { ArrowLeft, Check, ChevronRight, Plus, Terminal, Trash2, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Info, Plus, Terminal, Trash2, Undo2 } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
+import IconButton from '../../../components/ui/IconButton.tsx';
+import Tooltip from '../../../components/ui/Tooltip.tsx';
 import { readShortcuts, shortcutKey } from '../../chat/components/PromptInput.tsx';
 type Shortcut = { name: string; text: string };
 export default function ShortcutSettings({ userId }: { userId: string }) {
@@ -58,11 +60,14 @@ export default function ShortcutSettings({ userId }: { userId: string }) {
   return (
     <section className="shortcut-settings">
       <div className="shortcut-heading">
-        <div>
+        <div className="shortcut-title">
           <h4>快捷指令</h4>
-          <p>
-            把常用提示词存下来，输入 <kbd>/</kbd> 即可调用。
-          </p>
+          <IconButton
+            title="快捷指令"
+            description="输入 / 调用常用提示词。指令按账号保存在当前浏览器，不会跨设备同步。"
+          >
+            <Info size={14} />
+          </IconButton>
         </div>
         {editing === null && (
           <button
@@ -81,58 +86,54 @@ export default function ShortcutSettings({ userId }: { userId: string }) {
           <div className="shortcut-list">
             {items.length ? (
               items.map((item, index) => (
-                <button
-                  type="button"
-                  className="shortcut-row"
+                <Tooltip
                   key={item.name}
-                  onClick={() => open(index)}
+                  title={`/${item.name}`}
+                  description={item.text.slice(0, 400)}
                 >
-                  <Terminal size={17} strokeWidth={1.65} />
-                  <span>
-                    <strong>
-                      <span>/</span>
-                      {item.name}
-                    </strong>
-                    <small>{item.text}</small>
-                  </span>
-                  <ChevronRight size={15} />
-                </button>
+                  <button type="button" className="shortcut-row" onClick={() => open(index)}>
+                    <Terminal size={17} strokeWidth={1.65} />
+                    <span>
+                      <strong>
+                        <span>/</span>
+                        {item.name}
+                      </strong>
+                      <span className="shortcut-preview">{item.text}</span>
+                    </span>
+                    <ChevronRight size={15} />
+                  </button>
+                </Tooltip>
               ))
             ) : (
               <div className="shortcut-empty">
                 <Terminal size={24} strokeWidth={1.5} />
-                <strong>常用提示词，一次保存，随时填入</strong>
-                <p>例如代码审查、补充测试、解释代码。</p>
-                <button type="button" className="secondary" onClick={() => open(0)}>
-                  <Plus size={14} />
-                  创建第一条指令
-                </button>
+                <strong>暂无快捷指令</strong>
               </div>
             )}
           </div>
-          <div className="shortcut-status">
-            <span role="status">
-              {notice ? (
-                <>
-                  <Check size={13} />
-                  {notice}
-                </>
-              ) : (
-                '仅保存在当前浏览器，按账号独立保存。'
+          {(notice || removed) && (
+            <div className="shortcut-status">
+              <span role="status">
+                {notice ? (
+                  <>
+                    <Check size={13} />
+                    {notice}
+                  </>
+                ) : null}
+              </span>
+              {removed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (persist(removed, '已恢复删除的指令')) setRemoved(null);
+                  }}
+                >
+                  <Undo2 size={13} />
+                  撤销删除
+                </button>
               )}
-            </span>
-            {removed && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (persist(removed, '已恢复删除的指令')) setRemoved(null);
-                }}
-              >
-                <Undo2 size={13} />
-                撤销删除
-              </button>
-            )}
-          </div>
+            </div>
+          )}
         </>
       ) : (
         <div
@@ -180,7 +181,6 @@ export default function ShortcutSettings({ userId }: { userId: string }) {
               setError('');
             }}
           />
-          <p className="shortcut-editor-hint">选择指令后会填入输入框，你可以继续修改再发送。</p>
           <div className="shortcut-editor-actions">
             {editing < items.length && (
               <button
@@ -202,13 +202,15 @@ export default function ShortcutSettings({ userId }: { userId: string }) {
                 删除
               </button>
             )}
-            <span />
+            <span className="shortcut-action-spacer" />
             <button type="button" className="secondary" onClick={close}>
               取消
             </button>
-            <button type="button" className="primary" onClick={save}>
-              保存指令
-            </button>
+            <Tooltip title="保存指令" description="Ctrl / ⌘ + Enter">
+              <button type="button" className="primary" onClick={save}>
+                保存
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}

@@ -84,10 +84,10 @@
   color: var(--muted);
 }
 .tool-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 18px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius-lg);
+  margin: 0 0 20px;
 }
 .profile-info {
   display: flex;
@@ -418,9 +418,6 @@
 .action-error > span {
   min-width: 0;
 }
-.settings-apply-status svg {
-  color: var(--accent);
-}
 .account-status > .account-actions {
   display: flex;
   flex-direction: row;
@@ -611,12 +608,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
-  padding-top: 14px;
-  min-height: 22px;
-  margin-top: 20px;
-  border-top: 1px solid var(--line);
+  margin: 16px 0 0;
 }
 .account-status {
   display: flex;
@@ -665,14 +659,64 @@
   max-height: 330px;
   color: var(--muted);
 }
-.tool-buttons .secondary {
+.tool-buttons > button {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
   margin: 0;
-  font-size: 12px;
-  padding: 14px;
+  font-size: 13px;
+  padding: 14px 16px;
   background: var(--bg);
-  min-height: 60px;
+  color: var(--text);
+  min-height: 48px;
+  border-radius: 0;
+  text-align: left;
+}
+.tool-buttons > button + button {
+  border-top: 1px solid var(--line);
+}
+.tool-buttons > button:hover:not(:disabled) {
+  background: var(--ui-hover);
+}
+.tool-buttons > button > span {
+  flex: 1;
+  min-width: 0;
+}
+.tool-buttons > button > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.settings-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.settings-content .settings-section-heading h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.settings-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.settings-general .model-controls {
+  display: block;
+}
+.settings-general .model-controls > label,
+.settings-general > label {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 220px);
+  align-items: center;
+  gap: 24px;
+  margin: 0;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-size: 13px;
 }
 .profile-avatar-section {
   margin-bottom: 28px;
@@ -699,40 +743,16 @@
   padding: 12px 0;
   font-size: 12px;
 }
-.settings-content .model-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.settings-content .model-controls > label {
-  margin: 0 0 16px;
-}
 .settings-page-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 28px;
-}
-.settings-page-heading > span {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-field);
-  color: var(--muted);
-  flex-shrink: 0;
+  margin-bottom: 24px;
 }
 .settings-page-heading h3 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.4px;
-}
-.settings-page-heading p {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.7;
 }
 @media (max-width: 800px) {
   .account-status {
@@ -795,15 +815,9 @@
   .settings-content h3 {
     font-size: 17px;
   }
-  .settings-content .model-controls {
-    grid-template-columns: 1fr;
-  }
   .field-row {
     flex-direction: column;
     gap: 0;
-  }
-  .tool-buttons {
-    grid-template-columns: 1fr;
   }
   .settings-page-heading {
     margin-bottom: 24px;
@@ -821,6 +835,11 @@
   }
 }
 @media (max-width: 480px) {
+  .settings-general .model-controls > label,
+  .settings-general > label {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
   .avatar-cropper {
     padding: 20px;
   }

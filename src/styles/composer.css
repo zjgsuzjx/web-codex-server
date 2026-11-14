@@ -707,7 +707,7 @@
   position: absolute;
   bottom: calc(100% + 22px);
   left: -8px;
-  width: min(540px, calc(100% + 16px));
+  width: min(440px, calc(100% + 16px));
   padding: 5px;
   z-index: 45;
   border: 1px solid color-mix(in srgb, var(--text) 10%, var(--bg));
@@ -722,19 +722,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 31px;
-  padding: 2px 8px 5px;
+  min-height: 34px;
+  padding: 0 6px 4px 10px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 500;
 }
 .prompt-menu .prompt-manage {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 6px;
-  font-size: 11px;
-  font-weight: 400;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 5px;
   color: var(--muted);
   background: transparent;
@@ -751,13 +748,16 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+.prompt-options > .tooltip-trigger {
+  display: block;
+}
 .prompt-menu .prompt-option {
   display: flex;
   align-items: center;
   gap: 11px;
   width: 100%;
-  min-height: 57px;
-  padding: 9px 11px;
+  min-height: 42px;
+  padding: 7px 11px;
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -797,20 +797,6 @@
   color: var(--muted);
   margin-right: 1px;
 }
-.prompt-kind {
-  font-size: 10px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.prompt-option-description {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 3px;
-}
 .prompt-return {
   flex-shrink: 0;
   color: var(--muted);
@@ -818,34 +804,6 @@
 }
 .prompt-option.active .prompt-return {
   opacity: 0.7;
-}
-.prompt-menu-footer {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 5px 5px 0;
-  padding: 8px 4px 3px;
-  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  color: var(--muted);
-  font-size: 10px;
-}
-.prompt-menu-footer > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.prompt-menu-footer kbd {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  min-width: 18px;
-  justify-content: center;
-  font-family: var(--font-ui);
-  font-size: 10px;
-  color: var(--muted);
-}
-.prompt-menu-footer .prompt-dismiss-hint {
-  margin-left: auto;
 }
 .prompt-empty {
   display: flex;
@@ -862,7 +820,7 @@
   font-weight: 500;
 }
 .prompt-empty > span {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   max-width: 300px;
 }
@@ -878,21 +836,21 @@
   gap: 16px;
   margin-bottom: 16px;
 }
+.shortcut-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.shortcut-title .icon-button {
+  width: 26px;
+  height: 26px;
+}
 .settings-content .shortcut-heading h4,
 .shortcut-heading h4 {
   font-size: 14px;
   font-weight: 600;
-  margin: 0 0 6px;
-}
-.shortcut-heading p {
-  color: var(--muted);
-  font-size: 12px;
   margin: 0;
-  line-height: 1.6;
-}
-.shortcut-heading kbd {
-  font: inherit;
-  color: var(--text);
 }
 .shortcut-heading .shortcut-add {
   flex-shrink: 0;
@@ -907,6 +865,12 @@
   border-radius: 10px;
   overflow: hidden;
 }
+.shortcut-list > .tooltip-trigger {
+  display: block;
+}
+.shortcut-list > .tooltip-trigger + .tooltip-trigger {
+  border-top: 1px solid var(--line);
+}
 .shortcut-row {
   display: flex;
   align-items: center;
@@ -918,9 +882,6 @@
   background: transparent;
   color: var(--text);
 }
-.shortcut-row + .shortcut-row {
-  border-top: 1px solid var(--line);
-}
 .shortcut-row:hover {
   background: var(--hover);
 }
@@ -929,6 +890,10 @@
   color: var(--muted);
 }
 .shortcut-row > span {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 16px;
   flex: 1;
   min-width: 0;
 }
@@ -944,14 +909,13 @@
   color: var(--muted);
   margin-right: 2px;
 }
-.shortcut-row small {
+.shortcut-preview {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 4px;
 }
 .shortcut-status {
   display: flex;
@@ -989,15 +953,6 @@
   color: var(--text);
   font-size: 13px;
   font-weight: 500;
-}
-.shortcut-empty p {
-  font-size: 12px;
-  margin: 0 0 4px;
-}
-.shortcut-empty button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 .shortcut-editor {
   padding: 16px;
@@ -1049,18 +1004,13 @@
   font-size: 13px;
   line-height: 1.7;
 }
-.shortcut-editor-hint {
-  font-size: 11px;
-  color: var(--muted);
-  margin: 8px 0 20px;
-  line-height: 1.6;
-}
 .shortcut-editor-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 20px;
 }
-.shortcut-editor-actions > span {
+.shortcut-editor-actions > .shortcut-action-spacer {
   flex: 1;
 }
 .shortcut-editor-actions button {
@@ -1090,7 +1040,7 @@
     width: calc(100% + 10px);
   }
   .shortcut-heading {
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
   }
   .shortcut-editor {
@@ -1100,15 +1050,8 @@
     align-items: flex-start;
     flex-wrap: wrap;
   }
-}
-.prompt-menu-footer kbd,
-.shortcut-heading kbd {
-  background: color-mix(in srgb, var(--text) 4%, var(--bg));
-  border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
-  border-radius: 4px;
-  box-shadow: none;
-  padding: 2px 4px;
-}
-.shortcut-heading kbd {
-  padding: 1px 5px;
+  .shortcut-row > span {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
 }
