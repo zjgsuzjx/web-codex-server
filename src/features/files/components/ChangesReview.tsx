@@ -1,3 +1,4 @@
+import { ignoredChangePath } from '../lib/change-visibility.ts';
 import { ArrowLeft, ChevronDown, File, FileDiff, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ApiClient } from '../../../../shared/contracts/api.ts';
@@ -15,6 +16,7 @@ export interface DiffFileProps {
   onFile: ProtocolCallback;
 }
 export interface ChangesReviewProps {
+  ignoredPaths?: string[];
   review: ProtocolRecord;
   summary: ProtocolRecord | null | undefined;
   api: ApiClient;
@@ -86,6 +88,7 @@ function DiffFile({ file, onFile }: DiffFileProps) {
 }
 
 export default function ChangesReview({
+  ignoredPaths = [],
   review,
   summary,
   api,
@@ -114,8 +117,12 @@ export default function ChangesReview({
       });
     return () => abort.abort();
   }, [review.threadId, review.turnId, review.path, summary?.revision, retry, api]);
-  const files = data?.files || [],
-    choices = summary?.files || files;
+  const files = (data?.files || []).filter(
+      (file: FileChange) => !ignoredChangePath(file.path, ignoredPaths),
+    ),
+    choices = (summary?.files || files).filter(
+      (file: FileChange) => !ignoredChangePath(file.path, ignoredPaths),
+    );
   return (
     <div className="changes-review">
       <div className="changes-review-toolbar">
