@@ -1,6 +1,6 @@
 import ShortcutSettings from './ShortcutSettings.tsx';
 import {
-  Check,
+  BookOpen,
   ChevronRight,
   Code2,
   KeyRound,
@@ -8,10 +8,14 @@ import {
   LogOut,
   Monitor,
   Palette,
+  Plug,
   RefreshCw,
   Settings as SettingsIcon,
   ShieldCheck,
   Sparkles,
+  SlidersHorizontal,
+  Wrench,
+  Zap,
   LayoutDashboard,
 } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -60,7 +64,6 @@ const settingsPages = [
     icon: SettingsIcon,
     name: '通用',
     title: '模型与执行',
-    description: '选择适合当前任务的模型与工作方式。',
   },
   { id: 'appearance', icon: Palette, name: '壁纸与外观' },
   {
@@ -68,55 +71,42 @@ const settingsPages = [
     icon: Monitor,
     name: '浏览器',
     title: '浏览器与性能',
-    description: '检查当前浏览器的图形渲染与加速设置。',
   },
   {
     id: 'account',
     icon: KeyRound,
     name: 'Codex 账号',
     title: 'Codex 账号',
-    description: '管理工作区使用的账号与连接方式。',
   },
   {
     id: 'advanced',
     icon: Code2,
     name: '高级配置',
     title: '高级配置',
-    description: '精细调整你的 Codex 工作环境。',
   },
   {
     id: 'tools',
     icon: Sparkles,
     name: '工具与技能',
     title: '工具与技能',
-    description: '查看和管理工作区可用的能力。',
   },
   {
     id: 'profile',
     icon: ShieldCheck,
     name: '个人账号',
     title: '个人账号',
-    description: '让工作区更像你，也更适合你。',
   },
   {
     id: 'site',
     icon: LayoutDashboard,
     name: '网站管理',
     title: '网站管理',
-    description: '管理网站消息、账号权限与成员访问。',
   },
 ];
 function SettingsHeading({ page }: SettingsHeadingProps) {
-  const Icon = page.icon;
   return (
     <header className="settings-page-heading">
-      <span aria-hidden="true">
-        <Icon size={20} />
-      </span>
-      <div>
-        <h3>{page.title}</h3>
-        <p>{page.description}</p>
-      </div>
+      <h3>{page.title}</h3>
     </header>
   );
 }
@@ -196,8 +186,7 @@ export default function SettingsPanel({
   }
   return (
     <Modal
-      title="工作区设置"
-      subtitle="让 Codex 按照你的方式工作。"
+      title="设置"
       className={`settings-dialog${tab === 'appearance' ? ' appearance-settings' : ''}`}
       dismissible={!busy}
       onClose={onClose}
@@ -237,14 +226,13 @@ export default function SettingsPanel({
           )}
           {tab === 'browser' && <BrowserGraphicsCheck />}
           {tab === 'general' && (
-            <>
+            <div className="settings-general">
               <ModelControls
                 models={models}
                 value={draft}
                 onChange={applySettings}
                 disabled={busy}
               />
-              <p className="field-hint">执行审批可在聊天输入框旁直接选择。</p>
               <label>
                 对话模式
                 <Select
@@ -261,27 +249,18 @@ export default function SettingsPanel({
                   <option value="plan">计划模式</option>
                 </Select>
               </label>
-              <p className="settings-apply-status" role="status">
-                {saving ? (
-                  <>
-                    <LoaderCircle size={13} className="spin" />
-                    正在保存更改…
-                  </>
-                ) : saveError ? (
-                  '部分更改未保存'
-                ) : (
-                  <>
-                    <Check size={13} />
-                    更改会立即应用
-                  </>
-                )}
-              </p>
+              {saving && (
+                <p className="settings-apply-status" role="status">
+                  <LoaderCircle size={13} className="spin" />
+                  正在保存…
+                </p>
+              )}
               {saveError && (
                 <p className="form-error" role="alert">
                   {saveError}
                 </p>
               )}
-            </>
+            </div>
           )}
           {tab === 'account' && (
             <>
@@ -297,7 +276,7 @@ export default function SettingsPanel({
                           ? '使用自定义服务商'
                           : '尚未连接 Codex 账号'}
                   </strong>
-                  <span>{account?.account?.planType || '账号凭据仅存储在你的工作区'}</span>
+                  {account?.account?.planType && <span>{account.account.planType}</span>}
                 </div>
                 <div className="account-actions">
                   <IconButton title="刷新账号状态" disabled={busy} onClick={() => run(reload)}>
@@ -356,10 +335,8 @@ export default function SettingsPanel({
           )}
           {tab === 'advanced' && (
             <>
-              <p className="field-hint">
-                这里直接编辑你工作区的 config.toml，支持自定义服务商、MCP、功能开关、配置档案及其他
-                CLI 设置。保存会重启该用户的 Codex 进程，请先停止运行中的任务。
-              </p>
+              <h4>config.toml</h4>
+              <p className="field-hint">保存将重启 Codex，请先停止运行中的任务。</p>
               {!loadedConfig &&
                 (configError ? (
                   <p className="form-error" role="alert">
@@ -399,19 +376,43 @@ export default function SettingsPanel({
           {tab === 'tools' && (
             <>
               <ShortcutSettings userId={user.id} />
-              <p className="field-hint">
-                MCP 和功能开关可以在高级配置中管理。项目内的 AGENTS.md、技能和代码会被 Codex
-                自动读取。
-              </p>
+              <div className="settings-section-heading">
+                <h4>工作区能力</h4>
+                <div className="settings-section-actions">
+                  <IconButton
+                    title="高级配置"
+                    description="在 config.toml 中管理 MCP 和功能开关。"
+                    disabled={busy}
+                    onClick={() => {
+                      setTab('advanced');
+                      setResult(null);
+                    }}
+                  >
+                    <SlidersHorizontal size={15} />
+                  </IconButton>
+                  <IconButton
+                    title="重新加载 MCP"
+                    disabled={busy}
+                    onClick={() =>
+                      run(async () => {
+                        await socket.call('config/mcpServer/reload');
+                        notify('MCP 配置已重新加载');
+                      })
+                    }
+                  >
+                    <RefreshCw size={15} />
+                  </IconButton>
+                </div>
+              </div>
               <div className="tool-buttons">
                 {[
-                  ['skills/list', '查看已安装技能'],
-                  ['mcpServerStatus/list', '查看 MCP 工具'],
-                  ['app/list', '查看连接器'],
-                  ['experimentalFeature/list', '查看功能开关'],
-                ].map(([method, title]) => (
+                  { method: 'skills/list', title: '技能', icon: BookOpen },
+                  { method: 'mcpServerStatus/list', title: 'MCP 工具', icon: Wrench },
+                  { method: 'app/list', title: '连接器', icon: Plug },
+                  { method: 'experimentalFeature/list', title: '功能开关', icon: Zap },
+                ].map(({ method, title, icon: Icon }) => (
                   <button
-                    className="secondary"
+                    type="button"
                     disabled={busy}
                     key={method}
                     onClick={() =>
@@ -424,24 +425,12 @@ export default function SettingsPanel({
                       })
                     }
                   >
-                    {title}
+                    <Icon size={16} />
+                    <span>{title}</span>
                     <ChevronRight size={14} />
                   </button>
                 ))}
               </div>
-              <button
-                className="secondary full"
-                disabled={busy}
-                onClick={() =>
-                  run(async () => {
-                    await socket.call('config/mcpServer/reload');
-                    notify('MCP 配置已重新加载');
-                  })
-                }
-              >
-                <RefreshCw size={14} />
-                重新加载 MCP
-              </button>
               {result && <pre className="settings-result">{JSON.stringify(result, null, 2)}</pre>}
             </>
           )}

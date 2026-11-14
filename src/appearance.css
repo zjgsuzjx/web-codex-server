@@ -180,12 +180,6 @@
   font-size: 11px;
   display: block;
 }
-.appearance-panel .optional {
-  font-size: 9px;
-  font-weight: 400;
-  color: var(--subtle);
-  margin-left: 3px;
-}
 .appearance-panel input:not([type='range']) {
   font-size: 11px;
   padding: 10px;
@@ -338,9 +332,6 @@
   color: var(--danger);
   background: var(--hover);
 }
-.appearance-footer {
-  margin: 16px 0 0;
-}
 /* A fixed wallpaper layer follows the viewport; image proportions never stretch. */
 :root[data-skin='custom'] body {
   background: var(--bg);
@@ -479,24 +470,9 @@ body:has(.appearance-full-modal) > .modal-backdrop:not(:has(.appearance-full-mod
   font-size: 11px;
   line-height: 1.6;
 }
-.appearance-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-field);
-  color: var(--muted);
-  flex-shrink: 0;
-}
 .appearance-heading h3 {
   font-size: 18px;
   letter-spacing: -0.4px;
-  margin: 0 0 7px !important;
-}
-.appearance-heading p {
-  font-size: 12px;
-  color: var(--muted);
   margin: 0;
 }
 .appearance-devices {
@@ -554,12 +530,6 @@ body:has(.appearance-full-modal) > .modal-backdrop:not(:has(.appearance-full-mod
   white-space: nowrap;
   padding-right: 10px;
 }
-.appearance-presets small {
-  display: block;
-  font-size: 10px;
-  color: var(--muted);
-  margin: 0 12px;
-}
 .appearance-preset img {
   display: block;
   width: 100%;
@@ -591,11 +561,16 @@ body:has(.appearance-full-modal) > .modal-backdrop:not(:has(.appearance-full-mod
 .appearance-upload-row strong {
   font-size: 13px;
 }
-.appearance-upload-row p {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.8;
-  margin: 6px 0 0;
+.appearance-upload-heading,
+.appearance-presets-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.appearance-upload-heading .icon-button,
+.appearance-presets-heading .icon-button {
+  width: 26px;
+  height: 26px;
 }
 .appearance-heading {
   display: flex;
@@ -678,9 +653,6 @@ body:has(.appearance-full-modal) > .modal-backdrop:not(:has(.appearance-full-mod
   }
   .appearance-upload-row strong {
     font-size: 11px;
-  }
-  .appearance-upload-row p {
-    font-size: 9px;
   }
   .appearance-upload-row .secondary {
     font-size: 10px;

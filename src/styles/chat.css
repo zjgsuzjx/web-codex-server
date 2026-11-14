@@ -56,7 +56,7 @@
 .editor-open .suggestion-grid {
   gap: 8px;
 }
-.editor-open .suggestion-grid > button {
+.editor-open .suggestion-grid button {
   padding: 13px;
 }
 .editor-open .messages {
@@ -82,27 +82,27 @@
   letter-spacing: -1px;
   font-weight: 550;
   text-align: center;
-  margin-bottom: 12px;
-}
-.welcome > p {
-  text-align: center;
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.8;
+  margin-bottom: 0;
 }
 .suggestion-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 24px;
+  gap: 8px;
+  margin-top: 32px;
 }
-.suggestion-grid > button {
+.suggestion-grid > .tooltip-trigger {
+  display: flex;
+  min-width: 0;
+}
+.suggestion-grid button {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) 14px;
-  align-items: start;
+  align-items: center;
   gap: 10px;
   text-align: left;
-  padding: 14px;
+  width: 100%;
+  min-height: 54px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-lg);
   background: var(--bg);
@@ -112,7 +112,7 @@
   transform: none;
   box-shadow: none;
 }
-.suggestion-grid > button:hover {
+.suggestion-grid button:hover {
   background: var(--ui-hover);
   border-color: var(--ui-border-hover);
   transform: none;
@@ -120,7 +120,6 @@
 }
 .suggestion-icon {
   color: var(--muted);
-  margin-top: 1px;
   width: 18px;
   height: 18px;
 }
@@ -128,22 +127,10 @@
   align-self: center;
   color: var(--subtle);
 }
-.suggestion-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
 .suggestion-grid strong {
   font-size: 13px;
   font-weight: 550;
   line-height: 1.4;
-}
-.suggestion-description {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.6;
-  overflow-wrap: anywhere;
 }
 .messages {
   width: 100%;
@@ -175,9 +162,6 @@
     font-size: 26px;
     letter-spacing: -0.7px;
   }
-  .welcome > p {
-    font-size: 12px;
-  }
   .suggestion-grid {
     margin-top: 24px;
     gap: 10px;
@@ -194,12 +178,12 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
-  .suggestion-grid > button {
+  .suggestion-grid button {
     padding: 12px 14px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .suggestion-grid > button:hover {
+  .suggestion-grid button:hover {
     transform: none;
   }
 }
