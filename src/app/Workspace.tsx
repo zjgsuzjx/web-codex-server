@@ -1,3 +1,4 @@
+import PromptInput from '../features/chat/components/PromptInput.tsx';
 import { useChangeVisibility, visibleChanges } from '../features/files/lib/change-visibility.ts';
 import type { Attachment } from '../../shared/contracts/domain.ts';
 interface UploadSelection {
@@ -2045,7 +2046,10 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                       </IconButton>
                     </div>
                   )}
-                  <textarea
+                  <PromptInput
+                    socket={socket.current}
+                    userId={user.id}
+                    onValue={setInput}
                     onPaste={(e) => {
                       const files = [...e.clipboardData.items]
                         .filter((x) => x.kind === 'file')
@@ -2065,7 +2069,6 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                         : '先创建一个项目，再开始对话…'
                     }
                     value={input}
-                    onChange={(e) => setInput((e.target as HTMLTextAreaElement).value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                         e.preventDefault();

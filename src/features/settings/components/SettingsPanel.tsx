@@ -1,3 +1,4 @@
+import ShortcutSettings from './ShortcutSettings.tsx';
 import {
   Check,
   ChevronRight,
@@ -397,6 +398,7 @@ export default function SettingsPanel({
           )}
           {tab === 'tools' && (
             <>
+              <ShortcutSettings userId={user.id} />
               <p className="field-hint">
                 MCP 和功能开关可以在高级配置中管理。项目内的 AGENTS.md、技能和代码会被 Codex
                 自动读取。
