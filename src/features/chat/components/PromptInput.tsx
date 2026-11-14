@@ -1,3 +1,14 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  BookOpen,
+  CornerDownLeft,
+  LoaderCircle,
+  Search,
+  SlidersHorizontal,
+  Terminal,
+  Wrench,
+} from 'lucide-react';
 import { useEffect, useId, useRef, useState, type TextareaHTMLAttributes } from 'react';
 import type { LiveSocket } from '../../../lib/socket.ts';
 
@@ -25,12 +36,14 @@ export default function PromptInput({
   userId,
   value,
   onValue,
+  onManage,
   ...props
 }: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> & {
   socket: LiveSocket;
   userId: string;
   value: string;
   onValue: (value: string) => void;
+  onManage?: () => void;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const id = useId();
@@ -39,6 +52,7 @@ export default function PromptInput({
   const [active, setActive] = useState(0);
   const [items, setItems] = useState<Item[]>([]);
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
   const token = /(?:^|\s)([/@])([^\s/@]*)$/.exec(value.slice(0, cursor));
   const mode = !dismissed && token ? token[1] : '';
   const query = token?.[2].toLocaleLowerCase() || '';
@@ -47,6 +61,7 @@ export default function PromptInput({
     if (!mode) return;
     let cancelled = false;
     setItems([]);
+    setLoading(false);
     if (mode === '/') {
       setItems(
         readShortcuts(userId).map((x) => ({
@@ -60,12 +75,14 @@ export default function PromptInput({
       setMessage('还没有快捷指令，请在设置 → 工具与技能中添加');
       return;
     }
+    setLoading(true);
     setMessage('正在加载工具与技能…');
     Promise.allSettled([
       socket.call('skills/list', {}),
       socket.call('mcpServerStatus/list', { limit: 100 }),
     ]).then(([skills, mcp]) => {
       if (cancelled) return;
+      setLoading(false);
       const result: Item[] = [];
       if (skills.status === 'fulfilled')
         for (const group of skills.value?.data || [])
@@ -106,7 +123,7 @@ export default function PromptInput({
   );
   const selected = Math.min(active, Math.max(0, filtered.length - 1));
   function choose(item: Item) {
-    const start = cursor - query.length - 1;
+    const start = cursor - (token?.[2].length || 0) - 1;
     const next = value.slice(0, start) + item.text + value.slice(cursor);
     const caret = start + item.text.length;
     onValue(next);
@@ -118,39 +135,122 @@ export default function PromptInput({
     });
   }
   useEffect(() => {
-    if (mode) document.getElementById(`${id}-${selected}`)?.scrollIntoView({ block: 'nearest' });
+    const list = document.getElementById(id);
+    const option = document.getElementById(`${id}-${selected}`);
+    if (!mode || !list || !option) return;
+    if (option.offsetTop < list.scrollTop) list.scrollTop = option.offsetTop;
+    else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight)
+      list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight;
   }, [selected, mode, id]);
   return (
-    <div className="prompt-input">
+    <div
+      className="prompt-input"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && e.target !== input.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          setDismissed(true);
+          input.current?.focus();
+        }
+      }}
+    >
       {mode && (
         <div className="prompt-menu">
-          <header>
-            {mode === '/' ? '快捷指令' : '工具与技能'}
-            <small>↑ ↓ 选择 · Enter 填入 · Esc 关闭</small>
-          </header>
-          <div role="listbox" id={id} aria-label={mode === '/' ? '快捷指令' : '工具与技能'}>
-            {filtered.map((item, index) => (
+          <header className="prompt-menu-heading">
+            <span>{mode === '/' ? '快捷指令' : '工具与技能'}</span>
+            {mode === '/' && onManage && (
               <button
                 type="button"
-                role="option"
-                aria-selected={index === selected}
-                id={`${id}-${index}`}
-                key={item.id}
-                className={index === selected ? 'active' : ''}
+                className="prompt-manage"
                 onMouseDown={(e) => e.preventDefault()}
-                onMouseEnter={() => setActive(index)}
-                onClick={() => choose(item)}
+                onClick={() => {
+                  setDismissed(true);
+                  onManage();
+                }}
               >
-                <span className="prompt-symbol">{mode === '/' ? '/' : '@'}</span>
-                <span>
-                  <strong>{item.name}</strong>
-                  <small>{item.description}</small>
-                </span>
-                <em>{item.kind}</em>
+                <SlidersHorizontal size={12} />
+                管理指令
               </button>
-            ))}
-            {!filtered.length && <p role="status">{items.length ? '没有匹配结果' : message}</p>}
+            )}
+          </header>
+          <div
+            className="prompt-options"
+            role="listbox"
+            id={id}
+            aria-label={mode === '/' ? '快捷指令' : '工具与技能'}
+            aria-busy={loading}
+          >
+            {filtered.map((item, index) => {
+              const Icon = mode === '/' ? Terminal : item.kind === 'Skill' ? BookOpen : Wrench;
+              return (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  role="option"
+                  aria-selected={index === selected}
+                  id={`${id}-${index}`}
+                  key={item.id}
+                  className={`prompt-option ${index === selected ? 'active' : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseMove={() => setActive(index)}
+                  onClick={() => choose(item)}
+                >
+                  <span className="prompt-option-icon">
+                    <Icon size={17} strokeWidth={1.65} />
+                  </span>
+                  <span className="prompt-option-copy">
+                    <span className="prompt-option-title">
+                      <strong>
+                        {mode === '/' && <span className="prompt-prefix">/</span>}
+                        {item.name}
+                      </strong>
+                      {mode === '@' && <span className="prompt-kind">{item.kind}</span>}
+                    </span>
+                    <span className="prompt-option-description">
+                      {item.description || '选择后添加到消息'}
+                    </span>
+                  </span>
+                  <CornerDownLeft className="prompt-return" size={14} aria-hidden="true" />
+                </button>
+              );
+            })}
+            {!filtered.length && (
+              <div className="prompt-empty" role="status">
+                {loading ? <LoaderCircle size={19} className="spin" /> : <Search size={19} />}
+                <strong>
+                  {loading
+                    ? '正在读取工具与技能'
+                    : items.length
+                      ? '没有找到匹配项'
+                      : mode === '/'
+                        ? '把常用提示词存为快捷指令'
+                        : '暂无可用工具与技能'}
+                </strong>
+                <span>
+                  {items.length
+                    ? '试试其他名称或关键词'
+                    : mode === '/'
+                      ? '点击右上角「管理指令」添加，之后输入 / 即可使用。'
+                      : message}
+                </span>
+              </div>
+            )}
           </div>
+          <footer className="prompt-menu-footer">
+            <span>
+              <kbd>
+                <ArrowUp size={10} />
+                <ArrowDown size={10} />
+              </kbd>
+              选择
+            </span>
+            <span>
+              <kbd>↵</kbd>填入
+            </span>
+            <span className="prompt-dismiss-hint">
+              <kbd>esc</kbd>关闭
+            </span>
+          </footer>
         </div>
       )}
       <textarea
@@ -162,11 +262,15 @@ export default function PromptInput({
         aria-expanded={!!mode}
         aria-activedescendant={mode && filtered.length ? `${id}-${selected}` : undefined}
         onBlur={(e) => {
-          setDismissed(true);
+          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) setDismissed(true);
           props.onBlur?.(e);
         }}
         onSelect={(e) => {
-          setCursor(e.currentTarget.selectionStart);
+          if (e.currentTarget.selectionStart !== cursor) {
+            setCursor(e.currentTarget.selectionStart);
+            setDismissed(false);
+            setActive(0);
+          }
         }}
         onChange={(e) => {
           onValue(e.target.value);
@@ -180,6 +284,10 @@ export default function PromptInput({
             e.preventDefault();
             e.stopPropagation();
             setDismissed(true);
+            return;
+          }
+          if (mode && !filtered.length && e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
             return;
           }
           if (

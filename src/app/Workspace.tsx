@@ -2050,6 +2050,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                     socket={socket.current}
                     userId={user.id}
                     onValue={setInput}
+                    onManage={() => setModal('tools')}
                     onPaste={(e) => {
                       const files = [...e.clipboardData.items]
                         .filter((x) => x.kind === 'file')
@@ -2341,7 +2342,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
             </form>
           </Modal>
         )}
-        {['settings', 'appearance', 'profile'].includes(modal!) && (
+        {['settings', 'appearance', 'profile', 'tools'].includes(modal!) && (
           <SettingsPanel
             api={api}
             user={user}
@@ -2349,7 +2350,13 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
             onSkins={updateSkins}
             onResetAppearance={() => setTheme('light')}
             initialTab={
-              modal === 'appearance' ? 'appearance' : modal === 'profile' ? 'profile' : 'general'
+              modal === 'tools'
+                ? 'tools'
+                : modal === 'appearance'
+                  ? 'appearance'
+                  : modal === 'profile'
+                    ? 'profile'
+                    : 'general'
             }
             settings={settings}
             settingsQueue={settingsQueue.current}
