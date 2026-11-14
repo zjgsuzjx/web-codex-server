@@ -1383,3 +1383,8 @@
     border-left: 3px solid CanvasText;
   }
 }
+
+.file-row.changes-ignored .file-entry,
+.file-row.changes-ignored .file-entry:hover {
+  color: var(--muted);
+}

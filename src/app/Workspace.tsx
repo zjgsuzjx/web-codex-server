@@ -1,3 +1,4 @@
+import { useChangeVisibility, visibleChanges } from '../features/files/lib/change-visibility.ts';
 import type { Attachment } from '../../shared/contracts/domain.ts';
 interface UploadSelection {
   files?: import('../../shared/contracts/domain.ts').UploadFile[];
@@ -825,6 +826,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
     document.addEventListener('keydown', keydown, true);
     return () => document.removeEventListener('keydown', keydown, true);
   }, [showQuickOpen, welcomeVisible]);
+  const changeVisibility = useChangeVisibility(project?.id);
   const visibleStart = visibleFrom
     ? Math.max(
         0,
@@ -1884,7 +1886,10 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                       <div key={turn.id} className="turn" data-turn-id={turn.id}>
                         <TurnMessages
                           threadId={thread?.id}
-                          turn={turn}
+                          turn={{
+                            ...turn,
+                            changes: visibleChanges(turn.changes, changeVisibility.paths),
+                          }}
                           onFile={messageFile}
                           notify={notify}
                           onAttachment={setAttachmentPreview}
@@ -1906,7 +1911,10 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                           }}
                         />
                         <ThinkingStatus
-                          turn={turn}
+                          turn={{
+                            ...turn,
+                            changes: visibleChanges(turn.changes, changeVisibility.paths),
+                          }}
                           waitingForInput={requests.some(
                             (r) =>
                               isUserInput(r) &&
@@ -2183,6 +2191,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                     >
                       <ChangesReview
                         key={`${review.threadId}:${review.turnId}:${review.path || 'all'}`}
+                        ignoredPaths={changeVisibility.paths}
                         review={review}
                         summary={turns.find((turn) => turn.id === review.turnId)?.changes}
                         api={api}

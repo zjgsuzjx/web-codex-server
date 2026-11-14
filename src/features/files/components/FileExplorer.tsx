@@ -1,3 +1,4 @@
+import { ignoredChangePath, useChangeVisibility } from '../lib/change-visibility.ts';
 import {
   ChevronDown,
   ChevronRight,
@@ -579,6 +580,7 @@ export default memo(function FileTree({
       }
     }
   }
+  const visibility = useChangeVisibility(project?.id);
   function menuItems() {
     const { entry, paths } = menu!,
       multiple = paths.length > 1;
@@ -593,6 +595,28 @@ export default memo(function FileTree({
               : '展开文件夹',
         icon: entry.type === 'file' ? File : Folder,
         action: () => (entry.type === 'file' ? onOpen(entry.path) : void toggle(entry)),
+      });
+    }
+    if (paths.length) {
+      const restore = paths.every((path: string) => ignoredChangePath(path, visibility.paths));
+      const inherited =
+        restore &&
+        paths.some((path: string) => visibility.paths.some((root) => path.startsWith(`${root}/`)));
+      items.push({
+        disabled: inherited,
+        label: inherited
+          ? '已随父文件夹忽略（请在父文件夹恢复）'
+          : restore
+            ? '恢复在 Codex 文件变更中显示'
+            : '在 Codex 文件变更中忽略',
+        icon: File,
+        action: () => {
+          try {
+            visibility.toggle(paths, restore);
+          } catch {
+            notify('无法保存文件变更显示设置', true);
+          }
+        },
       });
     }
     if (paths.length)
@@ -711,7 +735,7 @@ export default memo(function FileTree({
           <div
             key={entry.path}
             data-file-path={entry.path}
-            className={`file-row ${activePath === entry.path && (!selection.size || selection.has(entry.path)) ? 'selected' : ''} ${selection.has(entry.path) ? 'multi-selected' : ''}`}
+            className={`file-row ${ignoredChangePath(entry.path, visibility.paths) ? 'changes-ignored' : ''} ${activePath === entry.path && (!selection.size || selection.has(entry.path)) ? 'selected' : ''} ${selection.has(entry.path) ? 'multi-selected' : ''}`}
             style={{ paddingLeft: 8 + depth * 16 }}
           >
             <span className="file-guides" aria-hidden="true">
