@@ -83,6 +83,9 @@ test('manual Codex updates verify the candidate before making it the persistent 
         async wait() {
           if (spec.Cmd[0] === 'npm') {
             await pauseInstall;
+            const cache = path.join(spec.HostConfig.Mounts[0].Source, '.npm-cache');
+            await fs.mkdir(cache);
+            await fs.writeFile(path.join(cache, 'native-package.tgz'), '');
             const executable = path.join(
               spec.HostConfig.Mounts[0].Source,
               'node_modules/.bin/codex',
@@ -90,6 +93,13 @@ test('manual Codex updates verify the candidate before making it the persistent 
             await fs.mkdir(path.dirname(executable), { recursive: true });
             await fs.writeFile(executable, '');
           }
+          if (spec.Cmd[0] === 'node')
+            await assert.rejects(
+              fs.access(path.join(spec.HostConfig.Mounts[0].Source, '.npm-cache')),
+              {
+                code: 'ENOENT',
+              },
+            );
           return { StatusCode: spec.Cmd[0] === 'node' && failedVerification ? 1 : 0 };
         },
         async logs() {
@@ -189,6 +199,7 @@ test('manual Codex updates verify the candidate before making it the persistent 
     assert.equal(versionProbe.HostConfig.NetworkMode, 'none');
     assert.equal(installer.Cmd.at(-1), '@openai/codex@0.100.0');
     assert.ok(installer.Cmd.includes('--ignore-scripts'));
+    assert.ok(installer.Cmd.includes(`--cache=${CODEX_RUNTIME_MOUNT}/.npm-cache`));
     assert.equal(installer.HostConfig.Mounts.length, 1);
     assert.equal(installer.HostConfig.Mounts[0].ReadOnly, false);
     assert.equal(verifier.HostConfig.NetworkMode, 'none');

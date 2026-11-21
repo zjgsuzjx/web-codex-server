@@ -247,6 +247,7 @@ export class CodexUpdates {
     const directory = `install-${randomUUID()}`;
     const localPath = path.join(this.root, directory);
     const hostPath = path.posix.join(this.hostRoot, directory);
+    const cache = '.npm-cache';
     const temp = path.join(this.root, `${directory}.json`);
     const { Id } = await this.docker.getImage(this.config.workerImage).inspect();
     await fs.mkdir(this.root, { recursive: true, mode: 0o700 });
@@ -263,7 +264,7 @@ export class CodexUpdates {
             CODEX_RUNTIME_MOUNT,
             '--registry',
             registry,
-            '--cache=/tmp/npm-cache',
+            `--cache=${CODEX_RUNTIME_MOUNT}/${cache}`,
             '--fetch-retries=1',
             '--fetch-timeout=30000',
             '--ignore-scripts',
@@ -277,6 +278,8 @@ export class CodexUpdates {
           150,
           { source: hostPath, writable: true },
         );
+        // Native archives can exceed the helper's tmpfs. Discard the staging cache before verification.
+        await fs.rm(path.join(localPath, cache), { recursive: true, force: true });
       } catch {
         fail(502, '无法下载或安装新版本，请检查服务器网络及存储空间后重试。');
       }
