@@ -78,7 +78,9 @@ curl -fsS http://127.0.0.1:3100/api/health
 
 The supplied [Compose file](../compose.yml) binds only `127.0.0.1:3100`, mounts `./data` and the Docker socket into the gateway, and uses the `DOCKER_GID` value from `.env`. Keep `PORT=3100` unless you also update the Compose port mapping and health check.
 
-The worker Dockerfile currently pins Codex CLI `0.162.1`. A healthy gateway confirms the web service is running; it does not prove account authentication or a model conversation works.
+The worker Dockerfile supplies Codex CLI `0.169.1` for a fresh deployment. In **设置 → 通用**, members can see the default workspace CLI version. The superadmin can manually check the official npm release and confirm an online update. The server downloads and verifies the new CLI in isolated containers before activating it. Installed versions are stored under `DATA_DIR/codex-runtime`. Running workers keep their version until their next start. Server mode uses its separately installed host CLI.
+
+A healthy gateway confirms the web service is running; it does not prove account authentication or a model conversation works.
 
 ### 4. Configure HTTPS and WebSockets
 

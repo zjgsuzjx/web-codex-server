@@ -1,6 +1,4 @@
 import {
-  ArrowDown,
-  ArrowUp,
   BookOpen,
   CornerDownLeft,
   LoaderCircle,
@@ -11,6 +9,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type TextareaHTMLAttributes } from 'react';
 import type { LiveSocket } from '../../../lib/socket.ts';
+import IconButton from '../../../components/ui/IconButton.tsx';
+import Tooltip from '../../../components/ui/Tooltip.tsx';
 
 type Shortcut = { name: string; text: string };
 export const shortcutKey = (userId: string) => `composer:shortcuts:${userId}`;
@@ -51,7 +51,7 @@ export default function PromptInput({
   const [dismissed, setDismissed] = useState(false);
   const [active, setActive] = useState(0);
   const [items, setItems] = useState<Item[]>([]);
-  const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(false);
   const token = /(?:^|\s)([/@])([^\s/@]*)$/.exec(value.slice(0, cursor));
   const mode = !dismissed && token ? token[1] : '';
@@ -62,6 +62,7 @@ export default function PromptInput({
     let cancelled = false;
     setItems([]);
     setLoading(false);
+    setLoadError('');
     if (mode === '/') {
       setItems(
         readShortcuts(userId).map((x) => ({
@@ -72,11 +73,9 @@ export default function PromptInput({
           kind: '快捷指令',
         })),
       );
-      setMessage('还没有快捷指令，请在设置 → 工具与技能中添加');
       return;
     }
     setLoading(true);
-    setMessage('正在加载工具与技能…');
     Promise.allSettled([
       socket.call('skills/list', {}),
       socket.call('mcpServerStatus/list', { limit: 100 }),
@@ -108,10 +107,10 @@ export default function PromptInput({
           });
         }
       setItems([...new Map(result.map((x) => [x.id, x])).values()]);
-      setMessage(
+      setLoadError(
         skills.status === 'rejected' || mcp.status === 'rejected'
           ? '部分列表加载失败，关闭后重新输入 @ 重试'
-          : '没有已安装的 MCP 或 Skill',
+          : '',
       );
     });
     return () => {
@@ -159,8 +158,9 @@ export default function PromptInput({
           <header className="prompt-menu-heading">
             <span>{mode === '/' ? '快捷指令' : '工具与技能'}</span>
             {mode === '/' && onManage && (
-              <button
-                type="button"
+              <IconButton
+                title="管理快捷指令"
+                description="输入 / 调用指令；↑ ↓ 选择，Enter 填入，Esc 关闭。"
                 className="prompt-manage"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
@@ -168,9 +168,8 @@ export default function PromptInput({
                   onManage();
                 }}
               >
-                <SlidersHorizontal size={12} />
-                管理指令
-              </button>
+                <SlidersHorizontal size={15} />
+              </IconButton>
             )}
           </header>
           <div
@@ -183,35 +182,42 @@ export default function PromptInput({
             {filtered.map((item, index) => {
               const Icon = mode === '/' ? Terminal : item.kind === 'Skill' ? BookOpen : Wrench;
               return (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  role="option"
-                  aria-selected={index === selected}
-                  id={`${id}-${index}`}
+                <Tooltip
                   key={item.id}
-                  className={`prompt-option ${index === selected ? 'active' : ''}`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onMouseMove={() => setActive(index)}
-                  onClick={() => choose(item)}
+                  title={mode === '/' ? `/${item.name}` : `${item.name} · ${item.kind}`}
+                  description={
+                    item.description.length > 320
+                      ? `${item.description.slice(0, 320)}…`
+                      : item.description || undefined
+                  }
                 >
-                  <span className="prompt-option-icon">
-                    <Icon size={17} strokeWidth={1.65} />
-                  </span>
-                  <span className="prompt-option-copy">
-                    <span className="prompt-option-title">
-                      <strong>
-                        {mode === '/' && <span className="prompt-prefix">/</span>}
-                        {item.name}
-                      </strong>
-                      {mode === '@' && <span className="prompt-kind">{item.kind}</span>}
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    role="option"
+                    aria-selected={index === selected}
+                    id={`${id}-${index}`}
+                    aria-label={mode === '/' ? `/${item.name}` : `${item.name} · ${item.kind}`}
+                    aria-description={item.description || undefined}
+                    className={`prompt-option ${index === selected ? 'active' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseMove={() => setActive(index)}
+                    onClick={() => choose(item)}
+                  >
+                    <span className="prompt-option-icon">
+                      <Icon size={17} strokeWidth={1.65} />
                     </span>
-                    <span className="prompt-option-description">
-                      {item.description || '选择后添加到消息'}
+                    <span className="prompt-option-copy">
+                      <span className="prompt-option-title">
+                        <strong>
+                          {mode === '/' && <span className="prompt-prefix">/</span>}
+                          {item.name}
+                        </strong>
+                      </span>
                     </span>
-                  </span>
-                  <CornerDownLeft className="prompt-return" size={14} aria-hidden="true" />
-                </button>
+                    <CornerDownLeft className="prompt-return" size={14} aria-hidden="true" />
+                  </button>
+                </Tooltip>
               );
             })}
             {!filtered.length && (
@@ -223,34 +229,28 @@ export default function PromptInput({
                     : items.length
                       ? '没有找到匹配项'
                       : mode === '/'
-                        ? '把常用提示词存为快捷指令'
-                        : '暂无可用工具与技能'}
+                        ? '暂无快捷指令'
+                        : loadError
+                          ? '工具与技能加载失败'
+                          : '暂无可用工具与技能'}
                 </strong>
-                <span>
-                  {items.length
-                    ? '试试其他名称或关键词'
-                    : mode === '/'
-                      ? '点击右上角「管理指令」添加，之后输入 / 即可使用。'
-                      : message}
-                </span>
+                {!loading && loadError && <span>{loadError}</span>}
+                {!items.length && mode === '/' && onManage && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setDismissed(true);
+                      onManage();
+                    }}
+                  >
+                    新建指令
+                  </button>
+                )}
               </div>
             )}
           </div>
-          <footer className="prompt-menu-footer">
-            <span>
-              <kbd>
-                <ArrowUp size={10} />
-                <ArrowDown size={10} />
-              </kbd>
-              选择
-            </span>
-            <span>
-              <kbd>↵</kbd>填入
-            </span>
-            <span className="prompt-dismiss-hint">
-              <kbd>esc</kbd>关闭
-            </span>
-          </footer>
         </div>
       )}
       <textarea

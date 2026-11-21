@@ -598,6 +598,7 @@ export async function createApp(options: AppOptions = {}) {
       skins.busy() ||
       cleanup?.busy() ||
       turnChanges.busy() ||
+      codex.updates?.installing ||
       codex.starting?.size ||
       [...codex.instances.values()].some(
         (i) => i.active?.size || i.terminals?.size || i.requests?.size || i.pending?.size,
@@ -727,6 +728,18 @@ export async function createApp(options: AppOptions = {}) {
       const snapshot = notifications.snapshot(id);
       for (const ws of clients.get(id) || []) send(ws, { type: 'site/notifications', snapshot });
     }
+  });
+  app.get('/api/codex/version', async (req, res) => res.json(await codex.updates.status()));
+  app.post('/api/codex/version/check', async (req, res) => {
+    if (req.user.role !== 'superadmin') fail(403, '只有超级管理员可以检查 Codex 更新');
+    rate(req, 'codex-version-check', 30);
+    res.json(await codex.updates.check());
+  });
+  app.post('/api/codex/version/install', async (req, res) => {
+    if (req.user.role !== 'superadmin') fail(403, '只有超级管理员可以更新 Codex');
+    const status = await codex.updates.install(req.body?.version);
+    store.audit(req.user.id, `codex_update_requested:${status.latestVersion}`);
+    res.status(202).json(status);
   });
   app.post('/api/logout', (req, res) => {
     store.run('DELETE FROM sessions WHERE hash=?', req.user.session_hash!);

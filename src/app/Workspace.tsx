@@ -1812,45 +1812,44 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                       <BrandMark size={64} className="brand-mark" />
                     </div>
                     <h1>今天，想创造些什么？</h1>
-                    <p>
-                      {project
-                        ? `在 ${project.name} 中，和 Codex 一起把想法写成代码。`
-                        : '创建一个项目，开始你的下一次创作。'}
-                    </p>
-                    <div className="suggestion-grid">
-                      {[
-                        {
-                          icon: Code2,
-                          title: '从一个想法开始',
-                          text: '帮我梳理项目需求，并制定一个可执行的开发计划。',
-                        },
-                        {
-                          icon: Search,
-                          title: '读懂现有代码',
-                          text: '请分析项目结构，介绍关键模块及其工作方式。',
-                        },
-                        {
-                          icon: ShieldCheck,
-                          title: '发现并修复问题',
-                          text: '请检查项目代码中可能存在的 bug，说明原因并给出修复。',
-                        },
-                        {
-                          icon: Sparkles,
-                          title: '把体验再打磨一下',
-                          text: '请检查项目的用户体验，提出并实现最有价值的改进。',
-                        },
-                      ].map((s) => (
-                        <button type="button" key={s.title} onClick={() => setInput(s.text)}>
-                          <s.icon size={18} className="suggestion-icon" aria-hidden="true" />
-                          <span className="suggestion-copy">
-                            <strong>{s.title}</strong>
-                            <span className="suggestion-description">{s.text}</span>
-                          </span>
-                          <ArrowRight size={14} className="suggestion-arrow" aria-hidden="true" />
-                        </button>
-                      ))}
-                    </div>
-                    {!project && (
+                    {project ? (
+                      <div className="suggestion-grid">
+                        {[
+                          {
+                            icon: Code2,
+                            title: '从一个想法开始',
+                            text: '帮我梳理项目需求，并制定一个可执行的开发计划。',
+                          },
+                          {
+                            icon: Search,
+                            title: '读懂现有代码',
+                            text: '请分析项目结构，介绍关键模块及其工作方式。',
+                          },
+                          {
+                            icon: ShieldCheck,
+                            title: '发现并修复问题',
+                            text: '请检查项目代码中可能存在的 bug，说明原因并给出修复。',
+                          },
+                          {
+                            icon: Sparkles,
+                            title: '把体验再打磨一下',
+                            text: '请检查项目的用户体验，提出并实现最有价值的改进。',
+                          },
+                        ].map((s) => (
+                          <Tooltip key={s.title} title={s.title} description={s.text}>
+                            <button type="button" onClick={() => setInput(s.text)}>
+                              <s.icon size={18} className="suggestion-icon" aria-hidden="true" />
+                              <strong>{s.title}</strong>
+                              <ArrowRight
+                                size={14}
+                                className="suggestion-arrow"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    ) : (
                       <button
                         className="primary welcome-create"
                         onClick={() => setModal('project')}
@@ -2307,11 +2306,7 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
           </div>
         )}
         {modal === 'project' && (
-          <Modal
-            title="新建项目"
-            subtitle="每个项目都是一个独立的创作空间。"
-            onClose={() => setModal(null)}
-          >
+          <Modal title="新建项目" onClose={() => setModal(null)}>
             <form
               className="modal-form"
               onSubmit={async (e) => {
@@ -2334,7 +2329,6 @@ export default function Workspace({ user, setUser, theme, setTheme }: WorkspaceP
                   placeholder="例如：我的个人网站"
                 />
               </label>
-              <p className="field-hint">创建后，你可以上传现有代码，或让 Codex 从头开始。</p>
               <button className="primary full">
                 <Plus size={16} />
                 创建项目

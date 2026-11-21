@@ -1,6 +1,7 @@
 import {
   Check,
   ImagePlus,
+  Info,
   LoaderCircle,
   Monitor,
   Palette,
@@ -22,6 +23,7 @@ import { skinDevice, skinTokens, WALLPAPER_MAX_BYTES } from '../../../../shared/
 import '../../../appearance.css';
 import Modal from '../../../components/ui/Modal.tsx';
 import Select from '../../../components/ui/Select.tsx';
+import IconButton from '../../../components/ui/IconButton.tsx';
 export interface AppearanceProviderProps {
   user: SessionUser;
   fallbackTheme: Theme;
@@ -307,13 +309,7 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
     <>
       <div className="appearance-panel">
         <div className="appearance-heading">
-          <span className="appearance-icon">
-            <Palette size={21} />
-          </span>
-          <div>
-            <h3>让工作区，有你的风格。</h3>
-            <p>一张壁纸，一整套协调的界面。</p>
-          </div>
+          <h3>壁纸与外观</h3>
         </div>
         <div className="appearance-devices" aria-label="外观适用设备">
           {(
@@ -391,9 +387,14 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
               </span>
             </div>
             <div className="appearance-upload-row">
-              <div>
-                <strong>你的壁纸，Codex 来搭配</strong>
-                <p>JPG、PNG、WebP · 最大 20 MB · 自动优化尺寸</p>
+              <div className="appearance-upload-heading">
+                <strong>壁纸</strong>
+                <IconButton
+                  title="壁纸格式"
+                  description="JPG、PNG、WebP，最大 20 MB，上传后自动优化尺寸。"
+                >
+                  <Info size={14} />
+                </IconButton>
               </div>
               <button
                 type="button"
@@ -427,7 +428,7 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
                   </div>
                 </div>
                 <label>
-                  风格偏好 <span className="optional">可选</span>
+                  风格偏好
                   <input
                     value={hint}
                     maxLength={300}
@@ -472,9 +473,7 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
                           title={`${key}: ${color}`}
                         />
                       ))}
-                      <span>
-                        {draft.config.mode === 'dark' ? '深色' : '浅色'} · 已校正文字对比度
-                      </span>
+                      <span>{draft.config.mode === 'dark' ? '深色' : '浅色'}</span>
                     </div>
                     <label>
                       预设名称
@@ -607,13 +606,23 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
           </>
         )}
         <div className="appearance-section-title">
-          <h4>我的{target === 'mobile' ? '手机' : '桌面'}预设</h4>
+          <div className="appearance-presets-heading">
+            <h4>我的预设</h4>
+            <IconButton
+              title="外观预设"
+              description="预设仅本人可见，随账号保存。手机和桌面独立设置，切换预设无需再次调用 Codex。"
+            >
+              <Info size={14} />
+            </IconButton>
+          </div>
           <span>{presets.length} / 12</span>
         </div>
         <div className="appearance-presets">
           <button
             type="button"
             className={`appearance-default ${!snapshot.active[target] ? 'selected' : ''}`}
+            title="还原初始外观"
+            aria-pressed={!snapshot.active[target]}
             disabled={!editable || disabled}
             onClick={() =>
               run('正在还原默认', async () => {
@@ -630,7 +639,6 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
               <RotateCcw size={22} />
             </span>
             <strong>初始外观</strong>
-            <small>清爽蓝白 · 一键还原</small>
             {!snapshot.active[target] && <Check size={15} />}
           </button>
           {presets.map((p: any) => (
@@ -640,6 +648,8 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
             >
               <button
                 type="button"
+                title={`${p.config.name} · ${p.config.mode === 'dark' ? '深色' : '浅色'}`}
+                aria-pressed={snapshot.active[target] === p.id}
                 disabled={!editable || disabled}
                 onClick={() =>
                   run('正在应用预设', async () => {
@@ -656,10 +666,6 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
               >
                 <img src={p.imageUrl} alt="" />
                 <strong>{p.config.name}</strong>
-                <small>
-                  {p.config.mode === 'dark' ? '深色' : '浅色'} ·{' '}
-                  {snapshot.active[target] === p.id ? '使用中' : '点击应用'}
-                </small>
               </button>
               {snapshot.active[target] === p.id && <Check size={15} />}
               <button
@@ -680,9 +686,6 @@ export default function Appearance({ api, socket, onUpdate, onReset, notify }: A
             </div>
           ))}
         </div>
-        <p className="field-hint appearance-footer">
-          预设仅本人可见，随账号保存。切换预设无需再次调用 Codex。
-        </p>
       </div>
       {immersive && (
         <Modal
