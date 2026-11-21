@@ -10,6 +10,12 @@ import { PendingRequests } from '../chat/pending-requests.ts';
 import { fail } from '../files/files.ts';
 import type { ServerConfig } from '../types.ts';
 import { executionTarget, hostCommand, projectCwd, workerSpec } from './execution.ts';
+import {
+  CODEX_APP_SERVER_ARGS,
+  CODEX_RUNTIME_BIN,
+  CODEX_RUNTIME_MOUNT,
+  CodexUpdates,
+} from './updates.ts';
 
 // Ordinary users/admins always receive non-root, scoped containers. Host execution
 // is a separate, explicitly selected superadmin-only backend; commands use argv.
@@ -19,12 +25,14 @@ export class CodexManager {
   declare instances: Map<string, ProtocolRecord>;
   declare starting: Map<string, Promise<ProtocolRecord>>;
   declare docker: Docker;
+  readonly updates: CodexUpdates;
   constructor(config: ServerConfig, emit: (uid: string, event: CodexEvent) => void) {
     this.config = config;
     this.emit = emit;
     this.instances = new Map();
     this.starting = new Map();
     this.docker = new Docker({ socketPath: config.dockerSocket || '/var/run/docker.sock' });
+    this.updates = new CodexUpdates(config, this.docker, () => this.starting.size === 0);
   }
   async ensure(user: StoredUser): Promise<ProtocolRecord> {
     user = this.currentUser(user);
@@ -41,8 +49,9 @@ export class CodexManager {
   }
   async start(user: StoredUser): Promise<ProtocolRecord> {
     user = this.currentUser(user);
-    const target = executionTarget(user),
-      spec = workerSpec(this.config, user);
+    const target = executionTarget(user);
+    const runtimePath = target === 'workspace' ? await this.updates.runtimePath() : undefined;
+    const spec = workerSpec(this.config, user, runtimePath);
     const userDir = path.join(this.config.dataDir, 'users', user.username);
     await fs.mkdir(path.join(userDir, 'projects'), { recursive: true });
     await fs.mkdir(path.join(userDir, 'codex'), { recursive: true });
@@ -80,10 +89,13 @@ export class CodexManager {
     let container = this.docker.getContainer(name);
     try {
       const info = await container.inspect();
+      const runtimeMount = info.Mounts?.find((mount) => mount.Destination === CODEX_RUNTIME_MOUNT);
       if (
         info.HostConfig.NetworkMode !== networkMode ||
         (info.Config.Labels?.['starvalley.execution'] || 'workspace') !== target ||
-        Boolean(info.HostConfig.Privileged) !== (target === 'server')
+        Boolean(info.HostConfig.Privileged) !== (target === 'server') ||
+        runtimeMount?.Source !== runtimePath ||
+        runtimeMount?.RW === true
       ) {
         await container.remove({ force: true });
         const missing: AppError = new Error('Recreate worker execution environment');
@@ -104,15 +116,14 @@ export class CodexManager {
       await container.remove({ force: true }).catch(() => {});
       throw e;
     }
-    const appServerArgs = ['app-server', '-c', 'features.default_mode_request_user_input=true'];
     const cmd =
       target === 'server'
         ? hostCommand(this.config, user, [
             '/usr/bin/node',
             this.config.hostCodexScript,
-            ...appServerArgs,
+            ...CODEX_APP_SERVER_ARGS,
           ])
-        : ['codex', ...appServerArgs];
+        : [runtimePath ? `${CODEX_RUNTIME_BIN}/codex` : 'codex', ...CODEX_APP_SERVER_ARGS];
     const exec = await container.exec({
       Cmd: cmd,
       AttachStdin: true,
@@ -516,6 +527,7 @@ export class CodexManager {
       }
   }
   async shutdown() {
+    await this.updates.close();
     await Promise.all(
       [...this.instances.values()].map((i) => i.container.stop({ t: 5 }).catch(() => {})),
     );
