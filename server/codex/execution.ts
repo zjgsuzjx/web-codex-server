@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { StoredUser } from '../../shared/contracts/domain.ts';
 import { fail } from '../files/files.ts';
 import type { ServerConfig } from '../types.ts';
+import { CODEX_RUNTIME_BIN, CODEX_RUNTIME_MOUNT } from './updates.ts';
 
 export const ROLES = ['user', 'admin', 'superadmin'];
 export const isAdministrator = (user: StoredUser) => ['admin', 'superadmin'].includes(user?.role);
@@ -43,7 +44,7 @@ export function hostCommand(config: ServerConfig, user: StoredUser, command: str
     ...command,
   ];
 }
-export function workerSpec(config: ServerConfig, user: StoredUser) {
+export function workerSpec(config: ServerConfig, user: StoredUser, runtimePath?: string) {
   const target = executionTarget(user),
     hostDir = path.join(config.hostDataDir, 'users', user.username).replaceAll('\\', '/');
   const shared = {
@@ -83,10 +84,28 @@ export function workerSpec(config: ServerConfig, user: StoredUser) {
     ...shared,
     User: '1000:1000',
     WorkingDir: '/workspace',
-    Env: ['HOME=/home/node', 'CODEX_HOME=/home/node/.codex'],
+    Env: [
+      'HOME=/home/node',
+      'CODEX_HOME=/home/node/.codex',
+      ...(runtimePath
+        ? [`PATH=${CODEX_RUNTIME_BIN}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`]
+        : []),
+    ],
     HostConfig: {
       NetworkMode: JSON.parse(user.settings || '{}').networkAccess === false ? 'none' : 'bridge',
       Binds: [`${hostDir}/projects:/workspace`, `${hostDir}/codex:/home/node/.codex`],
+      ...(runtimePath
+        ? {
+            Mounts: [
+              {
+                Type: 'bind' as const,
+                Source: runtimePath,
+                Target: CODEX_RUNTIME_MOUNT,
+                ReadOnly: true,
+              },
+            ],
+          }
+        : {}),
       ReadonlyRootfs: true,
       CapDrop: ['ALL'],
       SecurityOpt: ['no-new-privileges:true'],

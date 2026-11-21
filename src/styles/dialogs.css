@@ -718,6 +718,99 @@
   color: var(--text);
   font-size: 13px;
 }
+.codex-version {
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--ui-radius-lg);
+  background: var(--bg);
+  overflow: hidden;
+}
+.codex-version-header,
+.codex-version-identity,
+.codex-version-numbers,
+.codex-version-pair,
+.codex-version-actions,
+.codex-version-status {
+  display: flex;
+  align-items: center;
+}
+.codex-version-header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px 20px;
+  padding: 16px;
+}
+.codex-version-identity {
+  gap: 12px;
+  min-width: 0;
+}
+.codex-version-icon {
+  display: grid;
+  flex: 0 0 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: var(--ui-radius);
+  background: var(--ui-selected);
+  color: var(--accent);
+}
+.codex-version .codex-version-identity h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.codex-version-numbers {
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.codex-version-pair {
+  gap: 6px;
+  min-width: 0;
+}
+.codex-version-pair svg {
+  flex-shrink: 0;
+}
+.codex-version-numbers code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--ui-field);
+  color: var(--text);
+  font-family: var(--font-code);
+  overflow-wrap: anywhere;
+}
+.codex-version-numbers .codex-version-next {
+  background: var(--ui-selected);
+  color: var(--accent);
+}
+.codex-version-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.codex-version-actions:empty {
+  display: none;
+}
+.codex-version .codex-version-actions button {
+  margin: 0;
+  white-space: nowrap;
+}
+.codex-version-status {
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--ui-field);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.codex-version-status svg {
+  flex-shrink: 0;
+}
+.codex-version-status.is-error {
+  color: var(--danger);
+}
+.codex-version-status.is-success svg {
+  color: var(--success);
+}
 .profile-avatar-section {
   margin-bottom: 28px;
   background: var(--ui-field);

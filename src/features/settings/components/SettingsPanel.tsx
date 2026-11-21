@@ -35,6 +35,7 @@ import ModelControls from '../../chat/components/ModelControls.tsx';
 import InviteManagement from './InviteManagement.tsx';
 import UserManagement from './UserManagement.tsx';
 import NotificationManagement from './NotificationManagement.tsx';
+import CodexVersion from './CodexVersion.tsx';
 export interface SettingsHeadingProps {
   page: ProtocolRecord;
 }
@@ -260,6 +261,7 @@ export default function SettingsPanel({
                   {saveError}
                 </p>
               )}
+              <CodexVersion api={api} canUpdate={user.role === 'superadmin'} />
             </div>
           )}
           {tab === 'account' && (

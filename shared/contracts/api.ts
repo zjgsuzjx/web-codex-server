@@ -8,6 +8,9 @@ export interface ApiOptions extends Omit<RequestInit, 'body'> {
 export interface ApiResponseMap {
   '/session': { user: SessionUser | null; inviteRequired: boolean };
   '/settings': Settings;
+  '/codex/version': import('../settings/codex-updates.ts').CodexUpdateStatus;
+  '/codex/version/check': import('../settings/codex-updates.ts').CodexUpdateStatus;
+  '/codex/version/install': import('../settings/codex-updates.ts').CodexUpdateStatus;
   '/memo': import('../workspace/memo.ts').MemoDocument;
   '/notifications': import('../workspace/notifications.ts').NotificationPage;
   '/notifications/snapshot': import('../workspace/notifications.ts').NotificationSnapshot;

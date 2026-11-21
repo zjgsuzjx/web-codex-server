@@ -78,7 +78,9 @@ curl -fsS http://127.0.0.1:3100/api/health
 
 [Compose 配置](../compose.yml)仅绑定 `127.0.0.1:3100`，向网关挂载 `./data` 和 Docker socket，并读取 `.env` 中的 `DOCKER_GID`。请保持 `PORT=3100`；若修改，需要同步调整 Compose 端口映射与健康检查。
 
-worker Dockerfile 当前固定 Codex CLI `0.162.1`。网关健康只能说明网页服务运行正常，不能证明账号登录与模型对话已经可用。
+全新部署使用 worker 镜像内置的 Codex CLI `0.169.1`。成员可以在 **设置 → 通用** 查看工作区默认版本，超级管理员可以手动检查 npm 官方稳定版并确认在线更新。服务端在隔离容器中下载和验证，成功后启用新版并保存在 `DATA_DIR/codex-runtime`。运行中的工作区会在下次启动时切换版本。服务器模式使用宿主机独立安装的 CLI。
+
+网关健康只能说明网页服务运行正常，不能证明账号登录与模型对话已经可用。
 
 ### 4. 配置 HTTPS 与 WebSocket
 
